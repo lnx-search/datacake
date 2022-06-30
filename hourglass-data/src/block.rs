@@ -195,7 +195,8 @@ impl BlockReader {
         let slice = &self.inner_buffer[*start as usize..*start as usize + *len as usize];
 
         // TODO:
-        //  Make this safe via check bytes.
+        //  Make this safe via check bytes. - Do we actually need this to be a check? We know
+        //  it's aligned correctly.
         let doc = unsafe { rkyv::archived_root::<Document>(slice) };
         Some(doc)
     }
