@@ -12,7 +12,7 @@ use crate::Id;
 pub const OFFSET_HEADER_SIZE: usize = std::mem::size_of::<(u32, u32)>();
 pub const BLOCK_SIZE: usize = 512 << 10;
 
-pub type BlockId = Uuid;
+pub type GlobalBlockId = Uuid;
 type Offsets = BTreeMap<Id, (u32, u32)>;
 
 #[derive(Default)]

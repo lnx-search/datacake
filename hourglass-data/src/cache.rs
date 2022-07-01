@@ -5,15 +5,15 @@ use std::rc::Rc;
 
 use moka::unsync::Cache;
 
-use crate::block::{BlockReader, BlockId};
+use crate::block::{BlockReader, GlobalBlockId};
 use crate::value::Document;
 use crate::Id;
 
 /// A shard-local cache for retrieving documents backed by the individual buffers.
 pub struct ShardCache {
     /// A lookup table for mapping document ids, to their given block id.
-    lookup: Rc<RefCell<HashMap<Id, BlockId>>>,
-    block_cache: Cache<BlockId, BlockReaderWrapper>,
+    lookup: Rc<RefCell<HashMap<Id, GlobalBlockId>>>,
+    block_cache: Cache<GlobalBlockId, BlockReaderWrapper>,
 }
 
 impl ShardCache {
@@ -58,7 +58,7 @@ impl ShardCache {
     /// immediately. Instead this can be manually cleanup via the `run_cache_gc()` method
     /// or when the document is next accessed.
     pub fn store_block(&mut self, block: BlockReader) {
-        let block_id = BlockId::new_v4();
+        let block_id = GlobalBlockId::new_v4();
         let doc_ids = block
             .document_ids()
             .map(|v| (*v as Id, block_id))
@@ -94,7 +94,7 @@ pub struct CacheStats {
 
 pub struct BlockReaderWrapper {
     inner: BlockReader,
-    lookup: Rc<RefCell<HashMap<Id, BlockId>>>,
+    lookup: Rc<RefCell<HashMap<Id, GlobalBlockId>>>,
 }
 
 impl Deref for BlockReaderWrapper {
