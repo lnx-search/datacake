@@ -26,7 +26,9 @@ pub struct BlockWriter {
 
 impl BlockWriter {
     /// Serializes and appends the document to the buffer.
-    pub fn write_document(&mut self, id: Id, doc: &Document) -> Result<()> {
+    ///
+    /// returns `true` if the block is full.
+    pub fn write_document(&mut self, id: Id, doc: &Document) -> Result<bool> {
         let data = rkyv::to_bytes::<_, 2048>(doc)?;
 
         let len = data.len() as u32;
@@ -35,9 +37,10 @@ impl BlockWriter {
         self.inner_buffer.extend_from_slice(data.as_slice());
         self.doc_offsets.insert(id, (start, len));
 
-        Ok(())
+        Ok(self.used_memory() >= BLOCK_SIZE)
     }
 
+    #[inline]
     /// The approximate total memory usage of the block writer.
     pub fn used_memory(&self) -> usize {
         self.inner_buffer.len()
@@ -190,24 +193,51 @@ impl BlockReader {
         Ok(block)
     }
 
+    #[inline]
     /// The approximate total memory usage of the block reader.
     pub fn used_memory(&self) -> usize {
         self.raw_block.len() + std::mem::size_of::<Vec<u8>>()
     }
 
+    /// Gets a document with the given ID from the block.
     pub fn get_document(&self, id: Id) -> Option<&rkyv::Archived<Document>> {
-        let (start, len) = self.doc_offsets.get(&id)?;
+        let offsets = self.doc_offsets.get(&id)?;
+        Some(unsafe { self.get_doc_from_offsets(offsets) })
+    }
+
+    #[inline]
+    /// Produces iterator of document ids contained within the block.
+    pub fn document_ids(&self) -> impl Iterator<Item = &rkyv::Archived<Id>> {
+        self.doc_offsets.keys()
+    }
+
+    #[inline]
+    /// Produces iterator of all documents contained within the block.
+    pub fn iter_documents(&self) -> impl Iterator<Item = (&rkyv::Archived<Id>, &rkyv::Archived<Document>)> {
+        self.doc_offsets
+            .iter()
+            .map(|(id, offsets)| {
+                let doc = unsafe { self.get_doc_from_offsets(offsets) };
+                (id, doc)
+            })
+    }
+
+    /// Gets a document from the the given offset information.
+    ///
+    /// This assumes that both the start and end range are within bounds
+    /// and that they are correctly aligned.
+    ///
+    /// If the offsets are miss-aligned, then this can become UB.
+    unsafe fn get_doc_from_offsets(
+        &self,
+        (start, len): &rkyv::Archived<(u32, u32)>,
+    ) -> &rkyv::Archived<Document> {
         let slice = &self.inner_buffer[*start as usize..*start as usize + *len as usize];
 
         // TODO:
         //  Make this safe via check bytes. - Do we actually need this to be a check? We know
         //  it's aligned correctly.
-        let doc = unsafe { rkyv::archived_root::<Document>(slice) };
-        Some(doc)
-    }
-
-    pub fn document_ids(&self) -> impl Iterator<Item = &rkyv::Archived<Id>> {
-        self.doc_offsets.keys()
+        rkyv::archived_root::<Document>(slice)
     }
 }
 
