@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use anyhow::Result;
 use humansize::{FileSize, file_size_opts::CONVENTIONAL};
 use rkyv::{AlignedVec, Deserialize};
+use uuid::Uuid;
 
 use crate::blocking::BlockingExecutor;
 use crate::value::Document;
@@ -11,6 +12,7 @@ use crate::Id;
 pub const OFFSET_HEADER_SIZE: usize = std::mem::size_of::<(u32, u32)>();
 pub const BLOCK_SIZE: usize = 512 << 10;
 
+pub type BlockId = Uuid;
 type Offsets = BTreeMap<Id, (u32, u32)>;
 
 #[derive(Default)]
