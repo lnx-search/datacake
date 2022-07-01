@@ -118,9 +118,9 @@ impl Drop for BlockReaderWrapper {
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
-    use crate::value::{FixedStructureValue, JsonNumber, JsonValue};
 
     use super::*;
+    use crate::value::{FixedStructureValue, JsonNumber, JsonValue};
 
     #[tokio::test]
     async fn test_cache_eviction() {
@@ -145,7 +145,7 @@ mod tests {
         );
 
         let mut inner = BTreeMap::new();
-         inner.insert(
+        inner.insert(
             "json-data".to_string(),
             FixedStructureValue::Dynamic(big_object),
         );
@@ -154,7 +154,7 @@ mod tests {
         // We expect 5 to be cached as 6 will push us over the limit.
         for i in 1..2 {
             let block_reader =
-                crate::block::test_utils::create_temporary_block_reader(&doc,i).await;
+                crate::block::test_utils::create_temporary_block_reader(&doc, i).await;
             cache.store_block(block_reader);
         }
 
@@ -162,7 +162,7 @@ mod tests {
 
         for i in 4..6 {
             let block_reader =
-                crate::block::test_utils::create_temporary_block_reader(&doc,i).await;
+                crate::block::test_utils::create_temporary_block_reader(&doc, i).await;
             cache.store_block(block_reader);
         }
         cache.get_doc(4);

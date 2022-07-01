@@ -30,7 +30,7 @@ impl From<BTreeMap<String, FixedStructureValue>> for Document {
             created: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("Get unix timestamp"),
-            inner
+            inner,
         }
     }
 }

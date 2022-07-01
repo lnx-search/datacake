@@ -2,7 +2,6 @@ use std::io;
 
 pub type Result<T> = core::result::Result<T, SegmentError>;
 
-
 #[derive(Debug, thiserror::Error)]
 pub enum SegmentError {
     #[error("Failed to complete operation due to error: {0}")]
@@ -13,7 +12,7 @@ pub enum SegmentError {
 
     #[error("Failed to open immutable segment writer: {0}")]
     SegmentOpenError(String),
-    
+
     #[error("Failed to serialize document: {0}")]
     SerializationError(String),
 }

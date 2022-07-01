@@ -1,12 +1,18 @@
 use std::path::Path;
-use futures_lite::AsyncWriteExt;
 
-use glommio::io::{DmaFile, DmaStreamWriter, DmaStreamWriterBuilder, ImmutableFile, ImmutableFileBuilder};
+use futures_lite::AsyncWriteExt;
+use glommio::io::{
+    DmaFile,
+    DmaStreamWriter,
+    DmaStreamWriterBuilder,
+    ImmutableFile,
+    ImmutableFileBuilder,
+};
 use hourglass_data::block::{BlockReader, BlockWriter};
 use hourglass_data::blocking::BlockingExecutor;
-use hourglass_data::Id;
-use hourglass_data::segment_footer::{MAX_SEGMENT_SIZE, SegmentFooterWriter};
+use hourglass_data::segment_footer::{SegmentFooterWriter, MAX_SEGMENT_SIZE};
 use hourglass_data::value::Document;
+use hourglass_data::Id;
 
 use crate::error::{Result, SegmentError};
 
@@ -51,12 +57,13 @@ impl SegmentWriter {
     ///
     /// Returns `true` if the segment is at capacity.
     pub async fn add_document(&mut self, id: Id, doc: &Document) -> Result<bool> {
-        let is_full = self.active_block
+        let is_full = self
+            .active_block
             .write_document(id, doc)
             .map_err(|e| SegmentError::SerializationError(e.to_string()))?;
 
         if !is_full {
-            return Ok(false)
+            return Ok(false);
         }
 
         let n_bytes = self.write_block().await?;
@@ -69,7 +76,7 @@ impl SegmentWriter {
     pub async fn write_block(&mut self) -> Result<usize> {
         // No point trying to drain if we don't have any data to write.
         if self.active_block.num_docs() == 0 {
-            return Ok(0)
+            return Ok(0);
         }
 
         let compressed = self
@@ -78,9 +85,7 @@ impl SegmentWriter {
             .await
             .map_err(|e| SegmentError::SerializationError(e.to_string()))?;
 
-        self.writer
-            .write_all(&compressed)
-            .await?;
+        self.writer.write_all(&compressed).await?;
 
         Ok(compressed.len())
     }
@@ -94,18 +99,13 @@ impl SegmentWriter {
             .to_bytes()
             .map_err(|e| SegmentError::SerializationError(e.to_string()))?;
 
-        self.writer
-            .write_all(&footer)
-            .await?;
+        self.writer.write_all(&footer).await?;
 
-        self.writer
-            .flush()
-            .await?;
+        self.writer.flush().await?;
 
         Ok(())
     }
 }
-
 
 /// A immutable segment reader.
 ///
@@ -130,14 +130,10 @@ impl SegmentReader {
             .await
             .map_err(|v| SegmentError::SegmentOpenError(v.to_string()))?;
 
-        Ok(Self {
-            executor,
-            file,
-        })
+        Ok(Self { executor, file })
     }
 
     pub async fn get_block_reader(&self) -> Result<BlockReader> {
-
         todo!()
     }
 }

@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
-use rkyv::{AlignedVec, Archive, Deserialize, Serialize};
-use bytecheck::CheckBytes;
+
 use anyhow::{anyhow, Result};
+use bytecheck::CheckBytes;
+use rkyv::{AlignedVec, Archive, Deserialize, Serialize};
 
 use crate::blocking::BlockingExecutor;
 use crate::Id;
@@ -10,7 +11,6 @@ use crate::Id;
 pub const MAX_SEGMENT_SIZE: usize = 10 << 30;
 
 type SegmentLocalBlockId = u16;
-
 
 #[derive(Default)]
 /// A writer for a segment metadata.
@@ -32,7 +32,9 @@ impl SegmentFooterWriter {
         let block_id = self.meta.block_id_counter;
 
         self.meta.blocks.insert(block_id, block);
-        self.meta.docset.extend(contained_docs.map(|id| (id, block_id)));
+        self.meta
+            .docset
+            .extend(contained_docs.map(|id| (id, block_id)));
     }
 
     /// Serializes and compresses the segment footer.
@@ -42,8 +44,6 @@ impl SegmentFooterWriter {
             .map(|v| v.into_vec())
     }
 }
-
-
 
 /// A writer for a segment metadata.
 ///
@@ -57,12 +57,10 @@ impl SegmentFooterReader {
     /// Gets the footer metadata from a given buffer.
     ///
     /// This assumes that the buffer starts with the correct footer value.
-    pub async fn from_buffer(buff: &[u8], ) -> Result<Self> {
+    pub async fn from_buffer(buff: &[u8]) -> Result<Self> {
         let inner = SegmentMetadata::from_buffer(buff)?;
 
-        Ok(Self {
-            meta: inner,
-        })
+        Ok(Self { meta: inner })
     }
 
     /// Gets the block offsets associated with the given doc id.
@@ -71,7 +69,6 @@ impl SegmentFooterReader {
         self.meta.blocks.get(block).copied()
     }
 }
-
 
 #[derive(Default, Archive, Debug, Deserialize, Serialize, Clone)]
 #[archive_attr(derive(CheckBytes, Debug))]

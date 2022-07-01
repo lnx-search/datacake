@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
 
 use anyhow::Result;
-use humansize::{FileSize, file_size_opts::CONVENTIONAL};
+use humansize::file_size_opts::CONVENTIONAL;
+use humansize::FileSize;
 use rkyv::{AlignedVec, Deserialize};
 use uuid::Uuid;
 
@@ -221,13 +222,13 @@ impl BlockReader {
 
     #[inline]
     /// Produces iterator of all documents contained within the block.
-    pub fn iter_documents(&self) -> impl Iterator<Item = (&rkyv::Archived<Id>, &rkyv::Archived<Document>)> {
-        self.doc_offsets
-            .iter()
-            .map(|(id, offsets)| {
-                let doc = unsafe { self.get_doc_from_offsets(offsets) };
-                (id, doc)
-            })
+    pub fn iter_documents(
+        &self,
+    ) -> impl Iterator<Item = (&rkyv::Archived<Id>, &rkyv::Archived<Document>)> {
+        self.doc_offsets.iter().map(|(id, offsets)| {
+            let doc = unsafe { self.get_doc_from_offsets(offsets) };
+            (id, doc)
+        })
     }
 
     /// Gets a document from the the given offset information.
@@ -306,7 +307,10 @@ pub(crate) mod test_utils {
         Document::from(inner)
     }
 
-    pub(crate) async fn create_temporary_block_reader(doc: &Document, id: Id) -> BlockReader {
+    pub(crate) async fn create_temporary_block_reader(
+        doc: &Document,
+        id: Id,
+    ) -> BlockReader {
         let mut writer = BlockWriter::default();
 
         writer

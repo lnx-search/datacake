@@ -1,2 +1,2 @@
-pub mod segment;
 pub mod error;
+pub mod segment;
