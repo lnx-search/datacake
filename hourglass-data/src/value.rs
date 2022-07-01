@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::io;
 use std::io::Write;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use bytecheck::CheckBytes;
 use rkyv::collections::ArchivedBTreeMap;
@@ -14,7 +14,13 @@ use crate::value::ser::Formatter;
 #[archive(bound(serialize = "__S: rkyv::ser::ScratchSpace + rkyv::ser::Serializer"))]
 #[archive_attr(derive(CheckBytes, Debug))]
 pub struct Document {
-    pub created: u64,
+    /// An internal timestamp that tracks when the document was first created.
+    ///
+    /// This is may be used to resolve any merge conflicts where there may be
+    /// two documents with the same id.
+    pub created: Duration,
+
+    /// The main document object.
     pub inner: BTreeMap<String, FixedStructureValue>,
 }
 
@@ -23,14 +29,15 @@ impl From<BTreeMap<String, FixedStructureValue>> for Document {
         Self {
             created: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .expect("Get unix timestamp")
-                .as_millis() as u64,  // OK to do as we're not anywhere near the u64 cap in milli.
+                .expect("Get unix timestamp"),
             inner
         }
     }
 }
 
 impl ArchivedDocument {
+    /// Serializes the document to a compact JSON map and converts the binary
+    /// content to a string.
     pub fn to_json_string(&self) -> io::Result<String> {
         let data = self.to_json()?;
 
@@ -41,6 +48,7 @@ impl ArchivedDocument {
         Ok(s)
     }
 
+    /// Serializes the document to a compact JSON map.
     pub fn to_json(&self) -> io::Result<Vec<u8>> {
         let mut writer = Vec::new();
         self.to_json_writer(&mut writer)?;
@@ -48,6 +56,7 @@ impl ArchivedDocument {
         Ok(writer)
     }
 
+    /// Serializes the document to a compact JSON map which is written to the provided writer.
     pub fn to_json_writer<W>(&self, writer: &mut W) -> io::Result<()>
     where
         W: ?Sized + Write,
