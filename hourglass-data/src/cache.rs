@@ -18,6 +18,7 @@ pub struct ShardCache {
 }
 
 impl ShardCache {
+    /// Creates a new LRU cache with a maximum capacity of n bytes.
     pub fn with_capacity(n_bytes: u64) -> Self {
         let block_cache = Cache::builder()
             .weigher(|_k, v: &BlockReaderWrapper| v.used_memory() as u32)

@@ -14,7 +14,12 @@ pub const BLOCK_SIZE: usize = 512 << 10;
 type Offsets = BTreeMap<Id, (u32, u32)>;
 
 #[derive(Default)]
+/// A writer that ingests documents and serializes them into a
+/// temporary memory buffer until `drain_and_compress` is called
+/// where it is compressed and the inner buffer is cleared.
 pub struct BlockWriter {
+    /// A mapping of doc_id to a (start, len) tuple marking the doc's
+    /// position in the buffer.
     doc_offsets: Offsets,
     inner_buffer: Vec<u8>,
 }
