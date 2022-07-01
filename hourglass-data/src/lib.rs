@@ -5,6 +5,6 @@ pub mod block;
 pub mod blocking;
 pub mod cache;
 pub mod value;
-pub mod segment_header;
+pub mod segment_footer;
 
 pub type Id = u64;

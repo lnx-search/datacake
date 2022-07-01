@@ -1,12 +1,13 @@
 use std::collections::BTreeMap;
-use rkyv::{Archive, Deserialize, Serialize};
+use rkyv::{AlignedVec, Archive, Deserialize, Serialize};
 use bytecheck::CheckBytes;
 use anyhow::{anyhow, Result};
 
+use crate::blocking::BlockingExecutor;
 use crate::Id;
 
 /// Maximum segment size of 10GB
-pub const MAX_SEGMENT_SIZE: u64 = 10 << 30;
+pub const MAX_SEGMENT_SIZE: usize = 10 << 30;
 
 type SegmentLocalBlockId = u16;
 
@@ -16,12 +17,12 @@ type SegmentLocalBlockId = u16;
 ///
 /// This is data stored at the start of the file which contains data about the
 /// blocks contained within the segment.
-pub struct SegmentHeaderWriter {
+pub struct SegmentFooterWriter {
     meta: SegmentMetadata,
 }
 
-impl SegmentHeaderWriter {
-    /// Adds a block to the segment header data in memory.
+impl SegmentFooterWriter {
+    /// Adds a block to the segment footer data in memory.
     pub fn add_block(
         &mut self,
         block: (u32, u32),
@@ -33,6 +34,13 @@ impl SegmentHeaderWriter {
         self.meta.blocks.insert(block_id, block);
         self.meta.docset.extend(contained_docs.map(|id| (id, block_id)));
     }
+
+    /// Serializes and compresses the segment footer.
+    pub fn to_bytes(&self) -> Result<Vec<u8>> {
+        rkyv::to_bytes::<_, 1024>(&self.meta)
+            .map_err(anyhow::Error::from)
+            .map(|v| v.into_vec())
+    }
 }
 
 
@@ -41,15 +49,15 @@ impl SegmentHeaderWriter {
 ///
 /// This is data stored at the start of the file which contains data about the
 /// blocks contained within the segment.
-pub struct SegmentHeaderReader {
+pub struct SegmentFooterReader {
     meta: SegmentMetadata,
 }
 
-impl SegmentHeaderReader {
-    /// Gets the header metadata from a given buffer.
+impl SegmentFooterReader {
+    /// Gets the footer metadata from a given buffer.
     ///
-    /// This assumes that the buffer starts with the correct header value.
-    pub fn from_buffer(buff: &[u8]) -> Result<Self> {
+    /// This assumes that the buffer starts with the correct footer value.
+    pub async fn from_buffer(buff: &[u8], ) -> Result<Self> {
         let inner = SegmentMetadata::from_buffer(buff)?;
 
         Ok(Self {
@@ -74,18 +82,20 @@ pub(crate) struct SegmentMetadata {
 }
 
 impl SegmentMetadata {
-    /// Gets the header metadata from a given buffer.
+    /// Gets the footer metadata from a given buffer.
     ///
-    /// This assumes that the buffer starts with the correct header value.
+    /// This assumes that the buffer starts with the correct footer value.
     pub fn from_buffer(buff: &[u8]) -> Result<Self> {
-        let data_len = rkyv::check_archived_root::<u32>(&buff[..4])?;
+        let offset_start = buff.len() - std::mem::size_of::<u32>();
+        let data_len = rkyv::check_archived_root::<u32>(&buff[offset_start..])?;
+        let data_start = offset_start - *data_len as usize;
 
         // Linter doesn't like this, but this is completely fine.
-        let archived: Self = rkyv::check_archived_root::<Self>(&buff[4..*data_len as usize])
-            .map_err(|_| anyhow!("Failed to get archived segment metadata header. Is the segment corrupted?"))?
+        let slf: Self = rkyv::check_archived_root::<Self>(&buff[data_start..offset_start])
+            .map_err(|_| anyhow!("Failed to get archived segment metadata footer. Is the segment corrupted?"))?
             .deserialize(&mut rkyv::Infallible)
-            .map_err(|_| anyhow!("Failed to deserialize segment metadata header. Is the segment corrupted?"))?;
+            .map_err(|_| anyhow!("Failed to deserialize segment metadata footer. Is the segment corrupted?"))?;
 
-        Ok(archived)
+        Ok(slf)
     }
 }

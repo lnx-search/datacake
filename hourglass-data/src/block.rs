@@ -43,6 +43,12 @@ impl BlockWriter {
     }
 
     #[inline]
+    /// The number of docs currently in the block.
+    pub fn num_docs(&self) -> usize {
+        self.doc_offsets.len()
+    }
+
+    #[inline]
     /// The approximate total memory usage of the block writer.
     pub fn used_memory(&self) -> usize {
         self.inner_buffer.len()

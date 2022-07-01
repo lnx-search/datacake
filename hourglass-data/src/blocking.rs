@@ -1,9 +1,11 @@
+use std::sync::Arc;
 use anyhow::anyhow;
 use futures::channel::oneshot;
 
+#[derive(Clone)]
 /// A executor for spawning CPU intensive tasks like compression.
 pub struct BlockingExecutor {
-    pool: rayon::ThreadPool,
+    pool: Arc<rayon::ThreadPool>,
 }
 
 impl BlockingExecutor {
@@ -13,7 +15,7 @@ impl BlockingExecutor {
             .thread_name(|n| format!("hourglass-cpu-task-{}", n))
             .build()?;
 
-        Ok(Self { pool })
+        Ok(Self { pool: pool.into() })
     }
 
     /// Runs a blocking task in the threadpool until completion.
