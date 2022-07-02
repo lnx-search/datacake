@@ -10,7 +10,7 @@ use crate::Id;
 pub const MAX_SEGMENT_SIZE: usize = 10 << 30;
 pub const FOOTER_OFFSET_LEN: usize = std::mem::size_of::<u32>();
 
-type SegmentLocalBlockId = u16;
+pub type SegmentLocalBlockId = u16;
 
 #[derive(Default, Debug)]
 /// A writer for a segment metadata.
@@ -75,6 +75,13 @@ impl SegmentFooterReader {
         Ok(Self { meta: inner })
     }
 
+    #[inline]
+    /// Produces an interator of all the block ids and their offsets
+    /// contained within the segment.
+    pub fn iter_blocks(&self) -> std::collections::btree_map::Iter<SegmentLocalBlockId, (u32, u32)> {
+        self.meta.iter_blocks()
+    }
+
     /// Gets the block offsets associated with the given doc id.
     pub fn get_block_offsets_for_doc(&self, id: Id) -> Option<(u32, u32)> {
         let block = self.meta.docset.get(&id)?;
@@ -99,6 +106,12 @@ impl SegmentMetadata {
         let offset_start = buff.len() - std::mem::size_of::<u32>();
         let data_len = rkyv::check_archived_root::<u32>(&aligned[offset_start..])?;
         Ok(*data_len as usize)
+    }
+
+    /// Produces an interator of all the block ids and their offsets
+    /// contained within the segment.
+    pub fn iter_blocks(&self) -> std::collections::btree_map::Iter<SegmentLocalBlockId, (u32, u32)> {
+        self.blocks.iter()
     }
 
     /// Gets the footer metadata from a given buffer.

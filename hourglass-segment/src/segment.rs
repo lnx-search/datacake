@@ -1,13 +1,7 @@
 use std::path::Path;
 
 use futures_lite::AsyncWriteExt;
-use glommio::io::{
-    DmaFile,
-    DmaStreamWriter,
-    DmaStreamWriterBuilder,
-    ImmutableFile,
-    ImmutableFileBuilder,
-};
+use glommio::io::{DmaFile, DmaStreamReader, DmaStreamWriter, DmaStreamWriterBuilder, ImmutableFile, ImmutableFileBuilder};
 use hourglass_data::block::{BlockReader, BlockWriter};
 use hourglass_data::blocking::BlockingExecutor;
 use hourglass_data::segment_footer::{
@@ -204,6 +198,92 @@ impl SegmentReader {
 
         Ok(Some(block))
     }
+
+    /// Creates an iterator that walks through the segment file sequentially.
+    ///
+    /// The order of blocks are guarantee to be in the order they appear in the file.
+    pub fn iter_blocks(&self) -> SegmentBlocksIterator {
+        let block_ids = self.footer.iter_blocks();
+
+        let stream = self.file
+            .stream_reader()
+            .with_buffer_size(512 << 10)
+            .with_read_ahead(10)
+            .build();
+
+        // We want to sort our blocks so we're not jumping back and forth through
+        // our file.
+        let mut owned_ids = block_ids
+            .map(|(_, offsets)| offsets)
+            .copied()
+            .collect::<Vec<_>>();
+
+        // We want smallest at the end.
+        owned_ids.sort_by_key(|(start, _)| -(*start as i32));
+
+        SegmentBlocksIterator {
+            ids: owned_ids,
+            executor: self.executor.clone(),
+            stream,
+        }
+    }
+}
+
+
+pub struct SegmentBlocksIterator {
+    ids: Vec<(u32, u32)>,
+    stream: DmaStreamReader,
+    executor: BlockingExecutor,
+}
+
+impl SegmentBlocksIterator {
+    pub async fn next(&mut self) -> Option<Result<BlockReader>> {
+        // We pop off the end of the vec as our vec is reversed.
+        let (start, len) = match self.ids.pop() {
+            None => return None,
+            Some(v) => v,
+        };
+
+        let current = self.stream.current_pos();
+        let skip_n = start as u64 - current;
+
+        if skip_n != 0 {
+            self.stream.skip(skip_n);
+        }
+
+        let mut data = vec![];
+        let mut to_get = len as u64;
+        while to_get > 0 {
+            let maybe_buff = self.stream
+                .get_buffer_aligned(to_get)
+                .await
+                .map_err(|e| SegmentError::BlockReadError(e.to_string()));
+
+            let buff = match maybe_buff {
+                Ok(b) => b,
+                Err(other) => return Some(Err(other)),
+            };
+
+            // Small optimisation to avoid the additional allocation of
+            // the vec if we get all the data at once.
+            if buff.len() as u32 == len {
+                return BlockReader::from_compressed(&buff, &self.executor)
+                    .await
+                    .map_err(|e| SegmentError::DeserializationError(e.to_string()))
+                    .map(Some)
+                    .transpose()
+            }
+
+            data.extend_from_slice(&buff);
+            to_get -= buff.len() as u64;
+        }
+
+        BlockReader::from_compressed(&data, &self.executor)
+            .await
+            .map_err(|e| SegmentError::DeserializationError(e.to_string()))
+            .map(Some)
+            .transpose()
+    }
 }
 
 #[cfg(test)]
@@ -349,7 +429,7 @@ mod tests {
     ) -> SegmentWriter {
         let doc = get_random_doc();
 
-        let mut writer = SegmentWriter::create(executor, &file)
+        let mut writer = SegmentWriter::create(executor, file)
             .await
             .expect("Successful segment creation");
 
@@ -436,6 +516,51 @@ mod tests {
                 .expect("Successfully check doc block");
 
             assert!(block.is_none(), "Expected no block to be found");
+        };
+
+        run!(fut);
+    }
+
+    #[test]
+    fn test_segment_reader_block_iter() {
+        let file = std::env::temp_dir().join("segment-reader-block-iter-test");
+        let executor = BlockingExecutor::with_n_threads(1).expect("Create executor");
+
+        let fut = || async move {
+            {
+                let mut writer = get_populated_segment_writer(executor.clone(), &file).await;
+
+                // Add a bunch of docs to test iterating through.
+                for i in 0..4096 {
+                    let doc = get_random_doc();
+                    writer
+                        .add_document(i, &doc)
+                        .await
+                        .expect("Successful doc addition");
+                }
+
+                writer
+                    .seal_segment()
+                    .await
+                    .expect("Successful sealing of segment");
+            }
+
+            let reader = SegmentReader::open(executor, &file)
+                .await
+                .expect("Successful segment read");
+
+            let mut blocks = reader.iter_blocks();
+
+            let mut num_blocks = 0;
+            let mut total = 0;
+            while let Some(block) = blocks.next().await {
+                let block = block.expect("read block correctly");
+                total += block.document_ids().count();
+                num_blocks += 1;
+            }
+
+            // No +1 for the original doc as we override it.
+            assert_eq!(total, 4096, "Expected 4096 documents to be stored and retrieved correctly, got {} blocks: {}", total, num_blocks);
         };
 
         run!(fut);
