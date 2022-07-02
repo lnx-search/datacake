@@ -1,7 +1,6 @@
 use std::path::Path;
 use std::time::Instant;
 
-use humansize::{FileSize, file_size_opts::CONVENTIONAL};
 use futures_lite::AsyncWriteExt;
 use glommio::io::{DmaFile, DmaStreamWriter, DmaStreamWriterBuilder};
 use hourglass_data::block::BlockWriter;
@@ -9,6 +8,8 @@ use hourglass_data::blocking::BlockingExecutor;
 use hourglass_data::segment_footer::{SegmentFooterWriter, MAX_SEGMENT_SIZE};
 use hourglass_data::value::Document;
 use hourglass_data::Id;
+use humansize::file_size_opts::CONVENTIONAL;
+use humansize::FileSize;
 
 use crate::error::{Result, SegmentError};
 

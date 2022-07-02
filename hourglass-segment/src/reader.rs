@@ -1,12 +1,13 @@
 use std::cmp;
 use std::path::Path;
 
-use humansize::{FileSize, file_size_opts::CONVENTIONAL};
 use glommio::io::{DmaStreamReader, ImmutableFile, ImmutableFileBuilder};
 use hourglass_data::block::BlockReader;
 use hourglass_data::blocking::BlockingExecutor;
 use hourglass_data::segment_footer::{SegmentFooterReader, FOOTER_OFFSET_LEN};
 use hourglass_data::Id;
+use humansize::file_size_opts::CONVENTIONAL;
+use humansize::FileSize;
 
 use crate::error::{Result, SegmentError};
 
@@ -28,7 +29,7 @@ impl SegmentReader {
     /// the reader has the file open.
     pub async fn open(executor: BlockingExecutor, path: &Path) -> Result<Self> {
         debug!("Opening immutable segment @ {:?}", path);
-        
+
         let file = ImmutableFileBuilder::new(path)
             .with_sequential_concurrency(10)
             .with_buffer_size(512 << 10)
@@ -37,13 +38,13 @@ impl SegmentReader {
             .map_err(|e| SegmentError::SegmentOpenError(e.to_string()))?;
 
         let footer = get_footer_info(&file).await?;
-        
+
         debug!(
-            "Opened immutable segment with {} documents, totalling {} @ {:?}", 
-            footer.num_docs(), 
+            "Opened immutable segment with {} documents, totalling {} @ {:?}",
+            footer.num_docs(),
             file.file_size()
                 .file_size(CONVENTIONAL)
-                .unwrap_or_else(|_| "an unknown number of bytes.".to_string()), 
+                .unwrap_or_else(|_| "an unknown number of bytes.".to_string()),
             path,
         );
 
