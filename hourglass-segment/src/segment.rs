@@ -144,35 +144,7 @@ impl SegmentReader {
             .await
             .map_err(|e| SegmentError::SegmentOpenError(e.to_string()))?;
 
-        let length = file.file_size();
-        let footer_suffix = file
-            .read_at(length - FOOTER_OFFSET_LEN as u64, FOOTER_OFFSET_LEN)
-            .await
-            .map_err(|e| {
-                SegmentError::SegmentOpenError(format!(
-                    "Failed to read segment footer suffix. {}",
-                    e
-                ))
-            })?;
-
-        let data_len = SegmentFooterReader::get_data_len(&footer_suffix)
-            .map_err(|e| SegmentError::DeserializationError(e.to_string()))?;
-
-        let footer_data = file
-            .read_at(
-                length - FOOTER_OFFSET_LEN as u64 - data_len as u64,
-                data_len,
-            )
-            .await
-            .map_err(|e| {
-                SegmentError::SegmentOpenError(format!(
-                    "Failed to read segment footer. {}",
-                    e
-                ))
-            })?;
-
-        let footer = SegmentFooterReader::from_buffer(&footer_data, 0, data_len)
-            .map_err(|e| SegmentError::DeserializationError(e.to_string()))?;
+        let footer = get_footer_info(&file).await?;
 
         Ok(Self {
             executor,
@@ -246,21 +218,10 @@ pub struct SegmentBlocksIterator {
 
 impl SegmentBlocksIterator {
     pub async fn next(&mut self) -> Option<Result<BlockReader>> {
-        // We pop off the end of the vec as our vec is reversed.
-        let (start, len) = match self.ids.pop() {
-            None => return None,
-            Some(v) => v,
-        };
-
-        let current = self.stream.current_pos();
-        let skip_n = start as u64 - current;
-
-        if skip_n != 0 {
-            self.stream.skip(skip_n);
-        }
+        let len = self.seek_to_next_block()?;
 
         let mut data = vec![];
-        let mut to_get = len as u64;
+        let mut to_get = len;
         while to_get > 0 {
             let maybe_buff = self
                 .stream
@@ -275,7 +236,7 @@ impl SegmentBlocksIterator {
 
             // Small optimisation to avoid the additional allocation of
             // the vec if we get all the data at once.
-            if buff.len() as u32 == len {
+            if buff.len() as u64 == len {
                 return BlockReader::from_compressed(&buff, &self.executor)
                     .await
                     .map_err(|e| SegmentError::DeserializationError(e.to_string()))
@@ -293,6 +254,55 @@ impl SegmentBlocksIterator {
             .map(Some)
             .transpose()
     }
+
+    fn seek_to_next_block(&mut self) -> Option<u64> {
+        // We pop off the end of the vec as our vec is reversed.
+        let (start, len) = match self.ids.pop() {
+            None => return None,
+            Some(v) => v,
+        };
+
+        let current = self.stream.current_pos();
+        let skip_n = start as u64 - current;
+
+        if skip_n != 0 {
+            self.stream.skip(skip_n);
+        }
+
+        Some(len as u64)
+    }
+}
+
+async fn get_footer_info(file: &ImmutableFile) -> Result<SegmentFooterReader> {
+    let length = file.file_size();
+    let footer_suffix = file
+        .read_at(length - FOOTER_OFFSET_LEN as u64, FOOTER_OFFSET_LEN)
+        .await
+        .map_err(|e| {
+            SegmentError::SegmentOpenError(format!(
+                "Failed to read segment footer suffix. {}",
+                e
+            ))
+        })?;
+
+    let data_len = SegmentFooterReader::get_data_len(&footer_suffix)
+        .map_err(|e| SegmentError::DeserializationError(e.to_string()))?;
+
+    let footer_data = file
+        .read_at(
+            length - FOOTER_OFFSET_LEN as u64 - data_len as u64,
+            data_len,
+        )
+        .await
+        .map_err(|e| {
+            SegmentError::SegmentOpenError(format!(
+                "Failed to read segment footer. {}",
+                e
+            ))
+        })?;
+
+    SegmentFooterReader::from_buffer(&footer_data, 0, data_len)
+        .map_err(|e| SegmentError::DeserializationError(e.to_string()))
 }
 
 #[cfg(test)]
