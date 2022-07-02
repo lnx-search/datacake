@@ -65,8 +65,25 @@ impl SegmentWriter {
         Ok(self.num_bytes_written >= MAX_SEGMENT_SIZE)
     }
 
+    /// Flushes all pending data to disk and writes the segment footer, sealing the file.
+    pub async fn seal_segment(mut self) -> Result<()> {
+        self.write_block().await?;
+
+        let footer = self
+            .footer
+            .to_bytes()
+            .map_err(|e| SegmentError::SerializationError(e.to_string()))?;
+
+        self.writer.write_all(&footer).await?;
+
+        self.writer.flush().await?;
+        self.writer.close().await?;
+
+        Ok(())
+    }
+
     /// Writes the remaining data in the block writer to disk.
-    pub async fn write_block(&mut self) -> Result<usize> {
+    async fn write_block(&mut self) -> Result<usize> {
         // No point trying to drain if we don't have any data to write.
         if self.active_block.num_docs() == 0 {
             return Ok(0);
@@ -87,23 +104,6 @@ impl SegmentWriter {
         self.num_bytes_written += compressed.len();
 
         Ok(compressed.len())
-    }
-
-    /// Flushes all pending data to disk and writes the segment footer, sealing the file.
-    pub async fn seal_segment(mut self) -> Result<()> {
-        self.write_block().await?;
-
-        let footer = self
-            .footer
-            .to_bytes()
-            .map_err(|e| SegmentError::SerializationError(e.to_string()))?;
-
-        self.writer.write_all(&footer).await?;
-
-        self.writer.flush().await?;
-        self.writer.close().await?;
-
-        Ok(())
     }
 }
 

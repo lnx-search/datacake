@@ -231,6 +231,22 @@ impl BlockReader {
         })
     }
 
+    #[inline]
+    /// Produces iterator of all documents contained within the block after being
+    /// fully allocated.
+    pub fn iter_documents_owned(&self) -> impl Iterator<Item = (Id, Document)> + '_ {
+        self.doc_offsets.iter().map(|(id, offsets)| {
+            let doc = unsafe { self.get_doc_from_offsets(offsets) };
+
+            let id: Id = *id as Id;
+            let doc: Document = doc
+                .deserialize(&mut rkyv::Infallible)
+                .expect("No infallible error");
+
+            (id, doc)
+        })
+    }
+
     /// Gets a document from the the given offset information.
     ///
     /// This assumes that both the start and end range are within bounds

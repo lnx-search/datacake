@@ -528,6 +528,7 @@ dependencies = [
  "glommio",
  "hourglass-data",
  "rand",
+ "rkyv",
  "thiserror",
 ]
 
