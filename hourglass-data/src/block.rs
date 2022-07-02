@@ -239,6 +239,8 @@ impl BlockReader {
             let doc = unsafe { self.get_doc_from_offsets(offsets) };
 
             let id: Id = *id as Id;
+
+            // Ignore the linter: This compiles fine.
             let doc: Document = doc
                 .deserialize(&mut rkyv::Infallible)
                 .expect("No infallible error");
