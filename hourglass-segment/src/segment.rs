@@ -10,7 +10,12 @@ use glommio::io::{
 };
 use hourglass_data::block::{BlockReader, BlockWriter};
 use hourglass_data::blocking::BlockingExecutor;
-use hourglass_data::segment_footer::{SegmentFooterWriter, MAX_SEGMENT_SIZE, SegmentFooterReader, FOOTER_OFFSET_LEN};
+use hourglass_data::segment_footer::{
+    SegmentFooterReader,
+    SegmentFooterWriter,
+    FOOTER_OFFSET_LEN,
+    MAX_SEGMENT_SIZE,
+};
 use hourglass_data::value::Document;
 use hourglass_data::Id;
 
@@ -87,7 +92,8 @@ impl SegmentWriter {
         let block_start = self.num_bytes_written as u32;
         let len = compressed.len() as u32;
 
-        self.footer.add_block((block_start, len), docset.keys().copied());
+        self.footer
+            .add_block((block_start, len), docset.keys().copied());
         self.writer.write_all(&compressed).await?;
         self.num_bytes_written += compressed.len();
 
@@ -140,18 +146,28 @@ impl SegmentReader {
         let footer_suffix = file
             .read_at(length - FOOTER_OFFSET_LEN as u64, FOOTER_OFFSET_LEN)
             .await
-            .map_err(|e| SegmentError::SegmentOpenError(format!("Failed to read segment footer suffix. {}", e)))?;
+            .map_err(|e| {
+                SegmentError::SegmentOpenError(format!(
+                    "Failed to read segment footer suffix. {}",
+                    e
+                ))
+            })?;
 
         let data_len = SegmentFooterReader::get_data_len(&footer_suffix)
             .map_err(|e| SegmentError::DeserializationError(e.to_string()))?;
 
-        let footer_data  = file
+        let footer_data = file
             .read_at(
                 length - FOOTER_OFFSET_LEN as u64 - data_len as u64,
                 data_len,
             )
             .await
-            .map_err(|e| SegmentError::SegmentOpenError(format!("Failed to read segment footer. {}", e)))?;
+            .map_err(|e| {
+                SegmentError::SegmentOpenError(format!(
+                    "Failed to read segment footer. {}",
+                    e
+                ))
+            })?;
 
         let footer = SegmentFooterReader::from_buffer(&footer_data, 0, data_len)
             .map_err(|e| SegmentError::DeserializationError(e.to_string()))?;
@@ -176,7 +192,8 @@ impl SegmentReader {
             Some(offsets) => offsets,
         };
 
-        let data  = self.file
+        let data = self
+            .file
             .read_at(start as u64, len as usize)
             .await
             .map_err(|e| SegmentError::BlockReadError(e.to_string()))?;
@@ -189,11 +206,12 @@ impl SegmentReader {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
+
     use hourglass_data::value::{FixedStructureValue, JsonNumber, JsonValue};
+
     use super::*;
 
     macro_rules! run {
@@ -261,8 +279,7 @@ mod tests {
     #[test]
     fn test_segment_writer_create() {
         let file = std::env::temp_dir().join("segment-create-test");
-        let executor = BlockingExecutor::with_n_threads(1)
-            .expect("Create executor");
+        let executor = BlockingExecutor::with_n_threads(1).expect("Create executor");
 
         let fut = || async move {
             SegmentWriter::create(executor, &file)
@@ -276,8 +293,7 @@ mod tests {
     #[test]
     fn test_segment_writer_write_doc() {
         let file = std::env::temp_dir().join("segment-write-doc-test");
-        let executor = BlockingExecutor::with_n_threads(1)
-            .expect("Create executor");
+        let executor = BlockingExecutor::with_n_threads(1).expect("Create executor");
 
         let doc = get_random_doc();
 
@@ -298,8 +314,7 @@ mod tests {
     #[test]
     fn test_segment_writer_write_doc_until_flush() {
         let file = std::env::temp_dir().join("segment-write-doc-test");
-        let executor = BlockingExecutor::with_n_threads(1)
-            .expect("Create executor");
+        let executor = BlockingExecutor::with_n_threads(1).expect("Create executor");
 
         let doc = get_random_doc();
 
@@ -318,9 +333,7 @@ mod tests {
                     .expect("Successful doc addition");
 
                 // We want to make sure we're actually writing to disk.
-                if (i != 0)
-                    && (writer.active_block.num_docs() == 0)
-                {
+                if (i != 0) && (writer.active_block.num_docs() == 0) {
                     assert!(writer.num_bytes_written > last_num_bytes);
                     last_num_bytes = writer.num_bytes_written;
                 }
@@ -330,7 +343,10 @@ mod tests {
         run!(fut);
     }
 
-    async fn get_populated_segment_writer(executor: BlockingExecutor, file: &Path) -> SegmentWriter {
+    async fn get_populated_segment_writer(
+        executor: BlockingExecutor,
+        file: &Path,
+    ) -> SegmentWriter {
         let doc = get_random_doc();
 
         let mut writer = SegmentWriter::create(executor, &file)
@@ -348,8 +364,7 @@ mod tests {
     #[test]
     fn test_segment_writer_seal() {
         let file = std::env::temp_dir().join("segment-seal-test");
-        let executor = BlockingExecutor::with_n_threads(1)
-            .expect("Create executor");
+        let executor = BlockingExecutor::with_n_threads(1).expect("Create executor");
 
         let fut = || async move {
             let writer = get_populated_segment_writer(executor, &file).await;
@@ -366,8 +381,7 @@ mod tests {
     #[test]
     fn test_segment_reader_open() {
         let file = std::env::temp_dir().join("segment-reader-test");
-        let executor = BlockingExecutor::with_n_threads(1)
-            .expect("Create executor");
+        let executor = BlockingExecutor::with_n_threads(1).expect("Create executor");
 
         let fut = || async move {
             {
@@ -387,12 +401,10 @@ mod tests {
         run!(fut);
     }
 
-
     #[test]
     fn test_segment_reader_get_block() {
         let file = std::env::temp_dir().join("segment-reader-get-block-test");
-        let executor = BlockingExecutor::with_n_threads(1)
-            .expect("Create executor");
+        let executor = BlockingExecutor::with_n_threads(1).expect("Create executor");
 
         let fut = || async move {
             {
@@ -408,11 +420,15 @@ mod tests {
                 .await
                 .expect("Successful segment read");
 
-            let block = reader.get_doc_block(1)
+            let block = reader
+                .get_doc_block(1)
                 .await
                 .expect("Successfully check doc block");
 
-            assert!(block.is_some(), "Expected doc block to exist when doc id = 1");
+            assert!(
+                block.is_some(),
+                "Expected doc block to exist when doc id = 1"
+            );
         };
 
         run!(fut);

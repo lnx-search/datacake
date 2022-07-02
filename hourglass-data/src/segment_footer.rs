@@ -39,12 +39,11 @@ impl SegmentFooterWriter {
 
     /// Serializes and compresses the segment footer.
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
-        let mut buffer = rkyv::to_bytes::<_, 1024>(&self.meta)
-            .map_err(anyhow::Error::from)?;
+        let mut buffer =
+            rkyv::to_bytes::<_, 1024>(&self.meta).map_err(anyhow::Error::from)?;
 
         let offset = buffer.len() as u32;
-        let offset = rkyv::to_bytes::<_, 8>(&offset)
-            .map_err(anyhow::Error::from)?;
+        let offset = rkyv::to_bytes::<_, 8>(&offset).map_err(anyhow::Error::from)?;
 
         buffer.extend_from_slice(&offset);
 
@@ -119,7 +118,6 @@ impl SegmentMetadata {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -138,6 +136,7 @@ mod tests {
         let buffer = footer.to_bytes().expect("Successful serialize");
 
         // Try load it from bytes again.
-        SegmentFooterReader::from_buffer(&buffer, 0, buffer.len() - FOOTER_OFFSET_LEN).expect("Successful deserialize");
+        SegmentFooterReader::from_buffer(&buffer, 0, buffer.len() - FOOTER_OFFSET_LEN)
+            .expect("Successful deserialize");
     }
 }
