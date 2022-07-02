@@ -68,7 +68,7 @@ impl BlockWriter {
     pub async fn drain_and_compress(
         &mut self,
         executor: &BlockingExecutor,
-    ) -> Result<Vec<u8>> {
+    ) -> Result<(Vec<u8>, Offsets)> {
         let start = std::time::Instant::now();
         let num_documents = self.doc_offsets.len();
 
@@ -90,7 +90,7 @@ impl BlockWriter {
         // We do a hard reset here as we probably dont want to be
         // holding onto the left over memory all the time.
         self.inner_buffer = vec![];
-        self.doc_offsets.clear();
+        let doc_ids = std::mem::take(&mut self.doc_offsets);
 
         let offset_markers =
             rkyv::to_bytes::<_, 8>(&(offsets_len, uncompressed_length))?;
@@ -106,7 +106,7 @@ impl BlockWriter {
             start.elapsed(),
         );
 
-        Ok(compressed)
+        Ok((compressed, doc_ids))
     }
 }
 
@@ -319,7 +319,7 @@ pub(crate) mod test_utils {
 
         let executor = BlockingExecutor::with_n_threads(1).expect("Build executor");
 
-        let data = writer
+        let (data, _) = writer
             .drain_and_compress(&executor)
             .await
             .expect("Drain and compress");
@@ -380,7 +380,7 @@ mod tests {
 
         let executor = BlockingExecutor::with_n_threads(1).expect("Build executor");
 
-        let data = writer
+        let (data, _) = writer
             .drain_and_compress(&executor)
             .await
             .expect("Drain and compress");

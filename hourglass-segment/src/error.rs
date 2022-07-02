@@ -18,4 +18,7 @@ pub enum SegmentError {
 
     #[error("Failed to deserialize data: {0}")]
     DeserializationError(String),
+
+    #[error("Failed to read segment block: {0}")]
+    BlockReadError(String),
 }

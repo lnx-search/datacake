@@ -78,12 +78,16 @@ impl SegmentWriter {
             return Ok(0);
         }
 
-        let compressed = self
+        let (compressed, docset) = self
             .active_block
             .drain_and_compress(&self.executor)
             .await
             .map_err(|e| SegmentError::SerializationError(e.to_string()))?;
 
+        let block_start = self.num_bytes_written as u32;
+        let len = compressed.len() as u32;
+
+        self.footer.add_block((block_start, len), docset.keys().copied());
         self.writer.write_all(&compressed).await?;
         self.num_bytes_written += compressed.len();
 
@@ -159,8 +163,29 @@ impl SegmentReader {
         })
     }
 
-    pub async fn get_block_reader(&self) -> Result<BlockReader> {
-        todo!()
+    /// Gets a given doc's block reader.
+    ///
+    /// This may seem a little weird from a high level view however, this is a necessary
+    /// behaviour to return the entire block reader vs just the doc, as we cache blocks
+    /// rather than individual documents, and each cache is shard-local rather than
+    /// segment local. This means our cache could potentially be handling blocks from
+    /// multiple segments, and we want to avoid maintaining and managing a cache per-segment.
+    pub async fn get_doc_block(&self, doc_id: Id) -> Result<Option<BlockReader>> {
+        let (start, len) = match self.footer.get_block_offsets_for_doc(doc_id) {
+            None => return Ok(None),
+            Some(offsets) => offsets,
+        };
+
+        let data  = self.file
+            .read_at(start as u64, len as usize)
+            .await
+            .map_err(|e| SegmentError::BlockReadError(e.to_string()))?;
+
+        let block = BlockReader::from_compressed(&data, &self.executor)
+            .await
+            .map_err(|e| SegmentError::DeserializationError(e.to_string()))?;
+
+        Ok(Some(block))
     }
 }
 
@@ -305,23 +330,29 @@ mod tests {
         run!(fut);
     }
 
+    async fn get_populated_segment_writer(executor: BlockingExecutor, file: &Path) -> SegmentWriter {
+        let doc = get_random_doc();
+
+        let mut writer = SegmentWriter::create(executor, &file)
+            .await
+            .expect("Successful segment creation");
+
+        writer
+            .add_document(1, &doc)
+            .await
+            .expect("Successful doc addition");
+
+        writer
+    }
+
     #[test]
     fn test_segment_writer_seal() {
         let file = std::env::temp_dir().join("segment-seal-test");
         let executor = BlockingExecutor::with_n_threads(1)
             .expect("Create executor");
 
-        let doc = get_random_doc();
-
         let fut = || async move {
-            let mut writer = SegmentWriter::create(executor, &file)
-                .await
-                .expect("Successful segment creation");
-
-            writer
-                .add_document(1, &doc)
-                .await
-                .expect("Successful doc addition");
+            let writer = get_populated_segment_writer(executor, &file).await;
 
             writer
                 .seal_segment()
@@ -338,18 +369,9 @@ mod tests {
         let executor = BlockingExecutor::with_n_threads(1)
             .expect("Create executor");
 
-        let doc = get_random_doc();
-
         let fut = || async move {
             {
-                let mut writer = SegmentWriter::create(executor.clone(), &file)
-                    .await
-                    .expect("Successful segment creation");
-
-                writer
-                    .add_document(1, &doc)
-                    .await
-                    .expect("Successful doc addition");
+                let writer = get_populated_segment_writer(executor.clone(), &file).await;
 
                 writer
                     .seal_segment()
@@ -360,6 +382,37 @@ mod tests {
             SegmentReader::open(executor, &file)
                 .await
                 .expect("Successful segment read");
+        };
+
+        run!(fut);
+    }
+
+
+    #[test]
+    fn test_segment_reader_get_block() {
+        let file = std::env::temp_dir().join("segment-reader-get-block-test");
+        let executor = BlockingExecutor::with_n_threads(1)
+            .expect("Create executor");
+
+        let fut = || async move {
+            {
+                let writer = get_populated_segment_writer(executor.clone(), &file).await;
+
+                writer
+                    .seal_segment()
+                    .await
+                    .expect("Successful sealing of segment");
+            }
+
+            let reader = SegmentReader::open(executor, &file)
+                .await
+                .expect("Successful segment read");
+
+            let block = reader.get_doc_block(1)
+                .await
+                .expect("Successfully check doc block");
+
+            assert!(block.is_some(), "Expected doc block to exist when doc id = 1");
         };
 
         run!(fut);

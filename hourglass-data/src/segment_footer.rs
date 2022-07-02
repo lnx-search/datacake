@@ -12,7 +12,7 @@ pub const FOOTER_OFFSET_LEN: usize = std::mem::size_of::<u32>();
 
 type SegmentLocalBlockId = u16;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 /// A writer for a segment metadata.
 ///
 /// This is data stored at the start of the file which contains data about the
@@ -52,6 +52,7 @@ impl SegmentFooterWriter {
     }
 }
 
+#[derive(Debug)]
 /// A writer for a segment metadata.
 ///
 /// This is data stored at the start of the file which contains data about the
