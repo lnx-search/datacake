@@ -1,3 +1,4 @@
+use std::cmp;
 use std::path::Path;
 
 use futures_lite::AsyncWriteExt;
@@ -227,7 +228,7 @@ impl SegmentReader {
             .collect::<Vec<_>>();
 
         // We want smallest at the end.
-        owned_ids.sort_by_key(|(start, _)| -(*start as i32));
+        owned_ids.sort_by_key(|(start, _)| cmp::Reverse(*start));
 
         SegmentBlocksIterator {
             ids: owned_ids,
