@@ -429,6 +429,13 @@ mod tests {
                 block.is_some(),
                 "Expected doc block to exist when doc id = 1"
             );
+
+            let block = reader
+                .get_doc_block(1241241241)
+                .await
+                .expect("Successfully check doc block");
+
+            assert!(block.is_none(), "Expected no block to be found");
         };
 
         run!(fut);
