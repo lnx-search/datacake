@@ -15,4 +15,7 @@ pub enum SegmentError {
 
     #[error("Failed to serialize document: {0}")]
     SerializationError(String),
+
+    #[error("Failed to deserialize data: {0}")]
+    DeserializationError(String),
 }

@@ -527,6 +527,7 @@ dependencies = [
  "futures-lite",
  "glommio",
  "hourglass-data",
+ "rand",
  "thiserror",
 ]
 

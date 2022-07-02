@@ -314,7 +314,7 @@ pub(crate) mod test_utils {
         let mut writer = BlockWriter::default();
 
         writer
-            .write_document(id, &doc)
+            .write_document(id, doc)
             .unwrap_or_else(|_| panic!("Serialize OK, failed on doc: {:?}", doc));
 
         let executor = BlockingExecutor::with_n_threads(1).expect("Build executor");
