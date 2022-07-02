@@ -78,7 +78,9 @@ impl SegmentFooterReader {
     #[inline]
     /// Produces an interator of all the block ids and their offsets
     /// contained within the segment.
-    pub fn iter_blocks(&self) -> std::collections::btree_map::Iter<SegmentLocalBlockId, (u32, u32)> {
+    pub fn iter_blocks(
+        &self,
+    ) -> std::collections::btree_map::Iter<SegmentLocalBlockId, (u32, u32)> {
         self.meta.iter_blocks()
     }
 
@@ -110,7 +112,9 @@ impl SegmentMetadata {
 
     /// Produces an interator of all the block ids and their offsets
     /// contained within the segment.
-    pub fn iter_blocks(&self) -> std::collections::btree_map::Iter<SegmentLocalBlockId, (u32, u32)> {
+    pub fn iter_blocks(
+        &self,
+    ) -> std::collections::btree_map::Iter<SegmentLocalBlockId, (u32, u32)> {
         self.blocks.iter()
     }
 

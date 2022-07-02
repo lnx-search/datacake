@@ -1,7 +1,14 @@
 use std::path::Path;
 
 use futures_lite::AsyncWriteExt;
-use glommio::io::{DmaFile, DmaStreamReader, DmaStreamWriter, DmaStreamWriterBuilder, ImmutableFile, ImmutableFileBuilder};
+use glommio::io::{
+    DmaFile,
+    DmaStreamReader,
+    DmaStreamWriter,
+    DmaStreamWriterBuilder,
+    ImmutableFile,
+    ImmutableFileBuilder,
+};
 use hourglass_data::block::{BlockReader, BlockWriter};
 use hourglass_data::blocking::BlockingExecutor;
 use hourglass_data::segment_footer::{
@@ -205,7 +212,8 @@ impl SegmentReader {
     pub fn iter_blocks(&self) -> SegmentBlocksIterator {
         let block_ids = self.footer.iter_blocks();
 
-        let stream = self.file
+        let stream = self
+            .file
             .stream_reader()
             .with_buffer_size(512 << 10)
             .with_read_ahead(10)
@@ -228,7 +236,6 @@ impl SegmentReader {
         }
     }
 }
-
 
 pub struct SegmentBlocksIterator {
     ids: Vec<(u32, u32)>,
@@ -254,7 +261,8 @@ impl SegmentBlocksIterator {
         let mut data = vec![];
         let mut to_get = len as u64;
         while to_get > 0 {
-            let maybe_buff = self.stream
+            let maybe_buff = self
+                .stream
                 .get_buffer_aligned(to_get)
                 .await
                 .map_err(|e| SegmentError::BlockReadError(e.to_string()));
@@ -271,7 +279,7 @@ impl SegmentBlocksIterator {
                     .await
                     .map_err(|e| SegmentError::DeserializationError(e.to_string()))
                     .map(Some)
-                    .transpose()
+                    .transpose();
             }
 
             data.extend_from_slice(&buff);
@@ -528,7 +536,8 @@ mod tests {
 
         let fut = || async move {
             {
-                let mut writer = get_populated_segment_writer(executor.clone(), &file).await;
+                let mut writer =
+                    get_populated_segment_writer(executor.clone(), &file).await;
 
                 // Add a bunch of docs to test iterating through.
                 for i in 0..4096 {
