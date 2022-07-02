@@ -1,4 +1,11 @@
 extern crate core;
 
 pub mod error;
-pub mod segment;
+mod reader;
+mod writer;
+
+#[cfg(test)]
+mod test_utils;
+
+pub use reader::{SegmentBlocksIterator, SegmentReader};
+pub use writer::SegmentWriter;
