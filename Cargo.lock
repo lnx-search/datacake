@@ -527,9 +527,10 @@ dependencies = [
  "futures-lite",
  "glommio",
  "hourglass-data",
+ "humansize",
  "rand",
- "rkyv",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]

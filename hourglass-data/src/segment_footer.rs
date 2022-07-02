@@ -49,6 +49,11 @@ impl SegmentFooterWriter {
 
         Ok(buffer.into_vec())
     }
+
+    #[inline]
+    pub fn num_docs(&self) -> usize {
+        self.meta.num_docs()
+    }
 }
 
 #[derive(Debug)]
@@ -88,6 +93,11 @@ impl SegmentFooterReader {
     pub fn get_block_offsets_for_doc(&self, id: Id) -> Option<(u32, u32)> {
         let block = self.meta.docset.get(&id)?;
         self.meta.blocks.get(block).copied()
+    }
+
+    #[inline]
+    pub fn num_docs(&self) -> usize {
+        self.meta.num_docs()
     }
 }
 
@@ -132,6 +142,11 @@ impl SegmentMetadata {
             .map_err(|_| anyhow!("Failed to deserialize segment metadata footer. Is the segment corrupted?"))?;
 
         Ok(slf)
+    }
+
+    #[inline]
+    pub fn num_docs(&self) -> usize {
+        self.docset.len()
     }
 }
 

@@ -1,5 +1,7 @@
 use std::path::Path;
+use std::time::Instant;
 
+use humansize::{FileSize, file_size_opts::CONVENTIONAL};
 use futures_lite::AsyncWriteExt;
 use glommio::io::{DmaFile, DmaStreamWriter, DmaStreamWriterBuilder};
 use hourglass_data::block::BlockWriter;
@@ -27,6 +29,8 @@ impl SegmentWriter {
     ///
     /// This intern creates a new file and empty block writer.
     pub async fn create(executor: BlockingExecutor, path: &Path) -> Result<Self> {
+        debug!("Creating mutable segment @ {:?}", path);
+
         let file = DmaFile::create(path)
             .await
             .map_err(|v| SegmentError::SegmentCreationError(v.to_string()))?;
@@ -35,6 +39,8 @@ impl SegmentWriter {
             .with_write_behind(10)
             .with_buffer_size(512 << 10)
             .build();
+
+        debug!("Created mutable segment @ {:?}", path);
 
         Ok(Self {
             num_bytes_written: 0,
@@ -69,6 +75,7 @@ impl SegmentWriter {
     pub async fn seal_segment(mut self) -> Result<()> {
         self.write_block().await?;
 
+        let start = Instant::now();
         let footer = self
             .footer
             .to_bytes()
@@ -79,6 +86,15 @@ impl SegmentWriter {
         self.writer.flush().await?;
         self.writer.close().await?;
 
+        info!(
+            "Segment containing {} docs, totalling {} on disk has been sealed in {:?}.",
+            self.footer.num_docs(),
+            self.num_bytes_written
+                .file_size(CONVENTIONAL)
+                .unwrap_or_else(|_| "an unknown number of bytes.".to_string()),
+            start.elapsed(),
+        );
+
         Ok(())
     }
 
@@ -88,6 +104,8 @@ impl SegmentWriter {
         if self.active_block.num_docs() == 0 {
             return Ok(0);
         }
+
+        let start = Instant::now();
 
         let (compressed, docset) = self
             .active_block
@@ -103,7 +121,24 @@ impl SegmentWriter {
         self.writer.write_all(&compressed).await?;
         self.num_bytes_written += compressed.len();
 
+        debug!(
+            "Segment wrote out {} to disk. Segment size is now {}, totalling {} docs in {:?}.",
+            compressed.len()
+                .file_size(CONVENTIONAL)
+                .unwrap_or_else(|_| "an unknown number of bytes.".to_string()),
+            self.num_bytes_written
+                .file_size(CONVENTIONAL)
+                .unwrap_or_else(|_| "an unknown number of bytes.".to_string()),
+            self.footer.num_docs(),
+            start.elapsed(),
+        );
+
         Ok(compressed.len())
+    }
+
+    #[inline]
+    pub fn num_docs(&self) -> usize {
+        self.footer.num_docs()
     }
 }
 
