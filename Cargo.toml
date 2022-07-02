@@ -13,6 +13,7 @@ hourglass-segment = { path = "hourglass-segment" }
 members = [
     "hourglass-data",
     "hourglass-segment",
+    "hourglass-shard"
 ]
 exclude = [
 ]
