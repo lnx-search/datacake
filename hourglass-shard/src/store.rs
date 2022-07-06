@@ -3,6 +3,7 @@ use std::mem;
 use std::path::PathBuf;
 use std::time::Instant;
 
+use hourglass_data::block::ReadGuard;
 use hourglass_data::blocking::BlockingExecutor;
 use hourglass_data::cache::ShardCache;
 use hourglass_data::value::{Document, ZeroCopyDocument};
@@ -11,7 +12,6 @@ use hourglass_segment::{SegmentReader, SegmentWriter};
 use humansize::file_size_opts::CONVENTIONAL;
 use humansize::FileSize;
 use uuid::Uuid;
-use hourglass_data::block::ReadGuard;
 
 use crate::error::Result;
 
@@ -32,10 +32,7 @@ pub struct StoreShard {
 }
 
 impl StoreShard {
-    pub async fn get_document(
-        &mut self,
-        id: DocId,
-    ) -> Result<Option<ReadGuard>> {
+    pub async fn get_document(&mut self, id: DocId) -> Result<Option<ReadGuard>> {
         // SAFETY:
         //  There is potentially really dangerous, and any changes made to this block should be
         //  through checked (preferably by trying to remove the unsafe!) The only reason why unsafe

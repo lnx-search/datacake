@@ -113,7 +113,6 @@ impl BlockWriter {
     }
 }
 
-
 #[derive(Clone)]
 /// A guard that points to the raw block of data containing the document.
 ///
@@ -130,7 +129,6 @@ impl Deref for ReadGuard {
         &self.doc
     }
 }
-
 
 #[derive(Clone)]
 /// A zero-copy block reader.
