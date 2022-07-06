@@ -10,6 +10,8 @@ use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::value::ser::Formatter;
 
+pub type ZeroCopyDocument = rkyv::Archived<Document>;
+
 #[derive(Archive, Debug, Deserialize, Serialize, Clone)]
 #[archive(bound(serialize = "__S: rkyv::ser::ScratchSpace + rkyv::ser::Serializer"))]
 #[archive_attr(derive(CheckBytes, Debug))]

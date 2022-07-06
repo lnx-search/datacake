@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
-use hourglass_data::Id;
+use hourglass_data::DocId;
 
 use crate::error::Result;
 use crate::{SegmentReader, SegmentWriter};
@@ -14,14 +14,14 @@ use crate::{SegmentReader, SegmentWriter};
 pub async fn merge_segment_into_writer(
     writer: &mut SegmentWriter,
     to_merge: &SegmentReader,
-    tombstones: &HashSet<Id>,
+    tombstones: &HashSet<DocId>,
 ) -> Result<()> {
     let mut blocks = to_merge.iter_blocks();
 
     let start = Instant::now();
     let mut num_docs_processed = 0;
     let mut num_docs_removed = 0;
-    let mut processed_docs = HashMap::<Id, Duration>::new();
+    let mut processed_docs = HashMap::<DocId, Duration>::new();
     while let Some(block) = blocks.next().await {
         let block = block?;
 

@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 use bytecheck::CheckBytes;
 use rkyv::{AlignedVec, Archive, Deserialize, Serialize};
 
-use crate::Id;
+use crate::DocId;
 
 /// Maximum segment size of 10GB
 pub const MAX_SEGMENT_SIZE: usize = 10 << 30;
@@ -26,7 +26,7 @@ impl SegmentFooterWriter {
     pub fn add_block(
         &mut self,
         block: (u32, u32),
-        contained_docs: impl Iterator<Item = Id>,
+        contained_docs: impl Iterator<Item = DocId>,
     ) {
         self.meta.block_id_counter += 1;
         let block_id = self.meta.block_id_counter;
@@ -90,7 +90,7 @@ impl SegmentFooterReader {
     }
 
     /// Gets the block offsets associated with the given doc id.
-    pub fn get_block_offsets_for_doc(&self, id: Id) -> Option<(u32, u32)> {
+    pub fn get_block_offsets_for_doc(&self, id: DocId) -> Option<(u32, u32)> {
         let block = self.meta.docset.get(&id)?;
         self.meta.blocks.get(block).copied()
     }
@@ -105,7 +105,7 @@ impl SegmentFooterReader {
 #[archive_attr(derive(CheckBytes, Debug))]
 pub(crate) struct SegmentMetadata {
     block_id_counter: SegmentLocalBlockId,
-    pub docset: BTreeMap<Id, SegmentLocalBlockId>,
+    pub docset: BTreeMap<DocId, SegmentLocalBlockId>,
     pub blocks: BTreeMap<SegmentLocalBlockId, (u32, u32)>,
 }
 

@@ -7,4 +7,4 @@ pub mod cache;
 pub mod segment_footer;
 pub mod value;
 
-pub type Id = u64;
+pub type DocId = u64;

@@ -5,14 +5,13 @@ use std::rc::Rc;
 
 use moka::unsync::Cache;
 
-use crate::block::{BlockReader, GlobalBlockId};
-use crate::value::Document;
-use crate::Id;
+use crate::block::{BlockReader, GlobalBlockId, ReadGuard};
+use crate::DocId;
 
 /// A shard-local cache for retrieving documents backed by the individual buffers.
 pub struct ShardCache {
     /// A lookup table for mapping document ids, to their given block id.
-    lookup: Rc<RefCell<HashMap<Id, GlobalBlockId>>>,
+    lookup: Rc<RefCell<HashMap<DocId, GlobalBlockId>>>,
     block_cache: Cache<GlobalBlockId, BlockReaderWrapper>,
 }
 
@@ -43,7 +42,7 @@ impl ShardCache {
     }
 
     /// Attempts to get the document from the cache if it exists.
-    pub fn get_doc(&mut self, id: Id) -> Option<&rkyv::Archived<Document>> {
+    pub fn get_doc(&mut self, id: DocId) -> Option<ReadGuard> {
         let lookup = self.lookup.borrow();
         let block = lookup.get(&id)?;
 
@@ -61,7 +60,7 @@ impl ShardCache {
         let block_id = GlobalBlockId::new_v4();
         let doc_ids = block
             .document_ids()
-            .map(|v| (*v as Id, block_id))
+            .map(|v| (*v as DocId, block_id))
             .collect::<Vec<_>>();
 
         let wrapped = BlockReaderWrapper {
@@ -94,7 +93,7 @@ pub struct CacheStats {
 
 pub struct BlockReaderWrapper {
     inner: BlockReader,
-    lookup: Rc<RefCell<HashMap<Id, GlobalBlockId>>>,
+    lookup: Rc<RefCell<HashMap<DocId, GlobalBlockId>>>,
 }
 
 impl Deref for BlockReaderWrapper {

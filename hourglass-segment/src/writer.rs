@@ -7,13 +7,16 @@ use hourglass_data::block::BlockWriter;
 use hourglass_data::blocking::BlockingExecutor;
 use hourglass_data::segment_footer::{SegmentFooterWriter, MAX_SEGMENT_SIZE};
 use hourglass_data::value::Document;
-use hourglass_data::Id;
+use hourglass_data::DocId;
 use humansize::file_size_opts::CONVENTIONAL;
 use humansize::FileSize;
+use uuid::Uuid;
 
 use crate::error::{Result, SegmentError};
 
 pub struct SegmentWriter {
+    uid: Uuid,
+
     /// The total number of bytes written to disk that the process is aware of.
     num_bytes_written: usize,
 
@@ -29,10 +32,12 @@ impl SegmentWriter {
     /// Creates a new segment writer.
     ///
     /// This intern creates a new file and empty block writer.
-    pub async fn create(executor: BlockingExecutor, path: &Path) -> Result<Self> {
-        debug!("Creating mutable segment @ {:?}", path);
+    pub async fn create(executor: BlockingExecutor, base_path: &Path) -> Result<Self> {
+        let id = Uuid::new_v4();
 
-        let file = DmaFile::create(path)
+        debug!("Creating mutable segment {}", id);
+
+        let file = DmaFile::create(crate::shared::segment_path(id, base_path))
             .await
             .map_err(|v| SegmentError::SegmentCreationError(v.to_string()))?;
 
@@ -41,9 +46,10 @@ impl SegmentWriter {
             .with_buffer_size(512 << 10)
             .build();
 
-        debug!("Created mutable segment @ {:?}", path);
+        debug!("Created mutable segment {}", id);
 
         Ok(Self {
+            uid: id,
             num_bytes_written: 0,
             executor,
             footer: SegmentFooterWriter::default(),
@@ -52,12 +58,17 @@ impl SegmentWriter {
         })
     }
 
+    #[inline]
+    pub fn id(&self) -> Uuid {
+        self.uid
+    }
+
     /// Adds a document to the writer.
     ///
     /// This only asynchronously blocks once the given block writer is full.
     ///
     /// Returns `true` if the segment is at capacity.
-    pub async fn add_document(&mut self, id: Id, doc: &Document) -> Result<bool> {
+    pub async fn add_document(&mut self, id: DocId, doc: &Document) -> Result<bool> {
         let is_full = self
             .active_block
             .write_document(id, doc)
@@ -73,7 +84,9 @@ impl SegmentWriter {
     }
 
     /// Flushes all pending data to disk and writes the segment footer, sealing the file.
-    pub async fn seal_segment(mut self) -> Result<()> {
+    ///
+    /// Returns the number of bytes written to disk.
+    pub async fn seal_segment(mut self) -> Result<usize> {
         self.write_block().await?;
 
         let start = Instant::now();
@@ -83,6 +96,8 @@ impl SegmentWriter {
             .map_err(|e| SegmentError::SerializationError(e.to_string()))?;
 
         self.writer.write_all(&footer).await?;
+
+        let num_bytes_total = self.writer.current_pos();
 
         self.writer.flush().await?;
         self.writer.close().await?;
@@ -96,7 +111,7 @@ impl SegmentWriter {
             start.elapsed(),
         );
 
-        Ok(())
+        Ok(num_bytes_total as usize)
     }
 
     /// Writes the remaining data in the block writer to disk.

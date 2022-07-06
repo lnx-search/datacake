@@ -5,9 +5,10 @@ use glommio::io::{DmaStreamReader, ImmutableFile, ImmutableFileBuilder};
 use hourglass_data::block::BlockReader;
 use hourglass_data::blocking::BlockingExecutor;
 use hourglass_data::segment_footer::{SegmentFooterReader, FOOTER_OFFSET_LEN};
-use hourglass_data::Id;
+use hourglass_data::DocId;
 use humansize::file_size_opts::CONVENTIONAL;
 use humansize::FileSize;
+use uuid::Uuid;
 
 use crate::error::{Result, SegmentError};
 
@@ -27,10 +28,14 @@ impl SegmentReader {
     ///
     /// This is undefined behaviour if the file is still being modified while
     /// the reader has the file open.
-    pub async fn open(executor: BlockingExecutor, path: &Path) -> Result<Self> {
-        debug!("Opening immutable segment @ {:?}", path);
+    pub async fn open(
+        executor: BlockingExecutor,
+        id: Uuid,
+        base_path: &Path,
+    ) -> Result<Self> {
+        debug!("Opening immutable segment {}", id);
 
-        let file = ImmutableFileBuilder::new(path)
+        let file = ImmutableFileBuilder::new(crate::shared::segment_path(id, base_path))
             .with_sequential_concurrency(10)
             .with_buffer_size(512 << 10)
             .build_existing()
@@ -45,7 +50,7 @@ impl SegmentReader {
             file.file_size()
                 .file_size(CONVENTIONAL)
                 .unwrap_or_else(|_| "an unknown number of bytes.".to_string()),
-            path,
+            base_path,
         );
 
         Ok(Self {
@@ -62,7 +67,7 @@ impl SegmentReader {
     /// rather than individual documents, and each cache is shard-local rather than
     /// segment local. This means our cache could potentially be handling blocks from
     /// multiple segments, and we want to avoid maintaining and managing a cache per-segment.
-    pub async fn get_doc_block(&self, doc_id: Id) -> Result<Option<BlockReader>> {
+    pub async fn get_doc_block(&self, doc_id: DocId) -> Result<Option<BlockReader>> {
         let (start, len) = match self.footer.get_block_offsets_for_doc(doc_id) {
             None => return Ok(None),
             Some(offsets) => offsets,
@@ -228,16 +233,20 @@ mod tests {
         let executor = BlockingExecutor::with_n_threads(1).expect("Create executor");
 
         let fut = || async move {
-            {
+            let id = {
                 let writer = get_populated_segment_writer(executor.clone(), &file).await;
+
+                let id = writer.id();
 
                 writer
                     .seal_segment()
                     .await
                     .expect("Successful sealing of segment");
-            }
 
-            SegmentReader::open(executor, &file)
+                id
+            };
+
+            SegmentReader::open(executor, id, &file)
                 .await
                 .expect("Successful segment read");
         };
@@ -251,16 +260,20 @@ mod tests {
         let executor = BlockingExecutor::with_n_threads(1).expect("Create executor");
 
         let fut = || async move {
-            {
+            let id = {
                 let writer = get_populated_segment_writer(executor.clone(), &file).await;
+
+                let id = writer.id();
 
                 writer
                     .seal_segment()
                     .await
                     .expect("Successful sealing of segment");
-            }
 
-            let reader = SegmentReader::open(executor, &file)
+                id
+            };
+
+            let reader = SegmentReader::open(executor, id, &file)
                 .await
                 .expect("Successful segment read");
 
@@ -291,7 +304,7 @@ mod tests {
         let executor = BlockingExecutor::with_n_threads(1).expect("Create executor");
 
         let fut = || async move {
-            {
+            let id = {
                 let mut writer =
                     get_populated_segment_writer(executor.clone(), &file).await;
 
@@ -304,13 +317,17 @@ mod tests {
                         .expect("Successful doc addition");
                 }
 
+                let id = writer.id();
+
                 writer
                     .seal_segment()
                     .await
                     .expect("Successful sealing of segment");
-            }
 
-            let reader = SegmentReader::open(executor, &file)
+                id
+            };
+
+            let reader = SegmentReader::open(executor, id, &file)
                 .await
                 .expect("Successful segment read");
 

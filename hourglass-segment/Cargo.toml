@@ -13,6 +13,7 @@ thiserror = "1.0.31"
 glommio = "0.7.0"
 tracing = "0.1.35"
 humansize = "1.1.1"
+uuid = "1.1.2"
 
 [dev-dependencies]
 rand = "0.8.5"

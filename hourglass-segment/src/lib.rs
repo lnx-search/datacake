@@ -6,6 +6,7 @@ mod merger;
 mod reader;
 mod writer;
 
+mod shared;
 #[cfg(test)]
 mod test_utils;
 

@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 hourglass-data = { path = "hourglass-data" }
 hourglass-segment = { path = "hourglass-segment" }
+hourglass-shard = { path = "hourglass-shard" }
 
 [workspace]
 members = [

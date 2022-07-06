@@ -1,4 +1,7 @@
 use std::collections::BTreeMap;
+use std::mem;
+use std::ops::Deref;
+use std::sync::Arc;
 
 use anyhow::Result;
 use humansize::file_size_opts::CONVENTIONAL;
@@ -7,14 +10,14 @@ use rkyv::{AlignedVec, Deserialize};
 use uuid::Uuid;
 
 use crate::blocking::BlockingExecutor;
-use crate::value::Document;
-use crate::Id;
+use crate::value::{Document, ZeroCopyDocument};
+use crate::DocId;
 
 pub const OFFSET_HEADER_SIZE: usize = std::mem::size_of::<(u32, u32)>();
 pub const BLOCK_SIZE: usize = 512 << 10;
 
 pub type GlobalBlockId = Uuid;
-type Offsets = BTreeMap<Id, (u32, u32)>;
+type Offsets = BTreeMap<DocId, (u32, u32)>;
 
 #[derive(Default)]
 /// A writer that ingests documents and serializes them into a
@@ -31,7 +34,7 @@ impl BlockWriter {
     /// Serializes and appends the document to the buffer.
     ///
     /// returns `true` if the block is full.
-    pub fn write_document(&mut self, id: Id, doc: &Document) -> Result<bool> {
+    pub fn write_document(&mut self, id: DocId, doc: &Document) -> Result<bool> {
         let data = rkyv::to_bytes::<_, 2048>(doc)?;
 
         let len = data.len() as u32;
@@ -55,7 +58,7 @@ impl BlockWriter {
         self.inner_buffer.len()
             + std::mem::size_of::<Vec<u8>>()
             + self.doc_offsets.len()
-                * (std::mem::size_of::<Id>() + std::mem::size_of::<(u32, u32)>())
+                * (std::mem::size_of::<DocId>() + std::mem::size_of::<(u32, u32)>())
             + std::mem::size_of::<Offsets>()
     }
 
@@ -110,6 +113,25 @@ impl BlockWriter {
     }
 }
 
+
+#[derive(Clone)]
+/// A guard that points to the raw block of data containing the document.
+///
+/// This guard can be dereferenced, exposing the archived document.
+pub struct ReadGuard {
+    owned_data: Arc<AlignedVec>,
+    doc: &'static ZeroCopyDocument,
+}
+
+impl Deref for ReadGuard {
+    type Target = ZeroCopyDocument;
+
+    fn deref(&self) -> &Self::Target {
+        &self.doc
+    }
+}
+
+
 #[derive(Clone)]
 /// A zero-copy block reader.
 ///
@@ -117,7 +139,7 @@ impl BlockWriter {
 /// is a reference to the data within the vector.
 pub struct BlockReader {
     /// The raw decompressed block.
-    raw_block: AlignedVec,
+    raw_block: Arc<AlignedVec>,
 
     /// A reference into the raw block.
     ///
@@ -190,7 +212,7 @@ impl BlockReader {
                 );
 
                 let slf = BlockReader {
-                    raw_block,
+                    raw_block: Arc::new(raw_block),
                     doc_offsets,
                     inner_buffer,
                 };
@@ -209,14 +231,25 @@ impl BlockReader {
     }
 
     /// Gets a document with the given ID from the block.
-    pub fn get_document(&self, id: Id) -> Option<&rkyv::Archived<Document>> {
+    pub fn get_document(&self, id: DocId) -> Option<ReadGuard> {
         let offsets = self.doc_offsets.get(&id)?;
-        Some(unsafe { self.get_doc_from_offsets(offsets) })
+        let buff = self.raw_block.clone();
+        Some(ReadGuard {
+            doc: unsafe {
+                let doc = self.get_doc_from_offsets(offsets);
+
+                // SAFETY:
+                //  This is safe providing the buffer (`buff`/`owned_data`) is alive.
+                //  This is why the read guard contains the owned data.
+                mem::transmute::<&ZeroCopyDocument, &'static ZeroCopyDocument>(doc)
+            },
+            owned_data: buff,
+        })
     }
 
     #[inline]
     /// Produces iterator of document ids contained within the block.
-    pub fn document_ids(&self) -> impl Iterator<Item = &rkyv::Archived<Id>> {
+    pub fn document_ids(&self) -> impl Iterator<Item = &rkyv::Archived<DocId>> {
         self.doc_offsets.keys()
     }
 
@@ -224,7 +257,7 @@ impl BlockReader {
     /// Produces iterator of all documents contained within the block.
     pub fn iter_documents(
         &self,
-    ) -> impl Iterator<Item = (&rkyv::Archived<Id>, &rkyv::Archived<Document>)> {
+    ) -> impl Iterator<Item = (&rkyv::Archived<DocId>, &rkyv::Archived<Document>)> {
         self.doc_offsets.iter().map(|(id, offsets)| {
             let doc = unsafe { self.get_doc_from_offsets(offsets) };
             (id, doc)
@@ -234,11 +267,11 @@ impl BlockReader {
     #[inline]
     /// Produces iterator of all documents contained within the block after being
     /// fully allocated.
-    pub fn iter_documents_owned(&self) -> impl Iterator<Item = (Id, Document)> + '_ {
+    pub fn iter_documents_owned(&self) -> impl Iterator<Item = (DocId, Document)> + '_ {
         self.doc_offsets.iter().map(|(id, offsets)| {
             let doc = unsafe { self.get_doc_from_offsets(offsets) };
 
-            let id: Id = *id as Id;
+            let id: DocId = *id as DocId;
 
             // Ignore the linter: This compiles fine.
             let doc: Document = doc
@@ -327,7 +360,7 @@ pub(crate) mod test_utils {
 
     pub(crate) async fn create_temporary_block_reader(
         doc: &Document,
-        id: Id,
+        id: DocId,
     ) -> BlockReader {
         let mut writer = BlockWriter::default();
 
