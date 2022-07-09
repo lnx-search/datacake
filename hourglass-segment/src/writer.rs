@@ -156,6 +156,11 @@ impl SegmentWriter {
     pub fn num_docs(&self) -> usize {
         self.footer.num_docs()
     }
+
+    pub async fn close(&mut self) -> Result<()> {
+        self.writer.close().await?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]

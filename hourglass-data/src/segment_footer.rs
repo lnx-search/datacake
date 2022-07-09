@@ -6,8 +6,8 @@ use rkyv::{AlignedVec, Archive, Deserialize, Serialize};
 
 use crate::DocId;
 
-/// Maximum segment size of 10GB
-pub const MAX_SEGMENT_SIZE: usize = 10 << 30;
+/// Maximum segment size of 5GB
+pub const MAX_SEGMENT_SIZE: usize = 5 << 30;
 pub const FOOTER_OFFSET_LEN: usize = std::mem::size_of::<u32>();
 
 pub type SegmentLocalBlockId = u16;

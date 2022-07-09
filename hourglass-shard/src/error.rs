@@ -1,3 +1,4 @@
+
 pub type Result<T> = core::result::Result<T, ShardError>;
 
 #[derive(Debug, thiserror::Error)]

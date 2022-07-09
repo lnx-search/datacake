@@ -6,14 +6,15 @@ use std::time::Instant;
 use hourglass_data::block::ReadGuard;
 use hourglass_data::blocking::BlockingExecutor;
 use hourglass_data::cache::ShardCache;
-use hourglass_data::value::{Document, ZeroCopyDocument};
+use hourglass_data::value::Document;
 use hourglass_data::DocId;
 use hourglass_segment::{SegmentReader, SegmentWriter};
 use humansize::file_size_opts::CONVENTIONAL;
 use humansize::FileSize;
 use uuid::Uuid;
+use hourglass_segment::error::SegmentError;
 
-use crate::error::Result;
+use crate::error::{Result, ShardError};
 
 /// An abstraction around multiple segments that the shard manages.
 ///
@@ -109,6 +110,49 @@ impl StoreShard {
         self.uncommitted_index.dead_documents.insert(id);
     }
 
+    /// Cleans up and resets the segment state back to the last commit.
+    ///
+    /// This purges and intermediate buffers and written segments.
+    ///
+    /// Returns a list of segments that failed to be removed as part of the
+    /// immediate cleanup operation.
+    pub async fn rollback(&mut self) -> Result<Vec<(Uuid, SegmentError)>> {
+        let mut removed_segments = HashSet::new();
+
+        let mut failed_segments = vec![];
+        for segment_id in self.uncommitted_index.alive_documents.values() {
+            if removed_segments.contains(segment_id) {
+                continue
+            }
+
+            if let Err(e) = hourglass_segment::remove_segment(*segment_id, &self.base_path).await {
+                error!("Shard encountered an error during rollback: Failed to remove segment {} due to error: {:?}", segment_id, e);
+                failed_segments.push((*segment_id, e));
+            }
+
+            removed_segments.insert(*segment_id);
+        }
+
+        let segment_id = self.active_writer.id();
+
+        let new_segment = self.create_new_segment().await?;
+        let mut old_segment = mem::replace(&mut self.active_writer, new_segment);
+        let _ = old_segment.close().await;
+
+        if let Err(e) = hourglass_segment::remove_segment(segment_id, &self.base_path).await {
+            error!("Shard encountered an error during rollback: Failed to remove segment {} due to error: {:?}", segment_id, e);
+            failed_segments.push((segment_id, e));
+        }
+
+        Ok(failed_segments)
+    }
+
+    pub async fn commit(&mut self) -> Result<()> {
+
+
+        Ok(())
+    }
+
     #[inline]
     fn get_segment_reader(&self, id: DocId) -> Option<&SegmentReader> {
         self.index
@@ -119,7 +163,9 @@ impl StoreShard {
 
     #[inline]
     fn register_doc_insert_locally(&mut self, id: DocId) {
-        self.uncommitted_index.dead_documents.remove(&id);
+        self.uncommitted_index
+            .dead_documents
+            .remove(&id);
 
         self.uncommitted_index
             .alive_documents
@@ -127,15 +173,22 @@ impl StoreShard {
     }
 
     #[inline]
+    fn reset_uncommitted_index(&mut self) {
+        self.uncommitted_index = Index::default();
+    }
+
+    #[inline]
     async fn create_new_segment(&self) -> Result<SegmentWriter> {
-        let new_writer =
-            SegmentWriter::create(self.executor.clone(), &self.base_path).await?;
+        let new_writer = SegmentWriter::create(
+            self.executor.clone(),
+            &self.base_path,
+        ).await?;
 
         Ok(new_writer)
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Index<SegmentId> {
     /// A index mapping documents to their given segment location/
     alive_documents: HashMap<DocId, SegmentId>,
