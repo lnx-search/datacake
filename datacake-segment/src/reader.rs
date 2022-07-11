@@ -55,6 +55,7 @@ impl SegmentReader {
         );
 
         Ok(Self {
+            id,
             executor,
             file,
             footer,

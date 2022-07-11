@@ -26,6 +26,29 @@ pub struct Document {
     pub inner: BTreeMap<String, FixedStructureValue>,
 }
 
+impl Document {
+    pub fn new_delete() -> Self {
+        Self {
+            created: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("Get unix timestamp"),
+            inner: BTreeMap::new(),
+        }
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+}
+
+impl ArchivedDocument {
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+}
+
 impl From<BTreeMap<String, FixedStructureValue>> for Document {
     fn from(inner: BTreeMap<String, FixedStructureValue>) -> Self {
         Self {

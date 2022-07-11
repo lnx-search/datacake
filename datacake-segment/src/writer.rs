@@ -65,8 +65,6 @@ impl SegmentWriter {
 
     /// Adds a document to the writer.
     ///
-    /// This only asynchronously blocks once the given block writer is full.
-    ///
     /// Returns `true` if the segment is at capacity.
     pub async fn add_document(&mut self, id: DocId, doc: &Document) -> Result<bool> {
         let is_full = self

@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::mem;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Instant;
 
 use datacake_data::block::ReadGuard;
@@ -14,7 +14,7 @@ use humansize::FileSize;
 use uuid::Uuid;
 use datacake_segment::error::SegmentError;
 
-use crate::error::{Result, ShardError};
+use crate::error::Result;
 
 /// An abstraction around multiple segments that the shard manages.
 ///
@@ -75,14 +75,45 @@ impl StoreShard {
 
         self.block_cache.store_block(block.clone());
 
-        Ok(block.get_document(id))
+        // Empty documents are considered deletes, to be purged from the store.
+        // TODO: Make this a dedicated flag.
+        let reader = if let Some(maybe_deleted) = block.get_document(id) {
+            if (*maybe_deleted).is_empty() {
+                None
+            } else {
+                Some(maybe_deleted)
+            }
+        } else {
+            None
+        };
+
+        Ok(reader)
     }
 
+    #[inline]
     /// Adds a document to the shard.
     ///
     /// This is generally buffered in memory so is not guaranteed to be written
     /// out to disk or offer any sort of persistence guarantee.
     pub async fn add_document(&mut self, id: DocId, doc: &Document) -> Result<()> {
+        self.modify_document_internal(id, doc).await
+    }
+
+    #[inline]
+    /// Marks a document for removal from the shard.
+    ///
+    /// Due to the immutable nature of segments, this is only a in-memory operation
+    /// that then waits for a GC cycle to purge the documents from the segments themselves.
+    pub async fn remove_document(&mut self, id: DocId) -> Result<()> {
+        let delete = Document::new_delete();
+        self.modify_document_internal(id, &delete).await
+    }
+
+    /// Adds/Updates/Deletes a document from the shard.
+    ///
+    /// This uses the idea that everything is append only, a delete is simply a insertion
+    /// setting the document value to be empty, which then later gets cleaned up by the GC.
+    async fn modify_document_internal(&mut self, id: DocId, doc: &Document) -> Result<()> {
         let is_full = self.active_writer.add_document(id, doc).await?;
         self.register_doc_insert_locally(id);
 
@@ -105,14 +136,6 @@ impl StoreShard {
         );
 
         Ok(())
-    }
-
-    /// Marks a document for removal from the shard.
-    ///
-    /// Due to the immutable nature of segments, this is only a in-memory operation
-    /// that then waits for a GC cycle to purge the documents from the segments themselves.
-    pub async fn remove_document(&mut self, id: DocId) {
-        self.uncommitted_index.dead_documents.insert(id);
     }
 
     /// Cleans up and resets the segment state back to the last commit.
@@ -186,10 +209,6 @@ impl StoreShard {
     #[inline]
     fn register_doc_insert_locally(&mut self, id: DocId) {
         self.uncommitted_index
-            .dead_documents
-            .remove(&id);
-
-        self.uncommitted_index
             .alive_documents
             .insert(id, self.active_writer.id());
     }
@@ -214,10 +233,6 @@ impl StoreShard {
 pub struct Index<SegmentId> {
     /// A index mapping documents to their given segment location/
     alive_documents: HashMap<DocId, SegmentId>,
-
-    /// A set of dead documents which no technically still exist on disk,
-    /// but are marked as removed.
-    dead_documents: HashSet<DocId>,
 }
 
 

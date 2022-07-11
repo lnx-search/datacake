@@ -119,7 +119,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     use super::*;
-    use crate::value::{FixedStructureValue, JsonNumber, JsonValue};
+    use crate::value::{Document, FixedStructureValue, JsonNumber, JsonValue};
 
     #[tokio::test]
     async fn test_cache_eviction() {

@@ -13,7 +13,7 @@ use crate::blocking::BlockingExecutor;
 use crate::value::{Document, ZeroCopyDocument};
 use crate::DocId;
 
-pub const OFFSET_HEADER_SIZE: usize = std::mem::size_of::<(u32, u32)>();
+pub const OFFSET_HEADER_SIZE: usize = mem::size_of::<(u32, u32)>();
 pub const BLOCK_SIZE: usize = 512 << 10;
 
 pub type GlobalBlockId = Uuid;
@@ -32,6 +32,9 @@ pub struct BlockWriter {
 
 impl BlockWriter {
     /// Serializes and appends the document to the buffer.
+    ///
+    /// If the document data is `None`, no data is written directly to the buffer,
+    /// instead `id: (0, 0)` is set in the doc offsets.
     ///
     /// returns `true` if the block is full.
     pub fn write_document(&mut self, id: DocId, doc: &Document) -> Result<bool> {
@@ -56,10 +59,10 @@ impl BlockWriter {
     /// The approximate total memory usage of the block writer.
     pub fn used_memory(&self) -> usize {
         self.inner_buffer.len()
-            + std::mem::size_of::<Vec<u8>>()
+            + mem::size_of::<Vec<u8>>()
             + self.doc_offsets.len()
-                * (std::mem::size_of::<DocId>() + std::mem::size_of::<(u32, u32)>())
-            + std::mem::size_of::<Offsets>()
+                * (mem::size_of::<DocId>() + mem::size_of::<(u32, u32)>())
+            + mem::size_of::<Offsets>()
     }
 
     /// Drains all data in the writer and compresses it into a single block.
@@ -85,7 +88,7 @@ impl BlockWriter {
         // SAFETY:
         //  This is safe as we guarantee that the buffer will outlive the executor function.
         let to_compress: &'static [u8] =
-            unsafe { std::mem::transmute(self.inner_buffer.as_slice()) };
+            unsafe { mem::transmute(self.inner_buffer.as_slice()) };
         let mut compressed = executor
             .execute(move || lz4_flex::compress(to_compress))
             .await?;
@@ -93,7 +96,7 @@ impl BlockWriter {
         // We do a hard reset here as we probably dont want to be
         // holding onto the left over memory all the time.
         self.inner_buffer = vec![];
-        let doc_ids = std::mem::take(&mut self.doc_offsets);
+        let doc_ids = mem::take(&mut self.doc_offsets);
 
         let offset_markers =
             rkyv::to_bytes::<_, 8>(&(offsets_len, uncompressed_length))?;
@@ -118,7 +121,7 @@ impl BlockWriter {
 ///
 /// This guard can be dereferenced, exposing the archived document.
 pub struct ReadGuard {
-    owned_data: Arc<AlignedVec>,
+    _owned_data: Arc<AlignedVec>,
     doc: &'static ZeroCopyDocument,
 }
 
@@ -126,7 +129,7 @@ impl Deref for ReadGuard {
     type Target = ZeroCopyDocument;
 
     fn deref(&self) -> &Self::Target {
-        &self.doc
+        self.doc
     }
 }
 
@@ -169,7 +172,7 @@ impl BlockReader {
     ) -> Result<Self> {
         // SAFETY:
         //  This is safe as we guarantee that the slice will live for as long as the executed closure.
-        let data_buffer: &'static [u8] = unsafe { std::mem::transmute(buffer) };
+        let data_buffer: &'static [u8] = unsafe { mem::transmute(buffer) };
 
         let block = executor
             .execute(move || {
@@ -196,11 +199,11 @@ impl BlockReader {
                 let doc_offsets =
                     rkyv::check_archived_root::<Offsets>(&raw_block[offsets_start..])?;
                 let doc_offsets: &'static rkyv::Archived<Offsets> =
-                    unsafe { std::mem::transmute(doc_offsets) };
+                    unsafe { mem::transmute(doc_offsets) };
 
                 let inner_buffer = &raw_block[..offsets_start];
                 let inner_buffer: &'static [u8] =
-                    unsafe { std::mem::transmute(inner_buffer) };
+                    unsafe { mem::transmute(inner_buffer) };
 
                 debug!(
                     "Block decompression with {} documents totalling {} took {:?}.",
@@ -225,7 +228,7 @@ impl BlockReader {
     #[inline]
     /// The approximate total memory usage of the block reader.
     pub fn used_memory(&self) -> usize {
-        self.raw_block.len() + std::mem::size_of::<Vec<u8>>()
+        self.raw_block.len() + mem::size_of::<Vec<u8>>()
     }
 
     /// Gets a document with the given ID from the block.
@@ -241,7 +244,7 @@ impl BlockReader {
                 //  This is why the read guard contains the owned data.
                 mem::transmute::<&ZeroCopyDocument, &'static ZeroCopyDocument>(doc)
             },
-            owned_data: buff,
+            _owned_data: buff,
         })
     }
 

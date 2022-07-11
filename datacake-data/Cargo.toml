@@ -19,7 +19,7 @@ uuid = "1.1.2"
 tracing = "0.1.35"
 humansize = "1.1.1"
 
-rkyv = { version = "0.7.38", features = ["alloc", "validation"] }
+rkyv = { version = "0.7", features = ["alloc", "validation"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt"] }

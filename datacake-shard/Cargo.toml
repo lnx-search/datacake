@@ -13,3 +13,7 @@ tracing = "0.1.35"
 uuid = "1.1.2"
 humansize = "1.1.1"
 thiserror = "1.0.31"
+glommio = "0.7.0"
+
+bytecheck = { version = "0.6.8", features = ["uuid"] }
+rkyv = { version = "0.7", features = ["alloc", "validation", "uuid"] }

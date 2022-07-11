@@ -8,6 +8,15 @@ level of durability of documents as a traditional database like Postgres, SQLite
 Although it will guarantee that either all the documents are added in a commit
 or none of them are.
 
+Datacake can potentially have extremely high write amplification if you have lots of writes which are immediately
+followed by a commit. I.e. Add doc 1, Commit, Add doc 2, Commit, Add doc 3, etc... 
+This is due to the segment compaction process strictly being a background process which is also responsible for
+compacting and re-organising data blocks.
+
+If you want a database for with high durability for high write work loads, consider using something like RocksDB 
+instead. Datacake is extremely optimised around the idea that commits are few and far between when handling bulk
+inserts.
+
 ## Zero to hero
 Datacake is a linux only library due to its use of io_uring, that being said,
 you can run and develop with this library on Windows via WSL2 (Just make sure you
