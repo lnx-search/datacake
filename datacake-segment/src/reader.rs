@@ -2,10 +2,10 @@ use std::cmp;
 use std::path::Path;
 
 use glommio::io::{DmaStreamReader, ImmutableFile, ImmutableFileBuilder};
-use hourglass_data::block::BlockReader;
-use hourglass_data::blocking::BlockingExecutor;
-use hourglass_data::segment_footer::{SegmentFooterReader, FOOTER_OFFSET_LEN};
-use hourglass_data::DocId;
+use datacake_data::block::BlockReader;
+use datacake_data::blocking::BlockingExecutor;
+use datacake_data::segment_footer::{SegmentFooterReader, FOOTER_OFFSET_LEN};
+use datacake_data::DocId;
 use humansize::file_size_opts::CONVENTIONAL;
 use humansize::FileSize;
 use uuid::Uuid;
@@ -17,6 +17,7 @@ use crate::error::{Result, SegmentError};
 /// Once a segment is able to be read from, no other changes can be made
 /// to that segment without causing corruption of data.
 pub struct SegmentReader {
+    id: Uuid,
     /// A threadpool executor for running CPU intensive operations.
     executor: BlockingExecutor,
     footer: SegmentFooterReader,
@@ -58,6 +59,17 @@ impl SegmentReader {
             file,
             footer,
         })
+    }
+
+    #[inline]
+    pub fn id(&self) -> Uuid {
+        self.id
+    }
+
+    /// Closes the segment reader.
+    pub async fn close(self) -> Result<()> {
+        self.file.close().await?;
+        Ok(())
     }
 
     /// Gets a given doc's block reader.

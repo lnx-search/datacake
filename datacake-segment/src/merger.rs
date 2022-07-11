@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
-use hourglass_data::DocId;
+use datacake_data::DocId;
 
 use crate::error::Result;
 use crate::{SegmentReader, SegmentWriter};

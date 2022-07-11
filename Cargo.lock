@@ -266,6 +266,62 @@ dependencies = [
 ]
 
 [[package]]
+name = "datacake"
+version = "0.1.0"
+dependencies = [
+ "datacake-data",
+ "datacake-segment",
+ "datacake-shard",
+]
+
+[[package]]
+name = "datacake-data"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytecheck",
+ "futures",
+ "humansize",
+ "itoa",
+ "lz4_flex",
+ "moka",
+ "rand",
+ "rayon",
+ "rkyv",
+ "ryu",
+ "time",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "datacake-segment"
+version = "0.1.0"
+dependencies = [
+ "datacake-data",
+ "futures-lite",
+ "glommio",
+ "humansize",
+ "rand",
+ "thiserror",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "datacake-shard"
+version = "0.1.0"
+dependencies = [
+ "datacake-data",
+ "datacake-segment",
+ "humansize",
+ "thiserror",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "either"
 version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -489,62 +545,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "62b467343b94ba476dcb2500d242dadbb39557df889310ac77c5d99100aaac33"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "hourglass"
-version = "0.1.0"
-dependencies = [
- "hourglass-data",
- "hourglass-segment",
- "hourglass-shard",
-]
-
-[[package]]
-name = "hourglass-data"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bytecheck",
- "futures",
- "humansize",
- "itoa",
- "lz4_flex",
- "moka",
- "rand",
- "rayon",
- "rkyv",
- "ryu",
- "time",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "hourglass-segment"
-version = "0.1.0"
-dependencies = [
- "futures-lite",
- "glommio",
- "hourglass-data",
- "humansize",
- "rand",
- "thiserror",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "hourglass-shard"
-version = "0.1.0"
-dependencies = [
- "hourglass-data",
- "hourglass-segment",
- "humansize",
- "thiserror",
- "tracing",
- "uuid",
 ]
 
 [[package]]

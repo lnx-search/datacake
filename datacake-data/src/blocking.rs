@@ -13,7 +13,7 @@ impl BlockingExecutor {
     pub fn with_n_threads(n: usize) -> anyhow::Result<Self> {
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(n)
-            .thread_name(|n| format!("hourglass-cpu-task-{}", n))
+            .thread_name(|n| format!("datacake-cpu-task-{}", n))
             .build()?;
 
         Ok(Self { pool: pool.into() })

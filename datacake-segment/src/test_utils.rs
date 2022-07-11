@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use hourglass_data::blocking::BlockingExecutor;
-use hourglass_data::value::{Document, FixedStructureValue, JsonNumber, JsonValue};
+use datacake_data::blocking::BlockingExecutor;
+use datacake_data::value::{Document, FixedStructureValue, JsonNumber, JsonValue};
 
 use crate::SegmentWriter;
 

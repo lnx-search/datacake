@@ -1,20 +1,20 @@
 [package]
-name = "hourglass"
+name = "datacake"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-hourglass-data = { path = "hourglass-data" }
-hourglass-segment = { path = "hourglass-segment" }
-hourglass-shard = { path = "hourglass-shard" }
+datacake-data = { path = "datacake-data" }
+datacake-segment = { path = "datacake-segment" }
+datacake-shard = { path = "datacake-shard" }
 
 [workspace]
 members = [
-    "hourglass-data",
-    "hourglass-segment",
-    "hourglass-shard"
+    "datacake-data",
+    "datacake-segment",
+    "datacake-shard"
 ]
 exclude = [
 ]

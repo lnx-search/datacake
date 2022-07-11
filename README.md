@@ -1,4 +1,4 @@
-# Hourglass 
+# lnx Datacake 
 For when you need to store documents with minimal latency and high read efficiency.
 
 ### WARNING
@@ -9,7 +9,7 @@ Although it will guarantee that either all the documents are added in a commit
 or none of them are.
 
 ## Zero to hero
-Hourglass is a linux only library due to its use of io_uring, that being said,
+Datacake is a linux only library due to its use of io_uring, that being said,
 you can run and develop with this library on Windows via WSL2 (Just make sure you
 have the latest WSL installed and a kernel that supports uring.)
 

@@ -1,18 +1,18 @@
 use std::collections::{HashMap, HashSet};
 use std::mem;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use hourglass_data::block::ReadGuard;
-use hourglass_data::blocking::BlockingExecutor;
-use hourglass_data::cache::ShardCache;
-use hourglass_data::value::Document;
-use hourglass_data::DocId;
-use hourglass_segment::{SegmentReader, SegmentWriter};
+use datacake_data::block::ReadGuard;
+use datacake_data::blocking::BlockingExecutor;
+use datacake_data::cache::ShardCache;
+use datacake_data::value::Document;
+use datacake_data::DocId;
+use datacake_segment::{SegmentReader, SegmentWriter};
 use humansize::file_size_opts::CONVENTIONAL;
 use humansize::FileSize;
 use uuid::Uuid;
-use hourglass_segment::error::SegmentError;
+use datacake_segment::error::SegmentError;
 
 use crate::error::{Result, ShardError};
 
@@ -30,9 +30,16 @@ pub struct StoreShard {
 
     executor: BlockingExecutor,
     base_path: PathBuf,
+
+    prepared_commit: PreparedCommit,
+    bad_state: bool,
 }
 
 impl StoreShard {
+    /// Retries a document from the shard with a given id.
+    ///
+    /// If the document is not already present in cache, the document may be cached afterwards
+    /// (although not parented.)
     pub async fn get_document(&mut self, id: DocId) -> Result<Option<ReadGuard>> {
         // SAFETY:
         //  There is potentially really dangerous, and any changes made to this block should be
@@ -97,8 +104,6 @@ impl StoreShard {
             start.elapsed(),
         );
 
-        // TODO: Do we spawn a merging task here? Would this be better than a gc?
-
         Ok(())
     }
 
@@ -117,6 +122,9 @@ impl StoreShard {
     /// Returns a list of segments that failed to be removed as part of the
     /// immediate cleanup operation.
     pub async fn rollback(&mut self) -> Result<Vec<(Uuid, SegmentError)>> {
+        // Assume something has gone wrong to start with.
+        self.bad_state = true;
+
         let mut removed_segments = HashSet::new();
 
         let mut failed_segments = vec![];
@@ -125,7 +133,7 @@ impl StoreShard {
                 continue
             }
 
-            if let Err(e) = hourglass_segment::remove_segment(*segment_id, &self.base_path).await {
+            if let Err(e) = datacake_segment::remove_segment(*segment_id, &self.base_path).await {
                 error!("Shard encountered an error during rollback: Failed to remove segment {} due to error: {:?}", segment_id, e);
                 failed_segments.push((*segment_id, e));
             }
@@ -139,18 +147,32 @@ impl StoreShard {
         let mut old_segment = mem::replace(&mut self.active_writer, new_segment);
         let _ = old_segment.close().await;
 
-        if let Err(e) = hourglass_segment::remove_segment(segment_id, &self.base_path).await {
+        if let Err(e) = datacake_segment::remove_segment(segment_id, &self.base_path).await {
             error!("Shard encountered an error during rollback: Failed to remove segment {} due to error: {:?}", segment_id, e);
             failed_segments.push((segment_id, e));
         }
 
+        // Our rollback was successful in terms of resetting our shard to a safe state.
+        self.bad_state = false;
         Ok(failed_segments)
     }
 
-    pub async fn commit(&mut self) -> Result<()> {
+    /// Begins the commit process.
+    ///
+    /// This is potentially fallible as it requires opening
+    /// several segment readers and performing some IO operations.
+    ///
+    /// This does not finalise the commit / reflect any pending changes made.
+    pub async fn prepare_commit(&mut self) -> Result<()> {
 
 
         Ok(())
+    }
+
+    pub fn finalise_commit(&mut self) {
+        todo!(
+
+        )
     }
 
     #[inline]
@@ -196,4 +218,24 @@ pub struct Index<SegmentId> {
     /// A set of dead documents which no technically still exist on disk,
     /// but are marked as removed.
     dead_documents: HashSet<DocId>,
+}
+
+
+#[derive(Default)]
+pub struct PreparedCommit {
+    prepared_index: Index<usize>,
+    opened_readers: Vec<SegmentReader>,
+}
+
+impl PreparedCommit {
+    /// Closes all prepared segments.
+    pub async fn close_segments(self) -> Result<()> {
+        for segment in self.opened_readers {
+            if let Err(e) = segment.close().await {
+                warn!("Failed to close prepared segment reader with error: {:?}", e);
+            };
+        }
+
+        Ok(())
+    }
 }
