@@ -317,6 +317,7 @@ dependencies = [
  "bytecheck",
  "datacake-data",
  "datacake-segment",
+ "futures-lite",
  "glommio",
  "humansize",
  "rkyv",
