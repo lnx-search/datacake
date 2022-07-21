@@ -67,6 +67,11 @@ impl SegmentReader {
         self.id
     }
 
+    #[inline]
+    pub fn commit_id(&self) -> u32 {
+        self.footer.commit_id()
+    }
+
     /// Closes the segment reader.
     pub async fn close(self) -> Result<()> {
         self.file.close().await?;
@@ -194,9 +199,9 @@ impl SegmentBlocksIterator {
 }
 
 async fn get_footer_info(file: &ImmutableFile) -> Result<SegmentFooterReader> {
-    let length = file.file_size();
+    let file_length = file.file_size();
     let footer_suffix = file
-        .read_at(length - FOOTER_OFFSET_LEN as u64, FOOTER_OFFSET_LEN)
+        .read_at(file_length - FOOTER_OFFSET_LEN as u64, FOOTER_OFFSET_LEN)
         .await
         .map_err(|e| {
             SegmentError::SegmentOpenError(format!(
@@ -210,7 +215,7 @@ async fn get_footer_info(file: &ImmutableFile) -> Result<SegmentFooterReader> {
 
     let footer_data = file
         .read_at(
-            length - FOOTER_OFFSET_LEN as u64 - data_len as u64,
+            file_length - FOOTER_OFFSET_LEN as u64 - data_len as u64,
             data_len,
         )
         .await

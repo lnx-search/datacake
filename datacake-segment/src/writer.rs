@@ -32,7 +32,7 @@ impl SegmentWriter {
     /// Creates a new segment writer.
     ///
     /// This intern creates a new file and empty block writer.
-    pub async fn create(executor: BlockingExecutor, base_path: &Path) -> Result<Self> {
+    pub async fn create(commit_id: u32, executor: BlockingExecutor, base_path: &Path) -> Result<Self> {
         let id = Uuid::new_v4();
 
         debug!("Creating mutable segment {}", id);
@@ -52,7 +52,7 @@ impl SegmentWriter {
             uid: id,
             num_bytes_written: 0,
             executor,
-            footer: SegmentFooterWriter::default(),
+            footer: SegmentFooterWriter::new(commit_id),
             active_block: BlockWriter::default(),
             writer: file,
         })
@@ -61,6 +61,11 @@ impl SegmentWriter {
     #[inline]
     pub fn id(&self) -> Uuid {
         self.uid
+    }
+
+    #[inline]
+    pub fn commit_id(&self) -> u32 {
+        self.footer.commit_id()
     }
 
     /// Adds a document to the writer.
@@ -163,6 +168,7 @@ impl SegmentWriter {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
     use super::*;
     use crate::test_utils::*;
 
@@ -182,7 +188,7 @@ mod tests {
         let executor = BlockingExecutor::with_n_threads(1).expect("Create executor");
 
         let fut = || async move {
-            SegmentWriter::create(executor, &file)
+            SegmentWriter::create(0, executor, &file)
                 .await
                 .expect("Successful segment creation");
         };
@@ -198,7 +204,7 @@ mod tests {
         let doc = get_random_doc();
 
         let fut = || async move {
-            let mut writer = SegmentWriter::create(executor, &file)
+            let mut writer = SegmentWriter::create(0, executor, &file)
                 .await
                 .expect("Successful segment creation");
 
@@ -219,7 +225,7 @@ mod tests {
         let doc = get_random_doc();
 
         let fut = || async move {
-            let mut writer = SegmentWriter::create(executor, &file)
+            let mut writer = SegmentWriter::create(0, executor, &file)
                 .await
                 .expect("Successful segment creation");
 
@@ -246,6 +252,7 @@ mod tests {
     #[test]
     fn test_segment_writer_seal() {
         let file = std::env::temp_dir().join("segment-seal-test");
+
         let executor = BlockingExecutor::with_n_threads(1).expect("Create executor");
 
         let fut = || async move {

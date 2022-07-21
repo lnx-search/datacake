@@ -12,7 +12,7 @@ pub const FOOTER_OFFSET_LEN: usize = std::mem::size_of::<u32>();
 
 pub type SegmentLocalBlockId = u16;
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 /// A writer for a segment metadata.
 ///
 /// This is data stored at the start of the file which contains data about the
@@ -22,6 +22,20 @@ pub struct SegmentFooterWriter {
 }
 
 impl SegmentFooterWriter {
+    pub fn new(commit_id: u32) -> Self {
+        Self {
+            meta: SegmentMetadata {
+                commit_id,
+                ..Default::default()
+            }
+        }
+    }
+
+    #[inline]
+    pub fn commit_id(&self) -> u32 {
+        self.meta.commit_id
+    }
+
     /// Adds a block to the segment footer data in memory.
     pub fn add_block(
         &mut self,
@@ -66,6 +80,11 @@ pub struct SegmentFooterReader {
 }
 
 impl SegmentFooterReader {
+    #[inline]
+    pub fn commit_id(&self) -> u32 {
+        self.meta.commit_id
+    }
+
     /// Gets the length of the footer via the file suffix.
     pub fn get_data_len(buff: &[u8]) -> Result<usize> {
         SegmentMetadata::get_data_len(buff)
@@ -104,6 +123,8 @@ impl SegmentFooterReader {
 #[derive(Default, Archive, Debug, Deserialize, Serialize, Clone)]
 #[archive_attr(derive(CheckBytes, Debug))]
 pub(crate) struct SegmentMetadata {
+    /// The current commit transaction id.
+    commit_id: u32,
     block_id_counter: SegmentLocalBlockId,
     pub docset: BTreeMap<DocId, SegmentLocalBlockId>,
     pub blocks: BTreeMap<SegmentLocalBlockId, (u32, u32)>,
@@ -156,14 +177,14 @@ mod tests {
 
     #[test]
     fn test_footer_writer() {
-        let mut footer = SegmentFooterWriter::default();
+        let mut footer = SegmentFooterWriter::new(0);
         footer.add_block((0, 324), 0..3);
         footer.to_bytes().expect("Successful serialize");
     }
 
     #[test]
     fn test_footer_reader() {
-        let mut footer = SegmentFooterWriter::default();
+        let mut footer = SegmentFooterWriter::new(0);
         footer.add_block((0, 324), 0..3);
         let buffer = footer.to_bytes().expect("Successful serialize");
 

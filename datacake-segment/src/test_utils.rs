@@ -64,7 +64,7 @@ pub(crate) async fn get_populated_segment_writer(
 ) -> SegmentWriter {
     let doc = get_random_doc();
 
-    let mut writer = SegmentWriter::create(executor, file)
+    let mut writer = SegmentWriter::create(0, executor, file)
         .await
         .expect("Successful segment creation");
 

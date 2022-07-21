@@ -21,6 +21,7 @@ use crate::error::Result;
 /// This only handles document addition, document fetching and marking docs as dead.
 /// It does not handle actual deletions or merging of similar sized segments.
 pub struct StoreShard {
+    commit_id: u32,
     block_cache: ShardCache,
     index: Index<usize>,
     uncommitted_index: Index<Uuid>,
@@ -221,6 +222,7 @@ impl StoreShard {
     #[inline]
     async fn create_new_segment(&self) -> Result<SegmentWriter> {
         let new_writer = SegmentWriter::create(
+            self.commit_id,
             self.executor.clone(),
             &self.base_path,
         ).await?;

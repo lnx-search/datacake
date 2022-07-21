@@ -13,7 +13,8 @@ use crate::blocking::BlockingExecutor;
 use crate::value::{Document, ZeroCopyDocument};
 use crate::DocId;
 
-pub const OFFSET_HEADER_SIZE: usize = mem::size_of::<(u32, u32)>();
+pub type BlockHeader = (u32, u32);
+pub const OFFSET_HEADER_SIZE: usize = mem::size_of::<BlockHeader>();
 pub const BLOCK_SIZE: usize = 512 << 10;
 
 pub type GlobalBlockId = Uuid;
@@ -99,7 +100,7 @@ impl BlockWriter {
         let doc_ids = mem::take(&mut self.doc_offsets);
 
         let offset_markers =
-            rkyv::to_bytes::<_, 8>(&(offsets_len, uncompressed_length))?;
+            rkyv::to_bytes::<_, 18>(&(offsets_len, uncompressed_length))?;
 
         // Add the uncompressed length to the end of compressed buffer.
         compressed.extend_from_slice(&offset_markers);
@@ -179,10 +180,10 @@ impl BlockReader {
                 let start = std::time::Instant::now();
                 let meta_start = data_buffer.len() - OFFSET_HEADER_SIZE;
 
-                let (offsets_len, uncompressed_length): (u32, u32) = {
+                let (offsets_len, uncompressed_length): BlockHeader = {
                     let mut aligned = AlignedVec::new();
                     aligned.extend_from_slice(&data_buffer[meta_start..]);
-                    rkyv::check_archived_root::<(u32, u32)>(&aligned)?
+                    rkyv::check_archived_root::<BlockHeader>(&aligned)?
                         .deserialize(&mut rkyv::Infallible)?
                 };
 
