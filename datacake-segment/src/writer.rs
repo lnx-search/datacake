@@ -1,13 +1,13 @@
 use std::path::Path;
 use std::time::Instant;
 
-use futures_lite::AsyncWriteExt;
-use glommio::io::{DmaFile, DmaStreamWriter, DmaStreamWriterBuilder};
 use datacake_data::block::BlockWriter;
 use datacake_data::blocking::BlockingExecutor;
 use datacake_data::segment_footer::{SegmentFooterWriter, MAX_SEGMENT_SIZE};
 use datacake_data::value::Document;
 use datacake_data::DocId;
+use futures_lite::AsyncWriteExt;
+use glommio::io::{DmaFile, DmaStreamWriter, DmaStreamWriterBuilder};
 use humansize::file_size_opts::CONVENTIONAL;
 use humansize::FileSize;
 use uuid::Uuid;
@@ -32,7 +32,11 @@ impl SegmentWriter {
     /// Creates a new segment writer.
     ///
     /// This intern creates a new file and empty block writer.
-    pub async fn create(commit_id: u32, executor: BlockingExecutor, base_path: &Path) -> Result<Self> {
+    pub async fn create(
+        commit_id: u32,
+        executor: BlockingExecutor,
+        base_path: &Path,
+    ) -> Result<Self> {
         let id = Uuid::new_v4();
 
         debug!("Creating mutable segment {}", id);
@@ -169,6 +173,7 @@ impl SegmentWriter {
 #[cfg(test)]
 mod tests {
     use std::fs;
+
     use super::*;
     use crate::test_utils::*;
 

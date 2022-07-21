@@ -1,11 +1,11 @@
 use std::cmp;
 use std::path::Path;
 
-use glommio::io::{DmaStreamReader, ImmutableFile, ImmutableFileBuilder};
 use datacake_data::block::BlockReader;
 use datacake_data::blocking::BlockingExecutor;
 use datacake_data::segment_footer::{SegmentFooterReader, FOOTER_OFFSET_LEN};
 use datacake_data::DocId;
+use glommio::io::{DmaStreamReader, ImmutableFile, ImmutableFileBuilder};
 use humansize::file_size_opts::CONVENTIONAL;
 use humansize::FileSize;
 use uuid::Uuid;

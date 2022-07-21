@@ -8,11 +8,11 @@ use datacake_data::blocking::BlockingExecutor;
 use datacake_data::cache::ShardCache;
 use datacake_data::value::Document;
 use datacake_data::DocId;
+use datacake_segment::error::SegmentError;
 use datacake_segment::{SegmentReader, SegmentWriter};
 use humansize::file_size_opts::CONVENTIONAL;
 use humansize::FileSize;
 use uuid::Uuid;
-use datacake_segment::error::SegmentError;
 
 use crate::error::Result;
 
@@ -114,7 +114,11 @@ impl StoreShard {
     ///
     /// This uses the idea that everything is append only, a delete is simply a insertion
     /// setting the document value to be empty, which then later gets cleaned up by the GC.
-    async fn modify_document_internal(&mut self, id: DocId, doc: &Document) -> Result<()> {
+    async fn modify_document_internal(
+        &mut self,
+        id: DocId,
+        doc: &Document,
+    ) -> Result<()> {
         let is_full = self.active_writer.add_document(id, doc).await?;
         self.register_doc_insert_locally(id);
 
@@ -154,10 +158,12 @@ impl StoreShard {
         let mut failed_segments = vec![];
         for segment_id in self.uncommitted_index.alive_documents.values() {
             if removed_segments.contains(segment_id) {
-                continue
+                continue;
             }
 
-            if let Err(e) = datacake_segment::remove_segment(*segment_id, &self.base_path).await {
+            if let Err(e) =
+                datacake_segment::remove_segment(*segment_id, &self.base_path).await
+            {
                 error!("Shard encountered an error during rollback: Failed to remove segment {} due to error: {:?}", segment_id, e);
                 failed_segments.push((*segment_id, e));
             }
@@ -171,7 +177,9 @@ impl StoreShard {
         let mut old_segment = mem::replace(&mut self.active_writer, new_segment);
         let _ = old_segment.close().await;
 
-        if let Err(e) = datacake_segment::remove_segment(segment_id, &self.base_path).await {
+        if let Err(e) =
+            datacake_segment::remove_segment(segment_id, &self.base_path).await
+        {
             error!("Shard encountered an error during rollback: Failed to remove segment {} due to error: {:?}", segment_id, e);
             failed_segments.push((segment_id, e));
         }
@@ -188,15 +196,11 @@ impl StoreShard {
     ///
     /// This does not finalise the commit / reflect any pending changes made.
     pub async fn prepare_commit(&mut self) -> Result<()> {
-
-
         Ok(())
     }
 
     pub fn finalise_commit(&mut self) {
-        todo!(
-
-        )
+        todo!()
     }
 
     #[inline]
@@ -225,7 +229,8 @@ impl StoreShard {
             self.commit_id,
             self.executor.clone(),
             &self.base_path,
-        ).await?;
+        )
+        .await?;
 
         Ok(new_writer)
     }
@@ -236,7 +241,6 @@ pub struct Index<SegmentId> {
     /// A index mapping documents to their given segment location/
     alive_documents: HashMap<DocId, SegmentId>,
 }
-
 
 #[derive(Default)]
 pub struct PreparedCommit {
@@ -249,7 +253,10 @@ impl PreparedCommit {
     pub async fn close_segments(self) -> Result<()> {
         for segment in self.opened_readers {
             if let Err(e) = segment.close().await {
-                warn!("Failed to close prepared segment reader with error: {:?}", e);
+                warn!(
+                    "Failed to close prepared segment reader with error: {:?}",
+                    e
+                );
             };
         }
 

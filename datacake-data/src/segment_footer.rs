@@ -27,7 +27,7 @@ impl SegmentFooterWriter {
             meta: SegmentMetadata {
                 commit_id,
                 ..Default::default()
-            }
+            },
         }
     }
 

@@ -1,4 +1,5 @@
 use std::io;
+
 use glommio::GlommioError;
 
 pub type Result<T> = core::result::Result<T, SegmentError>;
@@ -31,7 +32,7 @@ impl From<GlommioError<()>> for SegmentError {
     fn from(e: GlommioError<()>) -> Self {
         match e {
             GlommioError::IoError(e) => Self::IoError(e),
-            other => Self::GlommioError(other.to_string())
+            other => Self::GlommioError(other.to_string()),
         }
     }
 }
