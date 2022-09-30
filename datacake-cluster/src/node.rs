@@ -182,14 +182,6 @@ impl DatacakeNode {
         self.members.borrow().clone()
     }
 
-    #[cfg(test)]
-    /// Set a key-value pair on the cluster node's state.
-    pub async fn set<K: ToString, V: ToString>(&self, key: K, value: V) {
-        let chitchat = self.chitchat_handle.chitchat();
-        let mut chitchat_guard = chitchat.lock().await;
-        chitchat_guard.self_node_state().set(key, value);
-    }
-
     /// Leave the cluster.
     pub async fn shutdown(self) {
         info!(self_addr = ?self.public_gossip_addr, "Shutting down the cluster.");
