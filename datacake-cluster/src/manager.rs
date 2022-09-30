@@ -10,14 +10,14 @@ use datacake_crdt::get_unix_timestamp_ms;
 use futures::channel::oneshot;
 use futures::StreamExt;
 use tokio::sync::Semaphore;
-use tokio::time::{Instant, interval, MissedTickBehavior};
+use tokio::time::{interval, Instant, MissedTickBehavior};
 use tokio_stream::wrappers::WatchStream;
 
 use crate::node::{ClusterMember, DatacakeNode};
-use crate::NUMBER_OF_SHARDS;
 use crate::rpc::{server, Client, ClientCluster, DataHandler};
-use crate::shard::{self, ShardGroupHandle, StateChangeTs};
 use crate::shard::state::StateWatcherHandle;
+use crate::shard::{self, ShardGroupHandle, StateChangeTs};
+use crate::NUMBER_OF_SHARDS;
 
 const CHANGES_POLLING_DURATION: Duration = Duration::from_millis(500);
 
@@ -124,7 +124,6 @@ impl DatacakeClusterManager {
     }
 }
 
-
 /// Watches any member state changes from the ChitChat cluster.
 ///
 /// * The system first checks for any new member joins and disconnects
@@ -154,7 +153,6 @@ async fn watch_for_remote_state_changes(
             .filter(|member| member.node_id != self_node_id)
             .map(|member| (member.node_id.clone(), member.public_rpc_addr));
 
-
         let errors = rpc_clients.adjust_connected_clients(iterator).await;
         for (node_id, error) in errors {
             error!(
@@ -165,7 +163,10 @@ async fn watch_for_remote_state_changes(
             );
         }
 
-        for member in members.into_iter().filter(|member| member.node_id != self_node_id) {
+        for member in members
+            .into_iter()
+            .filter(|member| member.node_id != self_node_id)
+        {
             if let Some(previous_addr) = shard_states.get(&member.node_id) {
                 if previous_addr == &member.public_rpc_addr {
                     trace!(
@@ -206,11 +207,9 @@ async fn watch_for_remote_state_changes(
                 data_handler.clone(),
                 shard_group.clone(),
             ));
-
         }
     }
 }
-
 
 /// A polling task that check the remote node's shard changes
 /// every given period of time.
@@ -218,7 +217,7 @@ async fn spawn_shard_state_poller(
     member: ClusterMember,
     node_rpc: Client,
     data_handler: Arc<dyn DataHandler>,
-    shard_group: ShardGroupHandle
+    shard_group: ShardGroupHandle,
 ) {
     let mut interval = interval(CHANGES_POLLING_DURATION);
     interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
@@ -269,9 +268,7 @@ async fn handle_node_state_change(
     data_handler: &Arc<dyn DataHandler>,
     shard_group: &ShardGroupHandle,
 ) -> Result<()> {
-    let shard_changes = new_state.iter()
-        .zip(previous_state.iter())
-        .enumerate();
+    let shard_changes = new_state.iter().zip(previous_state.iter()).enumerate();
 
     let (tx, rx) = flume::bounded(2);
     let concurrency_limiter = Arc::new(Semaphore::new(1));
@@ -347,7 +344,7 @@ async fn handle_shard_change(
     let (updated, removed) = shard_group.diff(shard_id, state.clone()).await?;
 
     if updated.is_empty() && removed.is_empty() {
-        return Ok(())
+        return Ok(());
     }
 
     let num_updates = updated.len();
@@ -356,12 +353,12 @@ async fn handle_shard_change(
     let start = Instant::now();
     let handler = data_handler.clone();
     let delete_task = tokio::spawn(async move {
-            if removed.is_empty() {
-                Ok(())
-            } else {
-                handler.mark_tombstone_documents(removed).await
-            }
-        });
+        if removed.is_empty() {
+            Ok(())
+        } else {
+            handler.mark_tombstone_documents(removed).await
+        }
+    });
 
     if !updated.is_empty() {
         let mut stream = rpc

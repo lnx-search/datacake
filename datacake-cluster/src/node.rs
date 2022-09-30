@@ -105,12 +105,10 @@ impl DatacakeNode {
 
         let chitchat_handle = spawn_chitchat(
             cfg,
-            vec![
-                (
-                    PUBLIC_RPC_ADDR_KEY.to_string(),
-                    me.public_rpc_addr.to_string(),
-                ),
-            ],
+            vec![(
+                PUBLIC_RPC_ADDR_KEY.to_string(),
+                me.public_rpc_addr.to_string(),
+            )],
             transport,
         )
         .await?;
@@ -282,7 +280,7 @@ mod tests {
         let _ = tracing_subscriber::fmt::try_init();
 
         let transport = ChannelTransport::default();
-        let cluster = create_node_for_test(Vec::new(),  &transport).await?;
+        let cluster = create_node_for_test(Vec::new(), &transport).await?;
 
         let members: Vec<SocketAddr> = cluster
             .members()
@@ -300,16 +298,11 @@ mod tests {
         let _ = tracing_subscriber::fmt::try_init();
 
         let transport = ChannelTransport::default();
-        let node1 = create_node_for_test(Vec::new(),  &transport).await?;
+        let node1 = create_node_for_test(Vec::new(), &transport).await?;
         let node_1_gossip_addr = node1.public_gossip_addr.to_string();
-        let node2 = create_node_for_test(
-            vec![node_1_gossip_addr.clone()],
-            &transport,
-        )
-        .await?;
-        let node3 =
-            create_node_for_test(vec![node_1_gossip_addr], &transport)
-                .await?;
+        let node2 =
+            create_node_for_test(vec![node_1_gossip_addr.clone()], &transport).await?;
+        let node3 = create_node_for_test(vec![node_1_gossip_addr], &transport).await?;
 
         let wait_secs = Duration::from_secs(30);
         for cluster in [&node1, &node2, &node3] {

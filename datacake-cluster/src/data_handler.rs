@@ -84,12 +84,21 @@ impl<DS: Datastore> DataHandler for StandardDataHandler<DS> {
         for (shard_id, changes) in shard_changes {
             let num_docs = changes.len();
             self.shard_group.set_many(shard_id, changes.clone()).await?;
-            self.datastore.update_keys(shard_id, changes.clone()).await?;
             self.datastore
-                .remove_tombstone_keys(shard_id, changes.into_iter().map(|v| v.0).collect())
+                .update_keys(shard_id, changes.clone())
+                .await?;
+            self.datastore
+                .remove_tombstone_keys(
+                    shard_id,
+                    changes.into_iter().map(|v| v.0).collect(),
+                )
                 .await?;
 
-            debug!(shard_id = shard_id, num_docs = num_docs, "Adding document to doc store.");
+            debug!(
+                shard_id = shard_id,
+                num_docs = num_docs,
+                "Adding document to doc store."
+            );
         }
 
         // TODO: Consider the issues that could happen if the datastore fails
@@ -107,7 +116,11 @@ impl<DS: Datastore> DataHandler for StandardDataHandler<DS> {
             .update_keys(shard_id, vec![(doc.id, doc.last_modified)])
             .await?;
 
-        debug!(shard_id = shard_id, num_docs = 1, "Adding document to doc store.");
+        debug!(
+            shard_id = shard_id,
+            num_docs = 1,
+            "Adding document to doc store."
+        );
         self.datastore.upsert_document(doc).await
     }
 
@@ -140,7 +153,11 @@ impl<DS: Datastore> DataHandler for StandardDataHandler<DS> {
                 .update_tombstone_keys(shard_id, changes)
                 .await?;
 
-            debug!(shard_id = shard_id, num_docs = num_docs, "Marked documents as tombstones.");
+            debug!(
+                shard_id = shard_id,
+                num_docs = num_docs,
+                "Marked documents as tombstones."
+            );
         }
 
         self.datastore.delete_documents(&doc_ids).await
@@ -157,11 +174,13 @@ impl<DS: Datastore> DataHandler for StandardDataHandler<DS> {
         self.datastore
             .update_tombstone_keys(shard_id, vec![(doc_id, ts)])
             .await?;
-        self.datastore
-            .remove_keys(shard_id, vec![doc_id])
-            .await?;
+        self.datastore.remove_keys(shard_id, vec![doc_id]).await?;
 
-        debug!(shard_id = shard_id, num_docs = 1, "Marked document as tombstones.");
+        debug!(
+            shard_id = shard_id,
+            num_docs = 1,
+            "Marked document as tombstones."
+        );
         self.datastore.delete_document(doc_id).await
     }
 

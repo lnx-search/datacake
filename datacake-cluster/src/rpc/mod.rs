@@ -1,8 +1,7 @@
+use bytecheck::CheckBytes;
 use bytes::Bytes;
 use datacake_crdt::{HLCTimestamp, Key};
-
-use bytecheck::CheckBytes;
-use rkyv::{Serialize, Deserialize, Archive};
+use rkyv::{Archive, Deserialize, Serialize};
 
 pub mod client;
 mod client_cluster;
@@ -13,8 +12,7 @@ pub use client_cluster::{Client, ClientCluster};
 
 use crate::rpc::cluster_rpc_models::Timestamp;
 
-#[derive(Debug)]
-#[derive(Serialize, Deserialize, Archive)]
+#[derive(Debug, Serialize, Deserialize, Archive)]
 #[archive_attr(derive(CheckBytes))]
 /// A wrapper type that contains all of the necessary document information.
 pub struct Document {

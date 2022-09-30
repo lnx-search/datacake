@@ -10,8 +10,7 @@ use crate::StateWatcherHandle;
 pub const NUMBER_OF_SHARDS: usize = 32;
 
 /// Creates a shard group.
-pub async fn create_shard_group(state_watcher: StateWatcherHandle) -> ShardGroupHandle
-{
+pub async fn create_shard_group(state_watcher: StateWatcherHandle) -> ShardGroupHandle {
     let mut handles = vec![];
 
     for shard_id in 0..NUMBER_OF_SHARDS {

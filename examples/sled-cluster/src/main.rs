@@ -1,9 +1,19 @@
 use std::net::SocketAddr;
 use std::time::Duration;
-use datacake_cluster::{ConnectionCfg, DatacakeCluster, Datastore, Document, HLCTimestamp, Key, Metastore, NUMBER_OF_SHARDS, StateChanges};
-use anyhow::{Error, Result};
-use sled::Mode;
 
+use anyhow::{Error, Result};
+use datacake_cluster::{
+    ConnectionCfg,
+    DatacakeCluster,
+    Datastore,
+    Document,
+    HLCTimestamp,
+    Key,
+    Metastore,
+    StateChanges,
+    NUMBER_OF_SHARDS,
+};
+use sled::Mode;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -16,34 +26,37 @@ async fn main() -> Result<()> {
 
     // Our gossip address and rpc address must be different.
     // The gossip address will use UDP vs the TCP RPC connection.
-    let node_1_cfg = make_connection_config("127.0.0.1:8000".parse().unwrap(), "127.0.0.1:8100".parse().unwrap());
+    let node_1_cfg = make_connection_config(
+        "127.0.0.1:8000".parse().unwrap(),
+        "127.0.0.1:8100".parse().unwrap(),
+    );
 
     // We connect the first node, it is safe to connect a node with a set of seed nodes
     // that may not be online yet.
     let node_1 = DatacakeCluster::connect(
         // This value must be unique
         "node-1",
-
         // Typically you would probably only have one cluster,
         // currently this does not affect anything outside of gossip.
         "cluster-1",
-
         // Our connection config we just made.
         node_1_cfg,
-
         // We say that the node-2 (the node we will create after this) will be one of our
         // seeds.
         vec!["127.0.0.1:8001".to_string()],
-
         // We pass in our datastore instance. This is where Datacake will send and receive all of
         // our state changes.
         node_1_store,
-    ).await?;
+    )
+    .await?;
 
     // In the real world this would likely be another
     // instance of your application on another machine.
     let node_2_store = Store::new(2);
-    let node_2_cfg = make_connection_config("127.0.0.1:8001".parse().unwrap(), "127.0.0.1:8101".parse().unwrap());
+    let node_2_cfg = make_connection_config(
+        "127.0.0.1:8001".parse().unwrap(),
+        "127.0.0.1:8101".parse().unwrap(),
+    );
     let node_2 = DatacakeCluster::connect(
         // It is super important that these are unique,
         // otherwise the system will not propagate state.
@@ -52,7 +65,8 @@ async fn main() -> Result<()> {
         node_2_cfg,
         vec!["127.0.0.1:8000".to_string()],
         node_2_store,
-    ).await?;
+    )
+    .await?;
 
     // We can use our handles to manipulate our data store's state.
     // These handles are cheap to clone.
@@ -77,12 +91,14 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-
 /// A simple helper method for the purposes of testing.
 ///
 /// In the real world you would want to set the public address and the listen address'
 /// to different values as nodes will likely be on different networks.
-fn make_connection_config(gossip_addr: SocketAddr, rpc_addr: SocketAddr) -> ConnectionCfg {
+fn make_connection_config(
+    gossip_addr: SocketAddr,
+    rpc_addr: SocketAddr,
+) -> ConnectionCfg {
     ConnectionCfg {
         gossip_public_addr: gossip_addr,
         gossip_listen_addr: gossip_addr,
@@ -135,11 +151,7 @@ impl Store {
             dead.push(d);
         }
 
-        Self {
-            keys,
-            dead,
-            db,
-        }
+        Self { keys, dead, db }
     }
 }
 
@@ -191,7 +203,10 @@ impl Metastore for Store {
     ///
     /// It's important that the state returned is correct, otherwise during synchronisations
     /// data may be incorrectly changed during the merging of two node's states.
-    async fn get_keys(&self, shard_id: usize) -> std::result::Result<StateChanges, Error> {
+    async fn get_keys(
+        &self,
+        shard_id: usize,
+    ) -> std::result::Result<StateChanges, Error> {
         let data = self.keys[shard_id].iter();
 
         let mut state = vec![];
@@ -211,7 +226,11 @@ impl Metastore for Store {
     /// The cluster will attempt to batch these changes by shard during bulk updates,
     /// but individual updates to documents will result in this method being triggered
     /// every time.
-    async fn update_keys(&self, shard_id: usize, states: Vec<(Key, HLCTimestamp)>) -> std::result::Result<(), Error> {
+    async fn update_keys(
+        &self,
+        shard_id: usize,
+        states: Vec<(Key, HLCTimestamp)>,
+    ) -> std::result::Result<(), Error> {
         let batch = metadata_updates_to_batch(states);
         self.keys[shard_id].apply_batch(batch)?;
 
@@ -226,7 +245,11 @@ impl Metastore for Store {
     /// The cluster will attempt to batch these changes by shard during bulk updates,
     /// but individual updates to documents will result in this method being triggered
     /// every time.
-    async fn remove_keys(&self, shard_id: usize, states: Vec<Key>) -> std::result::Result<(), Error> {
+    async fn remove_keys(
+        &self,
+        shard_id: usize,
+        states: Vec<Key>,
+    ) -> std::result::Result<(), Error> {
         let batch = metadata_removes_to_batch(states);
         self.keys[shard_id].apply_batch(batch)?;
 
@@ -240,7 +263,10 @@ impl Metastore for Store {
     /// It's important that tombstone metadata is correctly persisted and not pre-emptively removed
     /// as it can result in previously removed documents being re-added if a node which is behind
     /// has yet to observe the remove.
-    async fn get_tombstone_keys(&self, shard_id: usize) -> std::result::Result<StateChanges, Error> {
+    async fn get_tombstone_keys(
+        &self,
+        shard_id: usize,
+    ) -> std::result::Result<StateChanges, Error> {
         let data = self.dead[shard_id].iter();
 
         let mut state = vec![];
@@ -261,7 +287,11 @@ impl Metastore for Store {
     /// The cluster will attempt to batch these changes by shard during bulk updates,
     /// but individual updates to documents will result in this method being triggered
     /// every time.
-    async fn update_tombstone_keys(&self, shard_id: usize, states: Vec<(Key, HLCTimestamp)>) -> std::result::Result<(), Error> {
+    async fn update_tombstone_keys(
+        &self,
+        shard_id: usize,
+        states: Vec<(Key, HLCTimestamp)>,
+    ) -> std::result::Result<(), Error> {
         let batch = metadata_updates_to_batch(states);
         self.dead[shard_id].apply_batch(batch)?;
 
@@ -276,7 +306,11 @@ impl Metastore for Store {
     /// The cluster will attempt to batch these changes by shard during bulk updates,
     /// but individual updates to documents will result in this method being triggered
     /// every time.
-    async fn remove_tombstone_keys(&self, shard_id: usize, states: Vec<Key>) -> std::result::Result<(), Error> {
+    async fn remove_tombstone_keys(
+        &self,
+        shard_id: usize,
+        states: Vec<Key>,
+    ) -> std::result::Result<(), Error> {
         let batch = metadata_removes_to_batch(states);
         self.dead[shard_id].apply_batch(batch)?;
 
@@ -291,7 +325,10 @@ impl Datastore for Store {
     ///
     /// In this example we've gone with a very simple approach to fetching multiple documents,
     /// but you may wish to changes this to something which is better suited for your workload.
-    async fn get_documents(&self, doc_ids: &[Key]) -> std::result::Result<Vec<Document>, Error> {
+    async fn get_documents(
+        &self,
+        doc_ids: &[Key],
+    ) -> std::result::Result<Vec<Document>, Error> {
         let mut docs = vec![];
 
         for id in doc_ids {
@@ -314,7 +351,10 @@ impl Datastore for Store {
     /// The raw data you insert with the handle methods are wrapped in a [datacake_cluster::Document]
     /// which contains the required metadata to keep things simple.
     /// This wrapper type supports rkyv's (de)serialization for easy handling.
-    async fn upsert_documents(&self, documents: Vec<Document>) -> std::result::Result<(), Error> {
+    async fn upsert_documents(
+        &self,
+        documents: Vec<Document>,
+    ) -> std::result::Result<(), Error> {
         let mut batch = sled::Batch::default();
 
         for docs in documents {

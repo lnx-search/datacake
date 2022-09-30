@@ -14,12 +14,12 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use bytes::Bytes;
-use tokio::time::{timeout_at, Instant, Duration};
+pub use datacake_crdt::{HLCTimestamp, Key, OrSWotSet, StateChanges, TimestampError};
 pub use manager::ConnectionCfg;
-pub use shard::NUMBER_OF_SHARDS;
-pub use wrappers::{Datastore, Metastore};
-pub use datacake_crdt::{HLCTimestamp, OrSWotSet, TimestampError, Key, StateChanges};
 pub use rpc::Document;
+pub use shard::NUMBER_OF_SHARDS;
+use tokio::time::{timeout_at, Duration, Instant};
+pub use wrappers::{Datastore, Metastore};
 
 use crate::clock::Clock;
 use crate::data_handler::StandardDataHandler;
@@ -52,7 +52,7 @@ impl DatacakeCluster {
     ) -> Result<Self> {
         let node_id = node_id.into();
         let cluster_id = cluster_id.into();
-        
+
         let clock = Clock::new(crc32fast::hash(node_id.as_bytes()));
         let datastore = Arc::new(datastore);
 
@@ -129,7 +129,10 @@ impl Clone for DatacakeHandle {
 }
 
 impl DatacakeHandle {
-    async fn broadcast_upsert_to_nodes(&self, docs: Vec<(Key, HLCTimestamp, Bytes)>) -> Result<()> {
+    async fn broadcast_upsert_to_nodes(
+        &self,
+        docs: Vec<(Key, HLCTimestamp, Bytes)>,
+    ) -> Result<()> {
         let docs = Arc::new(docs);
         let nodes = self.nodes.get_all_clients();
         let (completed_tx, completed_rx) = flume::bounded(nodes.len());
@@ -149,20 +152,23 @@ impl DatacakeHandle {
                             error = ?e,
                             "Node failed to handle upsert request."
                         );
-                    }
+                    },
                 };
             });
         }
 
         let deadline = Instant::now() + Duration::from_millis(2);
         while (timeout_at(deadline, completed_rx.recv_async()).await).is_ok() {
-            continue
+            continue;
         }
 
         Ok(())
     }
 
-    async fn broadcast_delete_to_nodes(&self, docs: Vec<(Key, HLCTimestamp)>) -> Result<()> {
+    async fn broadcast_delete_to_nodes(
+        &self,
+        docs: Vec<(Key, HLCTimestamp)>,
+    ) -> Result<()> {
         let docs = Arc::new(docs);
         let nodes = self.nodes.get_all_clients();
         let (completed_tx, completed_rx) = flume::bounded(nodes.len());
@@ -182,14 +188,14 @@ impl DatacakeHandle {
                             error = ?e,
                             "Node failed to handle delete request."
                         );
-                    }
+                    },
                 };
             });
         }
 
         let deadline = Instant::now() + Duration::from_millis(2);
         while (timeout_at(deadline, completed_rx.recv_async()).await).is_ok() {
-            continue
+            continue;
         }
 
         Ok(())
@@ -223,7 +229,8 @@ impl DatacakeHandle {
             })
             .await?;
 
-        self.broadcast_upsert_to_nodes(vec![(id, last_modified, Bytes::from(data))]).await
+        self.broadcast_upsert_to_nodes(vec![(id, last_modified, Bytes::from(data))])
+            .await
     }
 
     /// Insert multiple documents into the datastore at once.
@@ -241,8 +248,9 @@ impl DatacakeHandle {
         self.broadcast_upsert_to_nodes(
             docs.into_iter()
                 .map(|(k, ts, data)| (k, ts, Bytes::from(data)))
-                .collect()
-        ).await
+                .collect(),
+        )
+        .await
     }
 
     /// Delete a document from the datastore with a given id.
@@ -253,7 +261,8 @@ impl DatacakeHandle {
             .mark_tombstone_document(id, last_modified)
             .await?;
 
-        self.broadcast_delete_to_nodes(vec![(id, last_modified)]).await
+        self.broadcast_delete_to_nodes(vec![(id, last_modified)])
+            .await
     }
 
     /// Delete many documents from the datastore from the set of ids.

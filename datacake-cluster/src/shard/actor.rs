@@ -28,10 +28,7 @@ pub struct ShardActor {
 }
 
 impl ShardActor {
-    pub async fn start(
-        shard_id: usize,
-        changes: StateWatcherHandle,
-    ) -> ShardHandle {
+    pub async fn start(shard_id: usize, changes: StateWatcherHandle) -> ShardHandle {
         let (events_tx, events_rx) = flume::bounded(50);
 
         let slf = Self {

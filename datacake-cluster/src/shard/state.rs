@@ -1,21 +1,28 @@
 use tokio::sync::oneshot;
-use crate::NUMBER_OF_SHARDS;
-use crate::shard::StateChangeTs;
 
+use crate::shard::StateChangeTs;
+use crate::NUMBER_OF_SHARDS;
 
 pub(crate) async fn state_watcher() -> StateWatcherHandle {
     let (tx, rx) = flume::bounded(10);
-    
-    let actor = ShardStateWatcher { changes: rx, live_view: vec![0; NUMBER_OF_SHARDS] };
+
+    let actor = ShardStateWatcher {
+        changes: rx,
+        live_view: vec![0; NUMBER_OF_SHARDS],
+    };
     tokio::spawn(actor.run_actor());
-    
+
     StateWatcherHandle { changes: tx }
 }
 
-
 enum Event {
-    ShardChange { shard_id: usize, ts: StateChangeTs },
-    GetShards { tx: oneshot::Sender<Vec<StateChangeTs>> },
+    ShardChange {
+        shard_id: usize,
+        ts: StateChangeTs,
+    },
+    GetShards {
+        tx: oneshot::Sender<Vec<StateChangeTs>>,
+    },
 }
 
 #[derive(Clone)]
@@ -43,7 +50,6 @@ impl StateWatcherHandle {
     }
 }
 
-
 struct ShardStateWatcher {
     live_view: Vec<StateChangeTs>,
     changes: flume::Receiver<Event>,
@@ -60,14 +66,10 @@ impl ShardStateWatcher {
                     if shard_id >= self.live_view.len() {
                         continue;
                     }
-                    
+
                     self.live_view[shard_id] = ts;
                 },
             }
         }
     }
 }
-
-
-
-

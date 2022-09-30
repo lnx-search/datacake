@@ -11,7 +11,17 @@ use tonic::{Code, Status, Streaming};
 use super::cluster_rpc_models::document_sync_client::DocumentSyncClient;
 use super::cluster_rpc_models::general_rpc_client::GeneralRpcClient;
 use super::DocsBlock;
-use crate::rpc::cluster_rpc_models::{Blank, DataFetchRequest, DataFetchResponse, DeletePayload, ShardState, SyncRequest, SyncResponse, Timestamp, UpsertPayload};
+use crate::rpc::cluster_rpc_models::{
+    Blank,
+    DataFetchRequest,
+    DataFetchResponse,
+    DeletePayload,
+    ShardState,
+    SyncRequest,
+    SyncResponse,
+    Timestamp,
+    UpsertPayload,
+};
 use crate::shard::StateChangeTs;
 
 #[derive(Debug, thiserror::Error)]
@@ -96,9 +106,7 @@ impl SynchronisationClient {
         let (tx, resp) = oneshot::channel();
 
         self.tx
-            .send_async(SynchronisationEvent::GetShardStates {
-                tx,
-            })
+            .send_async(SynchronisationEvent::GetShardStates { tx })
             .await
             .map_err(|_| RpcError::DeadActor)?;
 
@@ -217,13 +225,17 @@ impl SynchronisationClientActor {
                 SynchronisationEvent::FetchDocs { docs, tx } => {
                     self.fetch_docs(docs, tx).await
                 },
-                SynchronisationEvent::GetShardStates { tx } =>
+                SynchronisationEvent::GetShardStates { tx } => {
                     self.get_shard_state(tx).await
+                },
             }
         }
     }
 
-    async fn get_shard_state(&mut self, tx: oneshot::Sender<Result<ShardState, Status>>) {
+    async fn get_shard_state(
+        &mut self,
+        tx: oneshot::Sender<Result<ShardState, Status>>,
+    ) {
         let res = self.inner.get_shard_state(Blank {}).await;
         let _ = tx.send(res.map(|r| r.into_inner()));
     }
@@ -285,13 +297,8 @@ impl DataClient {
         &self,
         docs: Arc<Vec<(Key, HLCTimestamp, Bytes)>>,
     ) -> Result<(), RpcError> {
-        let (
-            doc_ids,
-            offsets,
-            timestamps,
-            docs,
-            uncompressed_len,
-        ) = super::build_docs_buffer(docs.iter().map(|v| (v.0, v.1, v.2.clone()))).await;
+        let (doc_ids, offsets, timestamps, docs, uncompressed_len) =
+            super::build_docs_buffer(docs.iter().map(|v| (v.0, v.1, v.2.clone()))).await;
 
         let (tx, resp) = oneshot::channel();
 
@@ -313,7 +320,10 @@ impl DataClient {
     }
 
     /// Sends a set of documents to be removed from the remote node.
-    pub async fn delete(&self, doc_key_ts_pairs: Arc<StateChanges>) -> Result<(), RpcError> {
+    pub async fn delete(
+        &self,
+        doc_key_ts_pairs: Arc<StateChanges>,
+    ) -> Result<(), RpcError> {
         let (tx, resp) = oneshot::channel();
 
         let mut doc_ids = vec![];

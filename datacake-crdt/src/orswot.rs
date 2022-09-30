@@ -60,8 +60,7 @@ pub struct OrSWotSet {
 
 impl OrSWotSet {
     pub fn from_bytes(data: &[u8]) -> Result<Self, BadState> {
-        let deserialized = rkyv::from_bytes::<Self>(data)
-            .map_err(|_| BadState)?;
+        let deserialized = rkyv::from_bytes::<Self>(data).map_err(|_| BadState)?;
 
         Ok(deserialized)
     }

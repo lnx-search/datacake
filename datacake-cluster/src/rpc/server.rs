@@ -17,10 +17,19 @@ use crate::rpc::cluster_rpc_models::document_sync_server::{
     DocumentSyncServer,
 };
 use crate::rpc::cluster_rpc_models::general_rpc_server::{GeneralRpc, GeneralRpcServer};
-use crate::rpc::cluster_rpc_models::{Blank, DataFetchRequest, DataFetchResponse, DeletePayload, ShardState, SyncRequest, SyncResponse, UpsertPayload};
+use crate::rpc::cluster_rpc_models::{
+    Blank,
+    DataFetchRequest,
+    DataFetchResponse,
+    DeletePayload,
+    ShardState,
+    SyncRequest,
+    SyncResponse,
+    UpsertPayload,
+};
 use crate::rpc::DataHandler;
-use crate::shard::ShardGroupHandle;
 use crate::shard::state::StateWatcherHandle;
+use crate::shard::ShardGroupHandle;
 
 type ResponseStream =
     Pin<Box<dyn Stream<Item = Result<DataFetchResponse, Status>> + Send>>;
@@ -31,7 +40,11 @@ pub async fn start_rpc_server(
     handler: Arc<dyn DataHandler>,
     bind: SocketAddr,
 ) -> oneshot::Sender<()> {
-    let server = RpcServer { shards, shard_changes_watcher, handler };
+    let server = RpcServer {
+        shards,
+        shard_changes_watcher,
+        handler,
+    };
 
     let (tx, rx) = oneshot::channel();
 
@@ -60,7 +73,10 @@ pub struct RpcServer {
 
 #[tonic::async_trait]
 impl DocumentSync for RpcServer {
-    async fn get_shard_state(&self, _request: Request<Blank>) -> Result<Response<ShardState>, Status> {
+    async fn get_shard_state(
+        &self,
+        _request: Request<Blank>,
+    ) -> Result<Response<ShardState>, Status> {
         let shards = self.shard_changes_watcher.get().await;
         Ok(Response::new(ShardState { shards }))
     }
