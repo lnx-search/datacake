@@ -9,4 +9,4 @@ edition = "2021"
 thiserror = "1.0.33"
 bytecheck = "0.6.9"
 
-rkyv = { version = "0.7.39", features = ["alloc", "bytecheck"] }
+rkyv = { version = "0.7.39", features = ["validation"] }
