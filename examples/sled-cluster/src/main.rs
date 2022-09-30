@@ -65,7 +65,7 @@ async fn main() -> Result<()> {
     // In theory if all nodes are operational and live this is much quicker
     // at aligning the state. But for demonstration purposes we will give our
     // nodes some time to sync up.
-    tokio::time::sleep(Duration::from_secs(10)).await;
+    tokio::time::sleep(Duration::from_secs(2)).await;
 
     let maybe_doc = node_2_handle.get(123).await?;
     assert!(maybe_doc.is_some(), "Expected our document to exist.");
