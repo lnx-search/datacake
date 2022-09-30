@@ -10,6 +10,10 @@ mod shard;
 mod shared;
 mod wrappers;
 
+#[cfg(feature = "test-utils")]
+pub mod test_utils;
+
+use std::mem;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -89,6 +93,14 @@ impl DatacakeCluster {
         })
     }
 
+    pub async fn shutdown(mut self) -> Result<()> {
+        if let Some(manager) = mem::take(&mut self.manager) {
+            manager.shutdown().await?;
+        }
+
+        Ok(())
+    }
+
     #[inline]
     pub fn handle(&self) -> DatacakeHandle {
         self.handle.clone()
@@ -138,6 +150,8 @@ impl DatacakeHandle {
         let (completed_tx, completed_rx) = flume::bounded(nodes.len());
 
         for (node_id, client) in nodes {
+            info!("Got node: {}", node_id);
+
             let tx = completed_tx.clone();
             let docs = docs.clone();
 
