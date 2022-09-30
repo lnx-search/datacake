@@ -13,7 +13,7 @@ pub use client_cluster::{Client, ClientCluster};
 
 use crate::rpc::cluster_rpc_models::Timestamp;
 
-#[derive(Debug, Serialize, Deserialize, Archive)]
+#[derive(Debug, Clone, Serialize, Deserialize, Archive)]
 #[archive_attr(derive(CheckBytes))]
 /// A wrapper type that contains all of the necessary document information.
 pub struct Document {
