@@ -1,0 +1,70 @@
+
+syntax = "proto3";
+
+package cluster_rpc_models;
+
+//
+// RPC for bringing nodes up to speed between their data.
+//
+service DocumentSync {
+  rpc GetShardState(Blank) returns (ShardState);
+  
+  rpc Sync(SyncRequest) returns (SyncResponse);
+
+  rpc FetchDocs(DataFetchRequest) returns (stream DataFetchResponse);
+}
+
+message ShardState {
+  repeated uint64 shards = 1;
+}
+
+message SyncRequest {
+  uint32 shard_id = 1;
+}
+
+message SyncResponse {
+  uint32 uncompressed_size = 1;
+  bytes doc_set = 2;
+}
+
+message DataFetchRequest {
+  repeated uint64 requested_docs = 3;
+}
+
+message DataFetchResponse {
+  repeated uint64 doc_ids = 1;
+  repeated uint32 offsets = 2;
+  repeated Timestamp timestamps = 3;
+  uint32 uncompressed_size = 4;
+  bytes docs = 5;
+}
+
+//
+// General RPC for consistency propagation.
+//
+service GeneralRpc {
+  rpc UpsertDocs(UpsertPayload) returns (Blank);
+
+  rpc DeleteDocs(DeletePayload) returns (Blank);
+}
+
+message UpsertPayload {
+  repeated uint64 doc_ids = 1;
+  repeated uint32 offsets = 2;
+  repeated Timestamp timestamps = 3;
+  uint32 uncompressed_size = 4;
+  bytes doc_data = 5;
+}
+
+message Timestamp {
+  uint64 millis = 1;
+  uint32 counter = 2;
+  uint32 node_id = 3;
+}
+
+message DeletePayload {
+  repeated uint64 doc_ids = 1;
+  repeated Timestamp timestamps = 2;
+}
+
+message Blank {}
