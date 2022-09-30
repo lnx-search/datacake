@@ -323,6 +323,10 @@ async fn spawn_handlers(
         let stop = stop.clone();
 
         tokio::spawn(async move {
+            if stop.load(Ordering::Relaxed) {
+                return;
+            }
+
             let _permit = concurrency_limiter.acquire().await;
 
             let fut = handle_shard_change(&node_id, shard_id, &node);
