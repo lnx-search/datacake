@@ -1,30 +1,51 @@
 use std::collections::HashMap;
+
 use anyhow::Error;
-use parking_lot::RwLock;
-use datacake_cluster::{Datastore, Document, Metastore};
 use datacake_crdt::{HLCTimestamp, Key, StateChanges};
+use parking_lot::RwLock;
 use tonic::async_trait;
 
-#[derive(Debug, Default)]
+use crate::{Datastore, Document, Metastore, NUMBER_OF_SHARDS};
+
+fn get_shard_map() -> HashMap<usize, HashMap<Key, HLCTimestamp>> {
+    let mut map = HashMap::new();
+
+    for i in 0..NUMBER_OF_SHARDS {
+        map.insert(i, HashMap::new());
+    }
+
+    map
+}
+
 pub struct MemStore {
     metadata: RwLock<HashMap<usize, HashMap<Key, HLCTimestamp>>>,
     tombstones: RwLock<HashMap<usize, HashMap<Key, HLCTimestamp>>>,
     documents: RwLock<HashMap<Key, Document>>,
 }
 
+impl Default for MemStore {
+    fn default() -> Self {
+        Self {
+            metadata: RwLock::new(get_shard_map()),
+            tombstones: RwLock::new(get_shard_map()),
+            documents: RwLock::new(HashMap::new()),
+        }
+    }
+}
+
 #[async_trait]
 impl Metastore for MemStore {
     async fn get_keys(&self, shard_id: usize) -> Result<StateChanges, Error> {
-        let map = self.metadata
-            .read()
-            .get(&shard_id)
-            .unwrap()
-            .clone();
+        let map = self.metadata.read().get(&shard_id).unwrap().clone();
 
         Ok(map.into_iter().collect())
     }
 
-    async fn update_keys(&self, shard_id: usize, states: Vec<(Key, HLCTimestamp)>) -> Result<(), Error> {
+    async fn update_keys(
+        &self,
+        shard_id: usize,
+        states: Vec<(Key, HLCTimestamp)>,
+    ) -> Result<(), Error> {
         let mut lock = self.metadata.write();
         let map = lock.get_mut(&shard_id).unwrap();
 
@@ -47,16 +68,16 @@ impl Metastore for MemStore {
     }
 
     async fn get_tombstone_keys(&self, shard_id: usize) -> Result<StateChanges, Error> {
-        let map = self.tombstones
-            .read()
-            .get(&shard_id)
-            .unwrap()
-            .clone();
+        let map = self.tombstones.read().get(&shard_id).unwrap().clone();
 
         Ok(map.into_iter().collect())
     }
 
-    async fn update_tombstone_keys(&self, shard_id: usize, states: Vec<(Key, HLCTimestamp)>) -> Result<(), Error> {
+    async fn update_tombstone_keys(
+        &self,
+        shard_id: usize,
+        states: Vec<(Key, HLCTimestamp)>,
+    ) -> Result<(), Error> {
         let mut lock = self.tombstones.write();
         let map = lock.get_mut(&shard_id).unwrap();
 
@@ -67,7 +88,11 @@ impl Metastore for MemStore {
         Ok(())
     }
 
-    async fn remove_tombstone_keys(&self, shard_id: usize, states: Vec<Key>) -> Result<(), Error> {
+    async fn remove_tombstone_keys(
+        &self,
+        shard_id: usize,
+        states: Vec<Key>,
+    ) -> Result<(), Error> {
         let mut lock = self.tombstones.write();
         let map = lock.get_mut(&shard_id).unwrap();
 
@@ -114,6 +139,3 @@ impl Datastore for MemStore {
         Ok(())
     }
 }
-
-
-

@@ -28,6 +28,9 @@ bytecheck = "0.6.9"
 
 datacake-crdt = { path = "../datacake-crdt" }
 
+[features]
+test-utils = []
+
 [dev-dependencies]
 tracing-subscriber = "0.3.15"
 

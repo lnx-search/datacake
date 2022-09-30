@@ -174,6 +174,9 @@ pub enum RpcError {
 
     #[error("The operation failed due to a unknown error: {0} - {1}")]
     Unknown(Code, String),
+
+    #[error("Connection has been disconnected.")]
+    Disconnected,
 }
 
 impl From<Status> for RpcError {
@@ -182,6 +185,7 @@ impl From<Status> for RpcError {
             Code::Internal | Code::Aborted | Code::Cancelled => {
                 Self::RemoteError(s.code(), s.message().to_string())
             },
+            Code::Unavailable => Self::Disconnected,
             Code::DataLoss
             | Code::InvalidArgument
             | Code::FailedPrecondition
