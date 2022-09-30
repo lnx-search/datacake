@@ -76,7 +76,7 @@ impl DatacakeClusterManager {
             data_handler.clone(),
             connection_cfg.rpc_listen_addr,
         )
-        .await;
+        .await?;
 
         let me = ClusterMember::new(
             node_id,

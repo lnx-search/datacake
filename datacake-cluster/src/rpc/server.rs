@@ -9,15 +9,14 @@ use futures::Stream;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Server;
-use tonic::{Request, Response, Status};
+use tonic::{Code, Request, Response, Status};
 
-use super::DocsBlock;
-use crate::rpc::cluster_rpc_models::document_sync_server::{
+use super::cluster_rpc_models::document_sync_server::{
     DocumentSync,
     DocumentSyncServer,
 };
-use crate::rpc::cluster_rpc_models::general_rpc_server::{GeneralRpc, GeneralRpcServer};
-use crate::rpc::cluster_rpc_models::{
+use super::cluster_rpc_models::general_rpc_server::{GeneralRpc, GeneralRpcServer};
+use super::cluster_rpc_models::{
     Blank,
     DataFetchRequest,
     DataFetchResponse,
@@ -27,7 +26,7 @@ use crate::rpc::cluster_rpc_models::{
     SyncResponse,
     UpsertPayload,
 };
-use crate::rpc::DataHandler;
+use super::{DataHandler, DocsBlock, RpcError};
 use crate::shard::state::StateWatcherHandle;
 use crate::shard::ShardGroupHandle;
 
@@ -39,7 +38,7 @@ pub async fn start_rpc_server(
     shard_changes_watcher: StateWatcherHandle,
     handler: Arc<dyn DataHandler>,
     bind: SocketAddr,
-) -> oneshot::Sender<()> {
+) -> Result<oneshot::Sender<()>, RpcError> {
     let server = RpcServer {
         shards,
         shard_changes_watcher,
@@ -47,21 +46,37 @@ pub async fn start_rpc_server(
     };
 
     let (tx, rx) = oneshot::channel();
+    let (set_ready, ready) = oneshot::channel();
 
-    tokio::spawn(async move {
+    let handle = tokio::spawn(async move {
         let server = Server::builder()
             .add_service(DocumentSyncServer::new(server.clone()))
             .add_service(GeneralRpcServer::new(server))
             .serve_with_shutdown(bind, async {
+                let _ = set_ready.send(());
                 let _ = rx.await;
             });
 
         if let Err(e) = server.await {
             error!(bind = %bind, error = ?e, "Failed to run RPC server due to error: {}", e);
+            Err(e)
+        } else {
+            Ok(())
         }
     });
 
-    tx
+    if ready.await.is_ok() {
+        Ok(tx)
+    } else {
+        let res = handle.await.expect("Handle should be joined.");
+
+        match res {
+            // This is odd, the server should not have shutdown before the server is ready.
+            // So we will make this an error.
+            Ok(_) => Err(RpcError::DeadActor),
+            Err(e) => Err(RpcError::Unknown(Code::Unknown, e.to_string())),
+        }
+    }
 }
 
 #[derive(Clone)]

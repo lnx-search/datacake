@@ -2,6 +2,7 @@ use bytecheck::CheckBytes;
 use bytes::Bytes;
 use datacake_crdt::{HLCTimestamp, Key};
 use rkyv::{Archive, Deserialize, Serialize};
+use tonic::{Code, Status};
 
 pub mod client;
 mod client_cluster;
@@ -155,4 +156,37 @@ pub(super) async fn build_docs_buffer<B: AsRef<[u8]>>(
     let docs = Bytes::from(crate::shared::compress_docs(continuous_buffer).await);
 
     (doc_ids, offsets, timestamps, docs, uncompressed_size)
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum RpcError {
+    #[error("The rpc actor has encountered a fatal error and was unable to resume")]
+    DeadActor,
+
+    #[error("Failed to deserialize response body due to and error, normally because the response payload is malformed.")]
+    DeserializeError,
+
+    #[error("The remote node failed to respond to the request: {0} - {1}")]
+    RemoteError(Code, String),
+
+    #[error("The operation failed due to the request payload not matching the expected schema: {0}")]
+    MalformedPayload(String),
+
+    #[error("The operation failed due to a unknown error: {0} - {1}")]
+    Unknown(Code, String),
+}
+
+impl From<Status> for RpcError {
+    fn from(s: Status) -> Self {
+        match s.code() {
+            Code::Internal | Code::Aborted | Code::Cancelled => {
+                Self::RemoteError(s.code(), s.message().to_string())
+            },
+            Code::DataLoss
+            | Code::InvalidArgument
+            | Code::FailedPrecondition
+            | Code::OutOfRange => Self::MalformedPayload(s.message().to_string()),
+            _ => Self::Unknown(s.code(), s.message().to_string()),
+        }
+    }
 }

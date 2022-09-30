@@ -6,11 +6,11 @@ use datacake_crdt::{HLCTimestamp, Key, OrSWotSet, StateChanges};
 use futures::StreamExt;
 use tokio::sync::oneshot;
 use tonic::transport::{Channel, Endpoint, Uri};
-use tonic::{Code, Status, Streaming};
+use tonic::{Status, Streaming};
 
 use super::cluster_rpc_models::document_sync_client::DocumentSyncClient;
 use super::cluster_rpc_models::general_rpc_client::GeneralRpcClient;
-use super::DocsBlock;
+use super::{DocsBlock, RpcError};
 use crate::rpc::cluster_rpc_models::{
     Blank,
     DataFetchRequest,
@@ -23,39 +23,6 @@ use crate::rpc::cluster_rpc_models::{
     UpsertPayload,
 };
 use crate::shard::StateChangeTs;
-
-#[derive(Debug, thiserror::Error)]
-pub enum RpcError {
-    #[error("The rpc actor has encountered a fatal error and was unable to resume")]
-    DeadActor,
-
-    #[error("Failed to deserialize response body due to and error, normally because the response payload is malformed.")]
-    DeserializeError,
-
-    #[error("The remote node failed to respond to the request: {0} - {1}")]
-    RemoteError(Code, String),
-
-    #[error("The operation failed due to the request payload not matching the expected schema: {0}")]
-    MalformedPayload(String),
-
-    #[error("The operation failed due to a unknown error: {0} - {1}")]
-    Unknown(Code, String),
-}
-
-impl From<Status> for RpcError {
-    fn from(s: Status) -> Self {
-        match s.code() {
-            Code::Internal | Code::Aborted | Code::Cancelled => {
-                Self::RemoteError(s.code(), s.message().to_string())
-            },
-            Code::DataLoss
-            | Code::InvalidArgument
-            | Code::FailedPrecondition
-            | Code::OutOfRange => Self::MalformedPayload(s.message().to_string()),
-            _ => Self::Unknown(s.code(), s.message().to_string()),
-        }
-    }
-}
 
 /// Connects to a remote RPC server.
 pub async fn connect_client(
