@@ -38,6 +38,12 @@ pub async fn compress_set(set: &OrSWotSet) -> Result<(usize, Vec<u8>), BadState>
         .await
         .expect("spawn background thread");
 
+    debug!(
+        compressed_size = %compressed.len(),
+        decompressed_size = %uncompressed_len,
+        "Compressed doc set.",
+    );
+
     Ok((uncompressed_len, compressed))
 }
 
@@ -58,6 +64,12 @@ pub async fn decompress_set(
     tokio::task::spawn_blocking(move || {
         let decompressed = lz4_flex::decompress(false_buffer, uncompressed_len)
             .map_err(|_| BadState)?;
+
+        debug!(
+            compressed_size = %false_buffer.len(),
+            decompressed_size = %decompressed.len(),
+            "Decompressed doc set.",
+        );
 
         OrSWotSet::from_bytes(&decompressed)
     })
