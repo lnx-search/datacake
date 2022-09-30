@@ -19,6 +19,13 @@ pub struct ClientCluster {
 }
 
 impl ClientCluster {
+    /// Drops a node's client.
+    ///
+    /// Once all requests have been handled, this will cause the client to shutdown.
+    pub fn disconnect_node(&self, node_id: &str) {
+        self.nodes.write().remove(node_id);
+    }
+
     #[inline]
     /// The number of nodes currently connected in the cluster.
     pub fn live_nodes_count(&self) -> usize {

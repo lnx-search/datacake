@@ -55,6 +55,7 @@ pub async fn start_rpc_server(
             .serve_with_shutdown(bind, async {
                 let _ = set_ready.send(());
                 let _ = rx.await;
+                info!(listen_addr = %bind, "Got shutdown signal.");
             });
 
         if let Err(e) = server.await {
