@@ -2,6 +2,12 @@
 name = "datacake-rocks"
 version = "0.1.0"
 edition = "2021"
+description = "A pre-built implementation of the require Metastore and Datastore traits for the Datacake cluster. Built on top of RocksDB."
+license = "MIT"
+keywords = ["rocksdb", "databases", "distributed"]
+categories = ["concurrency", "asynchronous"]
+repository = "https://github.com/lnx-search/datacake"
+readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
