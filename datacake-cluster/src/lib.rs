@@ -150,8 +150,6 @@ impl DatacakeHandle {
         let (completed_tx, completed_rx) = flume::bounded(nodes.len());
 
         for (node_id, client) in nodes {
-            info!("Got node: {}", node_id);
-
             let tx = completed_tx.clone();
             let docs = docs.clone();
 
