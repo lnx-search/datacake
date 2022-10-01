@@ -62,12 +62,12 @@ async fn test_document_removal_propagation() -> Result<()> {
     );
     let node_2_doc = node_2_handle.get(1).await?;
     assert!(
-        node_2_doc.is_some(),
+        node_2_doc.is_none(),
         "Node-2: Expected document to no longer exist."
     );
     let node_3_doc = node_3_handle.get(1).await?;
     assert!(
-        node_3_doc.is_some(),
+        node_3_doc.is_none(),
         "Node-3: Expected document to no longer exist."
     );
 
