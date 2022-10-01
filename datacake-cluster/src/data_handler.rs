@@ -59,7 +59,7 @@ impl<DS: Datastore> StandardDataHandler<DS> {
 
             self.shard_group.merge(shard_id, set).await?;
 
-            #[cfg(not(feature = "memory-compression"))]
+            #[cfg(feature = "memory-compression")]
             self.shard_group.compress_state(shard_id).await?;
         }
 

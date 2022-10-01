@@ -48,6 +48,7 @@ impl LocalShard {
         Ok(self.compressed_view.clone())
     }
 
+    #[cfg(feature = "memory-compression")]
     pub async fn try_decompress_data(&mut self) -> Result<(), BadState> {
         if !self.is_compressed {
             return Ok(());

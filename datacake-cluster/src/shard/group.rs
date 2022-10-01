@@ -90,7 +90,7 @@ impl ShardGroupHandle {
         self.handles[shard_id].diff(set).await
     }
 
-    #[cfg(not(feature = "memory-compression"))]
+    #[cfg(feature = "memory-compression")]
     pub async fn compress_state(&self, shard_id: usize) -> Result<(), DeadShard> {
         self.handles[shard_id].compress_state().await
     }
