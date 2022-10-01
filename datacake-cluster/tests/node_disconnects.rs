@@ -30,26 +30,26 @@ async fn test_node_failure() -> Result<()> {
     .await?;
 
     // Our cluster should be fully connected very quickly on localhost.
-    tokio::time::sleep(Duration::from_secs(2)).await;
+    tokio::time::sleep(Duration::from_secs(5)).await;
 
     assert_eq!(
         node_1.handle().live_nodes_count(),
         2,
-        "Expected node-1 to have 2 peer nodes within 3 seconds."
+        "Expected node-1 to have 2 peer nodes within 5 seconds."
     );
     assert_eq!(
         node_2.handle().live_nodes_count(),
         2,
-        "Expected node-2 to have 2 peer nodes within 3 seconds."
+        "Expected node-2 to have 2 peer nodes within 5 seconds."
     );
     assert_eq!(
         node_3.handle().live_nodes_count(),
         2,
-        "Expected node-3 to have 2 peer nodes within 3 seconds."
+        "Expected node-3 to have 2 peer nodes within 5 seconds."
     );
 
     node_1.shutdown().await?;
-    tokio::time::sleep(Duration::from_secs(2)).await;
+    tokio::time::sleep(Duration::from_secs(3)).await;
 
     let handle = node_2.handle();
     handle.insert(123, vec![123]).await?;
@@ -95,7 +95,7 @@ async fn test_node_failure_and_recover() -> Result<()> {
     .await?;
 
     // Our cluster should be fully connected very quickly on localhost.
-    tokio::time::sleep(Duration::from_secs(3)).await;
+    tokio::time::sleep(Duration::from_secs(5)).await;
 
     node_1.shutdown().await?;
     tokio::time::sleep(Duration::from_secs(3)).await;
