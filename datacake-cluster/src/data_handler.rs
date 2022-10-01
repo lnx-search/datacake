@@ -6,19 +6,21 @@ use datacake_crdt::{HLCTimestamp, Key, OrSWotSet, StateChanges};
 
 use crate::rpc::{DataHandler, Document};
 use crate::shard::ShardGroupHandle;
-use crate::{Datastore, NUMBER_OF_SHARDS};
+use crate::{Clock, Datastore, NUMBER_OF_SHARDS};
 
 #[derive(Clone)]
 pub struct StandardDataHandler<DS: Datastore> {
     shard_group: ShardGroupHandle,
     datastore: Arc<DS>,
+    clock: Clock,
 }
 
 impl<DS: Datastore> StandardDataHandler<DS> {
-    pub(crate) fn new(shard_group: ShardGroupHandle, datastore: Arc<DS>) -> Self {
+    pub(crate) fn new(shard_group: ShardGroupHandle, datastore: Arc<DS>, clock: Clock) -> Self {
         Self {
             shard_group,
             datastore,
+            clock,
         }
     }
 
@@ -65,6 +67,8 @@ impl<DS: Datastore> DataHandler for StandardDataHandler<DS> {
         let mut shard_changes = HashMap::<usize, StateChanges>::new();
         let mut documents = vec![];
         for (doc_id, ts, data) in docs {
+            self.clock.register_ts(ts).await;
+
             let shard_id = crate::shard::get_shard_id(doc_id);
 
             shard_changes
@@ -132,6 +136,8 @@ impl<DS: Datastore> DataHandler for StandardDataHandler<DS> {
         let mut doc_ids = vec![];
 
         for (doc_id, ts) in changes {
+            self.clock.register_ts(ts).await;
+
             let shard_id = crate::shard::get_shard_id(doc_id);
 
             doc_ids.push(doc_id);
