@@ -197,6 +197,8 @@ fn metadata_removes_to_batch(changes: Vec<Key>) -> sled::Batch {
 
 #[async_trait::async_trait]
 impl Metastore for Store {
+    type Error = Error;
+
     /// This is called when our cluster first starts up, where each shard's state is
     /// fetched from the persisted store, these keys contribute to the live documents
     /// in the set.

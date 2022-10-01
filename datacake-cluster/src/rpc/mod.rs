@@ -1,3 +1,5 @@
+use std::fmt::{Debug, Display};
+
 use bytecheck::CheckBytes;
 use bytes::Bytes;
 use datacake_crdt::{HLCTimestamp, Key};
@@ -12,6 +14,7 @@ pub mod server;
 pub use client_cluster::{Client, ClientCluster};
 
 use crate::rpc::cluster_rpc_models::Timestamp;
+use crate::DatacakeError;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Archive)]
 #[archive_attr(derive(CheckBytes))]
@@ -31,17 +34,19 @@ pub struct Document {
 
 #[tonic::async_trait]
 pub trait DataHandler: Send + Sync + 'static {
+    type Error: Display + Debug;
+
     /// Fetches a set of documents and returns the individual key-buffer pairs.
     async fn get_documents(
         &self,
         doc_ids: &[Key],
-    ) -> Result<Vec<Document>, anyhow::Error>;
+    ) -> Result<Vec<Document>, DatacakeError<Self::Error>>;
 
     /// Fetches a single document from the datastore.
     async fn get_document(
         &self,
         doc_id: Key,
-    ) -> Result<Option<Document>, anyhow::Error> {
+    ) -> Result<Option<Document>, DatacakeError<Self::Error>> {
         Ok(self.get_documents(&[doc_id]).await?.pop())
     }
 
@@ -52,13 +57,16 @@ pub trait DataHandler: Send + Sync + 'static {
     async fn upsert_documents(
         &self,
         docs: Vec<(Key, HLCTimestamp, Vec<u8>)>,
-    ) -> Result<(), anyhow::Error>;
+    ) -> Result<(), DatacakeError<Self::Error>>;
 
     /// Insert or update a single document.
     ///
     /// NOTE:
     ///  This should clear any associated tombstones on the document if applicable.
-    async fn upsert_document(&self, doc: Document) -> Result<(), anyhow::Error> {
+    async fn upsert_document(
+        &self,
+        doc: Document,
+    ) -> Result<(), DatacakeError<Self::Error>> {
         self.upsert_documents(vec![(doc.id, doc.last_modified, doc.data)])
             .await
     }
@@ -73,7 +81,7 @@ pub trait DataHandler: Send + Sync + 'static {
     async fn mark_tombstone_documents(
         &self,
         doc_ids: Vec<(Key, HLCTimestamp)>,
-    ) -> Result<(), anyhow::Error>;
+    ) -> Result<(), DatacakeError<Self::Error>>;
 
     /// Mark a documents as deleted.
     ///
@@ -86,7 +94,7 @@ pub trait DataHandler: Send + Sync + 'static {
         &self,
         doc_id: Key,
         ts: HLCTimestamp,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), DatacakeError<Self::Error>> {
         self.mark_tombstone_documents(vec![(doc_id, ts)]).await
     }
 
@@ -96,7 +104,7 @@ pub trait DataHandler: Send + Sync + 'static {
     async fn clear_tombstone_documents(
         &self,
         doc_ids: Vec<Key>,
-    ) -> Result<(), anyhow::Error>;
+    ) -> Result<(), DatacakeError<Self::Error>>;
 }
 
 /// A helper iterator that generates documents

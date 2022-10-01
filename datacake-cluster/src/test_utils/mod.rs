@@ -28,7 +28,7 @@ pub async fn make_test_node(
     gossip_addr: &str,
     rpc_addr: &str,
     seeds: Vec<&str>,
-) -> Result<DatacakeCluster> {
+) -> Result<DatacakeCluster<MemStore>> {
     make_test_node_with_store(node_id, gossip_addr, rpc_addr, seeds, MemStore::default())
         .await
 }
@@ -39,7 +39,7 @@ pub async fn make_test_node_with_store<DS: Datastore>(
     rpc_addr: &str,
     seeds: Vec<&str>,
     store: DS,
-) -> Result<DatacakeCluster> {
+) -> Result<DatacakeCluster<DS>> {
     let cfg =
         make_connection_config(gossip_addr.parse().unwrap(), rpc_addr.parse().unwrap());
 

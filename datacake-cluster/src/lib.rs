@@ -10,14 +10,15 @@ mod shard;
 mod shared;
 mod wrappers;
 
+pub mod error;
 mod tasks;
 #[cfg(feature = "test-utils")]
 pub mod test_utils;
 
+use std::fmt::{Debug, Display};
 use std::mem;
 use std::sync::Arc;
 
-use anyhow::Result;
 use bytes::Bytes;
 pub use datacake_crdt::{HLCTimestamp, Key, OrSWotSet, StateChanges, TimestampError};
 pub use manager::ConnectionCfg;
@@ -28,6 +29,7 @@ pub use wrappers::{Datastore, Metastore};
 
 use crate::clock::Clock;
 use crate::data_handler::StandardDataHandler;
+use crate::error::DatacakeError;
 use crate::manager::DatacakeClusterManager;
 use crate::rpc::{ClientCluster, DataHandler};
 use crate::shard::state::StateWatcherHandle;
@@ -41,20 +43,32 @@ use crate::shard::state::StateWatcherHandle;
 ///
 /// Datacake essentially acts as a frontend wrapper around a datastore
 /// to make is distributed.
-pub struct DatacakeCluster {
-    manager: Option<DatacakeClusterManager>,
-    handle: DatacakeHandle,
+pub struct DatacakeCluster<DS: Datastore> {
+    manager: Option<DatacakeClusterManager<DS::Error>>,
+    handle: DatacakeHandle<DS::Error>,
 }
 
-impl DatacakeCluster {
+impl<DS: Datastore> DatacakeCluster<DS> {
     /// Starts the Datacake cluster, connecting to the targeted seed nodes.
-    pub async fn connect<DS: Datastore>(
+    ///
+    /// When connecting to the cluster, the `node_id` **must be unique** otherwise
+    /// the cluster will incorrectly propagate state and not become consistent.
+    ///
+    /// Typically you will only have one cluster and therefore only have one `cluster_id`
+    /// which should be the same for each node in the cluster.
+    /// Currently the `cluster_id` is not handled by anything other than
+    /// [chitchat](https://docs.rs/chitchat/0.4.1/chitchat/)
+    ///
+    /// No seed nodes need to be current live for the cluster to start correctly,
+    /// but they are required in order for nodes to discover one-another and share
+    /// their basic state.
+    pub async fn connect(
         node_id: impl Into<String>,
         cluster_id: impl Into<String>,
         connection_cfg: ConnectionCfg,
         seed_nodes: Vec<String>,
         datastore: DS,
-    ) -> Result<Self> {
+    ) -> Result<Self, DatacakeError<DS::Error>> {
         let node_id = node_id.into();
         let cluster_id = cluster_id.into();
 
@@ -64,12 +78,16 @@ impl DatacakeCluster {
         let shard_changes_watcher = shard::state::state_watcher().await;
 
         let shard_group = shard::create_shard_group(shard_changes_watcher.clone()).await;
-        let handler = StandardDataHandler::new(shard_group.clone(), datastore.clone(), clock.clone());
+        let handler = StandardDataHandler::new(
+            shard_group.clone(),
+            datastore.clone(),
+            clock.clone(),
+        );
 
         // Initialise the shard groups loading from the persisted state.
         handler.load_initial_shard_states().await?;
 
-        let data_handler = Arc::new(handler) as Arc<dyn DataHandler>;
+        let data_handler = Arc::new(handler) as Arc<dyn DataHandler<Error = DS::Error>>;
 
         let manager = DatacakeClusterManager::connect(
             node_id,
@@ -94,7 +112,8 @@ impl DatacakeCluster {
         })
     }
 
-    pub async fn shutdown(mut self) -> Result<()> {
+    /// Safely shuts the current node down and leaves the cluster.
+    pub async fn shutdown(mut self) -> Result<(), DatacakeError<DS::Error>> {
         if let Some(manager) = mem::take(&mut self.manager) {
             manager.shutdown().await?;
         }
@@ -103,12 +122,13 @@ impl DatacakeCluster {
     }
 
     #[inline]
-    pub fn handle(&self) -> DatacakeHandle {
+    /// Creates a new [DatacakeHandle].
+    pub fn handle(&self) -> DatacakeHandle<DS::Error> {
         self.handle.clone()
     }
 }
 
-impl Drop for DatacakeCluster {
+impl<DS: Datastore> Drop for DatacakeCluster<DS> {
     fn drop(&mut self) {
         if let Some(manager) = self.manager.take() {
             tokio::spawn(async move {
@@ -125,13 +145,19 @@ impl Drop for DatacakeCluster {
 
 /// A cheap to clone, threadsafe handle for interacting
 /// with your underlying datastore and the distribution system.
-pub struct DatacakeHandle {
-    data_handler: Arc<dyn DataHandler>,
+pub struct DatacakeHandle<E>
+where
+    E: Display + Debug + Send + Sync + 'static,
+{
+    data_handler: Arc<dyn DataHandler<Error = E>>,
     nodes: ClientCluster,
     clock: Clock,
 }
 
-impl Clone for DatacakeHandle {
+impl<E> Clone for DatacakeHandle<E>
+where
+    E: Display + Debug + Send + Sync + 'static,
+{
     fn clone(&self) -> Self {
         Self {
             data_handler: self.data_handler.clone(),
@@ -141,11 +167,14 @@ impl Clone for DatacakeHandle {
     }
 }
 
-impl DatacakeHandle {
+impl<E> DatacakeHandle<E>
+where
+    E: Display + Debug + Send + Sync + 'static,
+{
     async fn broadcast_upsert_to_nodes(
         &self,
         docs: Vec<(Key, HLCTimestamp, Bytes)>,
-    ) -> Result<()> {
+    ) -> Result<(), DatacakeError<E>> {
         let docs = Arc::new(docs);
         let nodes = self.nodes.get_all_clients();
         let (completed_tx, completed_rx) = flume::bounded(nodes.len());
@@ -181,7 +210,7 @@ impl DatacakeHandle {
     async fn broadcast_delete_to_nodes(
         &self,
         docs: Vec<(Key, HLCTimestamp)>,
-    ) -> Result<()> {
+    ) -> Result<(), DatacakeError<E>> {
         let docs = Arc::new(docs);
         let nodes = self.nodes.get_all_clients();
         let (completed_tx, completed_rx) = flume::bounded(nodes.len());
@@ -221,17 +250,20 @@ impl DatacakeHandle {
     }
 
     /// Get a single document with a given id.
-    pub async fn get(&self, id: Key) -> Result<Option<Document>> {
+    pub async fn get(&self, id: Key) -> Result<Option<Document>, DatacakeError<E>> {
         self.data_handler.get_document(id).await
     }
 
     /// Get many documents from a set of ids.
-    pub async fn get_many(&self, ids: &[Key]) -> Result<Vec<Document>> {
+    pub async fn get_many(
+        &self,
+        ids: &[Key],
+    ) -> Result<Vec<Document>, DatacakeError<E>> {
         self.data_handler.get_documents(ids).await
     }
 
     /// Insert a single document into the datastore.
-    pub async fn insert(&self, id: Key, data: Vec<u8>) -> Result<()> {
+    pub async fn insert(&self, id: Key, data: Vec<u8>) -> Result<(), DatacakeError<E>> {
         let last_modified = self.clock.get_time().await;
 
         self.data_handler
@@ -250,7 +282,7 @@ impl DatacakeHandle {
     pub async fn insert_many(
         &self,
         documents: impl Iterator<Item = (Key, Vec<u8>)>,
-    ) -> Result<()> {
+    ) -> Result<(), DatacakeError<E>> {
         let mut docs = vec![];
         for (doc_id, data) in documents {
             let ts = self.clock.get_time().await;
@@ -267,7 +299,7 @@ impl DatacakeHandle {
     }
 
     /// Delete a document from the datastore with a given id.
-    pub async fn delete(&self, id: Key) -> Result<()> {
+    pub async fn delete(&self, id: Key) -> Result<(), DatacakeError<E>> {
         let last_modified = self.clock.get_time().await;
 
         self.data_handler
@@ -279,7 +311,7 @@ impl DatacakeHandle {
     }
 
     /// Delete many documents from the datastore from the set of ids.
-    pub async fn delete_many(&self, ids: &[Key]) -> Result<()> {
+    pub async fn delete_many(&self, ids: &[Key]) -> Result<(), DatacakeError<E>> {
         let mut doc_changes = vec![];
         for id in ids {
             let ts = self.clock.get_time().await;

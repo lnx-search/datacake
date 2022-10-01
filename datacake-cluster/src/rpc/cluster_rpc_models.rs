@@ -1,74 +1,75 @@
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ShardState {
-    #[prost(uint64, repeated, tag = "1")]
+    #[prost(uint64, repeated, tag="1")]
     pub shards: ::prost::alloc::vec::Vec<u64>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SyncRequest {
-    #[prost(uint32, tag = "1")]
+    #[prost(uint32, tag="1")]
     pub shard_id: u32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SyncResponse {
-    #[prost(uint32, tag = "1")]
+    #[prost(uint32, tag="1")]
     pub uncompressed_size: u32,
-    #[prost(bytes = "bytes", tag = "2")]
+    #[prost(bytes="bytes", tag="2")]
     pub doc_set: ::prost::bytes::Bytes,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DataFetchRequest {
-    #[prost(uint64, repeated, tag = "3")]
+    #[prost(uint64, repeated, tag="3")]
     pub requested_docs: ::prost::alloc::vec::Vec<u64>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DataFetchResponse {
-    #[prost(uint64, repeated, tag = "1")]
+    #[prost(uint64, repeated, tag="1")]
     pub doc_ids: ::prost::alloc::vec::Vec<u64>,
-    #[prost(uint32, repeated, tag = "2")]
+    #[prost(uint32, repeated, tag="2")]
     pub offsets: ::prost::alloc::vec::Vec<u32>,
-    #[prost(message, repeated, tag = "3")]
+    #[prost(message, repeated, tag="3")]
     pub timestamps: ::prost::alloc::vec::Vec<Timestamp>,
-    #[prost(uint32, tag = "4")]
+    #[prost(uint32, tag="4")]
     pub uncompressed_size: u32,
-    #[prost(bytes = "bytes", tag = "5")]
+    #[prost(bytes="bytes", tag="5")]
     pub docs: ::prost::bytes::Bytes,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct UpsertPayload {
-    #[prost(uint64, repeated, tag = "1")]
+    #[prost(uint64, repeated, tag="1")]
     pub doc_ids: ::prost::alloc::vec::Vec<u64>,
-    #[prost(uint32, repeated, tag = "2")]
+    #[prost(uint32, repeated, tag="2")]
     pub offsets: ::prost::alloc::vec::Vec<u32>,
-    #[prost(message, repeated, tag = "3")]
+    #[prost(message, repeated, tag="3")]
     pub timestamps: ::prost::alloc::vec::Vec<Timestamp>,
-    #[prost(uint32, tag = "4")]
+    #[prost(uint32, tag="4")]
     pub uncompressed_size: u32,
-    #[prost(bytes = "bytes", tag = "5")]
+    #[prost(bytes="bytes", tag="5")]
     pub doc_data: ::prost::bytes::Bytes,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Timestamp {
-    #[prost(uint64, tag = "1")]
+    #[prost(uint64, tag="1")]
     pub millis: u64,
-    #[prost(uint32, tag = "2")]
+    #[prost(uint32, tag="2")]
     pub counter: u32,
-    #[prost(uint32, tag = "3")]
+    #[prost(uint32, tag="3")]
     pub node_id: u32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DeletePayload {
-    #[prost(uint64, repeated, tag = "1")]
+    #[prost(uint64, repeated, tag="1")]
     pub doc_ids: ::prost::alloc::vec::Vec<u64>,
-    #[prost(message, repeated, tag = "2")]
+    #[prost(message, repeated, tag="2")]
     pub timestamps: ::prost::alloc::vec::Vec<Timestamp>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Blank {}
+pub struct Blank {
+}
 /// Generated client implementations.
 pub mod document_sync_client {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
-    use tonic::codegen::http::Uri;
     use tonic::codegen::*;
+    use tonic::codegen::http::Uri;
     ///
     /// RPC for bringing nodes up to speed between their data.
     ///
@@ -140,12 +141,15 @@ pub mod document_sync_client {
             &mut self,
             request: impl tonic::IntoRequest<super::Blank>,
         ) -> Result<tonic::Response<super::ShardState>, tonic::Status> {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::new(
-                    tonic::Code::Unknown,
-                    format!("Service was not ready: {}", e.into()),
-                )
-            })?;
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/cluster_rpc_models.DocumentSync/GetShardState",
@@ -156,12 +160,15 @@ pub mod document_sync_client {
             &mut self,
             request: impl tonic::IntoRequest<super::SyncRequest>,
         ) -> Result<tonic::Response<super::SyncResponse>, tonic::Status> {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::new(
-                    tonic::Code::Unknown,
-                    format!("Service was not ready: {}", e.into()),
-                )
-            })?;
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/cluster_rpc_models.DocumentSync/Sync",
@@ -175,27 +182,28 @@ pub mod document_sync_client {
             tonic::Response<tonic::codec::Streaming<super::DataFetchResponse>>,
             tonic::Status,
         > {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::new(
-                    tonic::Code::Unknown,
-                    format!("Service was not ready: {}", e.into()),
-                )
-            })?;
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/cluster_rpc_models.DocumentSync/FetchDocs",
             );
-            self.inner
-                .server_streaming(request.into_request(), path, codec)
-                .await
+            self.inner.server_streaming(request.into_request(), path, codec).await
         }
     }
 }
 /// Generated client implementations.
 pub mod general_rpc_client {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
-    use tonic::codegen::http::Uri;
     use tonic::codegen::*;
+    use tonic::codegen::http::Uri;
     ///
     /// General RPC for consistency propagation.
     ///
@@ -267,12 +275,15 @@ pub mod general_rpc_client {
             &mut self,
             request: impl tonic::IntoRequest<super::UpsertPayload>,
         ) -> Result<tonic::Response<super::Blank>, tonic::Status> {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::new(
-                    tonic::Code::Unknown,
-                    format!("Service was not ready: {}", e.into()),
-                )
-            })?;
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/cluster_rpc_models.GeneralRpc/UpsertDocs",
@@ -283,12 +294,15 @@ pub mod general_rpc_client {
             &mut self,
             request: impl tonic::IntoRequest<super::DeletePayload>,
         ) -> Result<tonic::Response<super::Blank>, tonic::Status> {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::new(
-                    tonic::Code::Unknown,
-                    format!("Service was not ready: {}", e.into()),
-                )
-            })?;
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/cluster_rpc_models.GeneralRpc/DeleteDocs",
@@ -313,7 +327,9 @@ pub mod document_sync_server {
             request: tonic::Request<super::SyncRequest>,
         ) -> Result<tonic::Response<super::SyncResponse>, tonic::Status>;
         ///Server streaming response type for the FetchDocs method.
-        type FetchDocsStream: futures_core::Stream<Item = Result<super::DataFetchResponse, tonic::Status>>
+        type FetchDocsStream: futures_core::Stream<
+                Item = Result<super::DataFetchResponse, tonic::Status>,
+            >
             + Send
             + 'static;
         async fn fetch_docs(
@@ -386,17 +402,21 @@ pub mod document_sync_server {
                 "/cluster_rpc_models.DocumentSync/GetShardState" => {
                     #[allow(non_camel_case_types)]
                     struct GetShardStateSvc<T: DocumentSync>(pub Arc<T>);
-                    impl<T: DocumentSync> tonic::server::UnaryService<super::Blank> for GetShardStateSvc<T> {
+                    impl<T: DocumentSync> tonic::server::UnaryService<super::Blank>
+                    for GetShardStateSvc<T> {
                         type Response = super::ShardState;
-                        type Future =
-                            BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::Blank>,
                         ) -> Self::Future {
                             let inner = self.0.clone();
-                            let fut =
-                                async move { (*inner).get_shard_state(request).await };
+                            let fut = async move {
+                                (*inner).get_shard_state(request).await
+                            };
                             Box::pin(fut)
                         }
                     }
@@ -416,14 +436,17 @@ pub mod document_sync_server {
                         Ok(res)
                     };
                     Box::pin(fut)
-                },
+                }
                 "/cluster_rpc_models.DocumentSync/Sync" => {
                     #[allow(non_camel_case_types)]
                     struct SyncSvc<T: DocumentSync>(pub Arc<T>);
-                    impl<T: DocumentSync> tonic::server::UnaryService<super::SyncRequest> for SyncSvc<T> {
+                    impl<T: DocumentSync> tonic::server::UnaryService<super::SyncRequest>
+                    for SyncSvc<T> {
                         type Response = super::SyncResponse;
-                        type Future =
-                            BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::SyncRequest>,
@@ -449,14 +472,14 @@ pub mod document_sync_server {
                         Ok(res)
                     };
                     Box::pin(fut)
-                },
+                }
                 "/cluster_rpc_models.DocumentSync/FetchDocs" => {
                     #[allow(non_camel_case_types)]
                     struct FetchDocsSvc<T: DocumentSync>(pub Arc<T>);
-                    impl<T: DocumentSync>
-                        tonic::server::ServerStreamingService<super::DataFetchRequest>
-                        for FetchDocsSvc<T>
-                    {
+                    impl<
+                        T: DocumentSync,
+                    > tonic::server::ServerStreamingService<super::DataFetchRequest>
+                    for FetchDocsSvc<T> {
                         type Response = super::DataFetchResponse;
                         type ResponseStream = T::FetchDocsStream;
                         type Future = BoxFuture<
@@ -488,15 +511,19 @@ pub mod document_sync_server {
                         Ok(res)
                     };
                     Box::pin(fut)
-                },
-                _ => Box::pin(async move {
-                    Ok(http::Response::builder()
-                        .status(200)
-                        .header("grpc-status", "12")
-                        .header("content-type", "application/grpc")
-                        .body(empty_body())
-                        .unwrap())
-                }),
+                }
+                _ => {
+                    Box::pin(async move {
+                        Ok(
+                            http::Response::builder()
+                                .status(200)
+                                .header("grpc-status", "12")
+                                .header("content-type", "application/grpc")
+                                .body(empty_body())
+                                .unwrap(),
+                        )
+                    })
+                }
             }
         }
     }
@@ -606,11 +633,12 @@ pub mod general_rpc_server {
                     #[allow(non_camel_case_types)]
                     struct UpsertDocsSvc<T: GeneralRpc>(pub Arc<T>);
                     impl<T: GeneralRpc> tonic::server::UnaryService<super::UpsertPayload>
-                        for UpsertDocsSvc<T>
-                    {
+                    for UpsertDocsSvc<T> {
                         type Response = super::Blank;
-                        type Future =
-                            BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::UpsertPayload>,
@@ -636,16 +664,17 @@ pub mod general_rpc_server {
                         Ok(res)
                     };
                     Box::pin(fut)
-                },
+                }
                 "/cluster_rpc_models.GeneralRpc/DeleteDocs" => {
                     #[allow(non_camel_case_types)]
                     struct DeleteDocsSvc<T: GeneralRpc>(pub Arc<T>);
                     impl<T: GeneralRpc> tonic::server::UnaryService<super::DeletePayload>
-                        for DeleteDocsSvc<T>
-                    {
+                    for DeleteDocsSvc<T> {
                         type Response = super::Blank;
-                        type Future =
-                            BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::DeletePayload>,
@@ -671,15 +700,19 @@ pub mod general_rpc_server {
                         Ok(res)
                     };
                     Box::pin(fut)
-                },
-                _ => Box::pin(async move {
-                    Ok(http::Response::builder()
-                        .status(200)
-                        .header("grpc-status", "12")
-                        .header("content-type", "application/grpc")
-                        .body(empty_body())
-                        .unwrap())
-                }),
+                }
+                _ => {
+                    Box::pin(async move {
+                        Ok(
+                            http::Response::builder()
+                                .status(200)
+                                .header("grpc-status", "12")
+                                .header("content-type", "application/grpc")
+                                .body(empty_body())
+                                .unwrap(),
+                        )
+                    })
+                }
             }
         }
     }

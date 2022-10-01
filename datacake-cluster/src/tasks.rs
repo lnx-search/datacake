@@ -1,3 +1,4 @@
+use std::fmt::{Debug, Display};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -14,16 +15,18 @@ const TOMBSTONE_PURGE_DELAY: Duration = Duration::from_secs(600);
 
 use crate::node::ClusterMember;
 use crate::rpc::{Client, RpcError};
-use crate::shard::{DeadShard, ShardGroupHandle, StateChangeTs};
-use crate::{ClientCluster, DataHandler, NUMBER_OF_SHARDS};
+use crate::shard::{ShardGroupHandle, StateChangeTs};
+use crate::{ClientCluster, DataHandler, DatacakeError, NUMBER_OF_SHARDS};
 
 /// A background task for the node which purges any documents marked as tombstones
 /// once it is safe to completely remove any trace of them.
-pub(crate) async fn tombstone_purge_task(
+pub(crate) async fn tombstone_purge_task<E>(
     node_id: String,
     shards: ShardGroupHandle,
-    handler: Arc<dyn DataHandler>,
-) {
+    handler: Arc<dyn DataHandler<Error = E>>,
+) where
+    E: Display + Debug + Send + Sync + 'static,
+{
     let mut interval = interval(TOMBSTONE_PURGE_DELAY);
 
     loop {
@@ -67,7 +70,10 @@ pub(crate) async fn tombstone_purge_task(
 ///
 /// If the connection to the remote node fails, this task ends as it assumes the node
 /// is dead and this task will be restarted once it reconnects.
-pub(crate) async fn shard_state_poller_task(member: ClusterMember, node: NodeInfo) {
+pub(crate) async fn shard_state_poller_task<E>(member: ClusterMember, node: NodeInfo<E>)
+where
+    E: Display + Debug + Send + Sync + 'static,
+{
     let mut interval = interval(CHANGES_POLLING_DURATION);
     interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
@@ -105,19 +111,35 @@ pub(crate) async fn shard_state_poller_task(member: ClusterMember, node: NodeInf
             &member,
             state,
             &mut previous_state,
-            &node,
+            node.clone(),
             stop.clone(),
         )
         .await;
     }
 }
 
-#[derive(Clone)]
-pub(crate) struct NodeInfo {
+pub(crate) struct NodeInfo<E>
+where
+    E: Display + Debug + Send + 'static,
+{
     pub(crate) rpc: Client,
     pub(crate) client_cluster: ClientCluster,
-    pub(crate) data_handler: Arc<dyn DataHandler>,
+    pub(crate) data_handler: Arc<dyn DataHandler<Error = E>>,
     pub(crate) shard_group: ShardGroupHandle,
+}
+
+impl<E> Clone for NodeInfo<E>
+where
+    E: Display + Debug + Send + 'static,
+{
+    fn clone(&self) -> Self {
+        Self {
+            rpc: self.rpc.clone(),
+            client_cluster: self.client_cluster.clone(),
+            data_handler: self.data_handler.clone(),
+            shard_group: self.shard_group.clone(),
+        }
+    }
 }
 
 /// Calculated what shards have changed for a given node's state
@@ -126,13 +148,15 @@ pub(crate) struct NodeInfo {
 /// In the case that the shard's change timestamp is `0` (Initial startup state)
 /// then the shard is always marked as changed and follows the synchronisation
 /// process, regardless of if the local node's state is aligned already.
-async fn handle_node_state_change(
+async fn handle_node_state_change<E>(
     member: &ClusterMember,
     new_state: Vec<StateChangeTs>,
     previous_state: &mut [StateChangeTs],
-    node: &NodeInfo,
+    node: NodeInfo<E>,
     stop: Arc<AtomicBool>,
-) {
+) where
+    E: Display + Debug + Send + 'static,
+{
     let completed = spawn_handlers(member, new_state, previous_state, node, stop).await;
 
     while let Ok((shard_id, aligned_ts)) = completed.recv_async().await {
@@ -140,13 +164,16 @@ async fn handle_node_state_change(
     }
 }
 
-async fn spawn_handlers(
+async fn spawn_handlers<E>(
     member: &ClusterMember,
     new_state: Vec<StateChangeTs>,
     previous_state: &mut [StateChangeTs],
-    node: &NodeInfo,
+    node: NodeInfo<E>,
     stop: Arc<AtomicBool>,
-) -> flume::Receiver<(usize, StateChangeTs)> {
+) -> flume::Receiver<(usize, StateChangeTs)>
+where
+    E: Display + Debug + Send + 'static,
+{
     let shard_changes = new_state.iter().zip(previous_state.iter()).enumerate();
 
     let (tx, rx) = flume::bounded(2);
@@ -178,7 +205,7 @@ async fn spawn_handlers(
 
             let _permit = concurrency_limiter.acquire().await;
 
-            let fut = handle_shard_change(&node_id, shard_id, &node);
+            let fut = handle_shard_change(&node_id, shard_id, node.clone());
 
             let err = match fut.await {
                 Err(e) => e,
@@ -189,7 +216,7 @@ async fn spawn_handlers(
             };
 
             match err {
-                ShardError::HandlerError(e) => {
+                DatacakeError::DatastoreError(e) => {
                     error!(
                         node_id = %node_id,
                         target_shard_id = %shard_id,
@@ -197,12 +224,14 @@ async fn spawn_handlers(
                         "Failed to handle shard state change due to an error occurring within the datastore.",
                     );
                 },
-                ShardError::RpcError(ref e) if matches!(e, RpcError::Disconnected) => {
+                DatacakeError::RpcError(ref e)
+                    if matches!(e, RpcError::Disconnected) =>
+                {
                     warn!(node_id = %node_id, "Node has lost connection to remote.");
                     stop.store(true, Ordering::Relaxed);
                     node.client_cluster.disconnect_node(&node_id);
                 },
-                ShardError::RpcError(e) => {
+                e => {
                     error!(
                         node_id = %node_id,
                         target_shard_id = %shard_id,
@@ -210,32 +239,11 @@ async fn spawn_handlers(
                         "Failed to handle shard state changes due to an RPC error.",
                     );
                 },
-                ShardError::DeadShard(e) => {
-                    error!(
-                        node_id = %node_id,
-                        target_shard_id = shard_id,
-                        error = ?e,
-                        "The shard on the current node has died, this is likely a bug.",
-                    );
-                    stop.store(true, Ordering::Relaxed);
-                },
             }
         });
     }
 
     rx
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum ShardError {
-    #[error("{0}")]
-    RpcError(#[from] RpcError),
-
-    #[error("{0}")]
-    HandlerError(#[from] anyhow::Error),
-
-    #[error("The shard actor has died. This is likely a bug.")]
-    DeadShard(#[from] DeadShard),
 }
 
 /// Handles a given node's state shard changing.
@@ -253,11 +261,14 @@ pub enum ShardError {
 ///
 /// * Purged deletes are then cleared completely including removing the tombstone markers
 ///   for that given document.
-async fn handle_shard_change(
+async fn handle_shard_change<E>(
     node_id: &str,
     shard_id: usize,
-    node: &NodeInfo,
-) -> Result<(), ShardError> {
+    node: NodeInfo<E>,
+) -> Result<(), DatacakeError<E>>
+where
+    E: Display + Debug + Send + 'static,
+{
     let state = node.rpc.sync.get_doc_set(shard_id).await?;
 
     let (updated, removed) = node.shard_group.diff(shard_id, state.clone()).await?;
