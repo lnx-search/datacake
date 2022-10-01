@@ -36,7 +36,7 @@ impl Default for MemStore {
 #[async_trait]
 impl Metastore for MemStore {
     type Error = Error;
-    
+
     async fn get_keys(&self, shard_id: usize) -> Result<StateChanges, Error> {
         let map = self.metadata.read().get(&shard_id).unwrap().clone();
 
