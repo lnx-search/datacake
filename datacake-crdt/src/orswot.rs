@@ -70,7 +70,7 @@ impl NodeVersions {
 /// The tombstones can be purged safely once the set has observed other,
 /// newer operations from the original node which the entry is tied to.
 /// (This is tracked by checking the `node` field of the timestamp.)
-/// 
+///
 /// ```
 /// use datacake_crdt::{OrSWotSet, HLCTimestamp, get_unix_timestamp_ms};
 ///

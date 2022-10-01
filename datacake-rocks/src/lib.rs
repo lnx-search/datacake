@@ -2,18 +2,25 @@
 extern crate tracing;
 
 mod error;
-mod shard;
 mod metastore;
+mod shard;
 
 use std::path::Path;
+
+use datacake_cluster::{
+    Datastore,
+    Document,
+    HLCTimestamp,
+    Key,
+    Metastore,
+    StateChanges,
+};
+pub use error::RocksStoreError;
 #[cfg(feature = "cache")]
 use moka::sync::Cache;
-use datacake_cluster::{Datastore, Document, HLCTimestamp, Key, Metastore, StateChanges};
 
-pub use error::RocksStoreError;
 use crate::metastore::MetastoreHandle;
 use crate::shard::{RawKey, ShardHandle};
-
 
 /// Opens a new or existing store using a default set of options.
 ///
@@ -55,10 +62,7 @@ pub async fn open_store_with_options(
 
     let (metadata, storage_shards) = tokio::task::spawn_blocking(move || {
         let meta_path = base_path.join("metadata");
-        let metadata = metastore::start_metastore(
-            options.clone(),
-            &meta_path,
-        )?;
+        let metadata = metastore::start_metastore(options.clone(), &meta_path)?;
 
         let mut shards = vec![];
         for shard_id in 0..num_shard {
@@ -69,18 +73,18 @@ pub async fn open_store_with_options(
         }
 
         Ok::<_, RocksStoreError>((metadata, shards))
-    }).await.expect("Spawn background thread.")?;
+    })
+    .await
+    .expect("Spawn background thread.")?;
 
     Ok(RocksStore {
         metadata,
         storage_shards,
 
         #[cfg(feature = "cache")]
-        cache: Cache::new(0)
+        cache: Cache::new(0),
     })
 }
-
-
 
 /// A document and metadata store which can be used as a drop in store for a Datacake cluster.
 ///
@@ -123,8 +127,11 @@ impl RocksStore {
         (key % self.storage_shards.len() as u64) as usize
     }
 
-    fn group_and_serialize_keys(&self, doc_ids: &[Key]) -> Result<Vec<Vec<RawKey>>, RocksStoreError> {
-        let mut shard_grouped_ids =  Vec::with_capacity(self.storage_shards.len());
+    fn group_and_serialize_keys(
+        &self,
+        doc_ids: &[Key],
+    ) -> Result<Vec<Vec<RawKey>>, RocksStoreError> {
+        let mut shard_grouped_ids = Vec::with_capacity(self.storage_shards.len());
         shard_grouped_ids.resize(self.storage_shards.len(), vec![]);
 
         for doc_id in doc_ids {
@@ -148,36 +155,58 @@ impl Metastore for RocksStore {
         self.metadata.get_keys(false, shard_id).await
     }
 
-    async fn update_keys(&self, shard_id: usize, states: Vec<(Key, HLCTimestamp)>) -> Result<(), Self::Error> {
+    async fn update_keys(
+        &self,
+        shard_id: usize,
+        states: Vec<(Key, HLCTimestamp)>,
+    ) -> Result<(), Self::Error> {
         self.metadata.update_keys(false, shard_id, states).await
     }
 
-    async fn remove_keys(&self, shard_id: usize, states: Vec<Key>) -> Result<(), Self::Error> {
+    async fn remove_keys(
+        &self,
+        shard_id: usize,
+        states: Vec<Key>,
+    ) -> Result<(), Self::Error> {
         self.metadata.delete_keys(false, shard_id, states).await
     }
 
-    async fn get_tombstone_keys(&self, shard_id: usize) -> Result<StateChanges, Self::Error> {
+    async fn get_tombstone_keys(
+        &self,
+        shard_id: usize,
+    ) -> Result<StateChanges, Self::Error> {
         self.metadata.get_keys(true, shard_id).await
     }
 
-    async fn update_tombstone_keys(&self, shard_id: usize, states: Vec<(Key, HLCTimestamp)>) -> Result<(), Self::Error> {
+    async fn update_tombstone_keys(
+        &self,
+        shard_id: usize,
+        states: Vec<(Key, HLCTimestamp)>,
+    ) -> Result<(), Self::Error> {
         self.metadata.update_keys(true, shard_id, states).await
     }
 
-    async fn remove_tombstone_keys(&self, shard_id: usize, states: Vec<Key>) -> Result<(), Self::Error> {
+    async fn remove_tombstone_keys(
+        &self,
+        shard_id: usize,
+        states: Vec<Key>,
+    ) -> Result<(), Self::Error> {
         self.metadata.delete_keys(true, shard_id, states).await
     }
 }
 
 #[async_trait::async_trait]
 impl Datastore for RocksStore {
-    async fn get_documents(&self, doc_ids: &[Key]) -> Result<Vec<Document>, Self::Error> {
+    async fn get_documents(
+        &self,
+        doc_ids: &[Key],
+    ) -> Result<Vec<Document>, Self::Error> {
         let shard_grouped_ids = self.group_and_serialize_keys(doc_ids)?;
 
         let mut documents = Vec::with_capacity(doc_ids.len());
         for (shard_id, mut doc_ids) in shard_grouped_ids.into_iter().enumerate() {
             if doc_ids.is_empty() {
-                continue
+                continue;
             }
 
             // Small optimisation for where there's only one doc to get.
@@ -190,9 +219,7 @@ impl Datastore for RocksStore {
                     documents.push(doc);
                 }
             } else {
-                let docs = self.storage_shards[shard_id]
-                    .get_documents(doc_ids)
-                    .await?;
+                let docs = self.storage_shards[shard_id].get_documents(doc_ids).await?;
 
                 documents.extend(docs);
             }
@@ -212,8 +239,12 @@ impl Datastore for RocksStore {
             .await
     }
 
-    async fn upsert_documents(&self, documents: Vec<Document>) -> Result<(), Self::Error> {
-        let mut shard_grouped_ids =  Vec::<Vec<(RawKey, Vec<u8>)>>::with_capacity(self.storage_shards.len());
+    async fn upsert_documents(
+        &self,
+        documents: Vec<Document>,
+    ) -> Result<(), Self::Error> {
+        let mut shard_grouped_ids =
+            Vec::<Vec<(RawKey, Vec<u8>)>>::with_capacity(self.storage_shards.len());
         shard_grouped_ids.resize(self.storage_shards.len(), vec![]);
 
         for doc in documents {
@@ -230,7 +261,7 @@ impl Datastore for RocksStore {
 
         for (shard_id, mut doc_ids) in shard_grouped_ids.into_iter().enumerate() {
             if doc_ids.is_empty() {
-                continue
+                continue;
             }
 
             // Small optimisation for where there's only one doc to get.
@@ -240,7 +271,7 @@ impl Datastore for RocksStore {
                     .upsert_document(key, doc)
                     .await?;
             } else {
-                 self.storage_shards[shard_id]
+                self.storage_shards[shard_id]
                     .upsert_documents(doc_ids)
                     .await?;
             }
@@ -268,7 +299,7 @@ impl Datastore for RocksStore {
 
         for (shard_id, mut doc_ids) in shard_grouped_ids.into_iter().enumerate() {
             if doc_ids.is_empty() {
-                continue
+                continue;
             }
 
             // Small optimisation for where there's only one doc to get.
@@ -277,7 +308,7 @@ impl Datastore for RocksStore {
                     .delete_document(doc_ids.remove(0))
                     .await?;
             } else {
-                 self.storage_shards[shard_id]
+                self.storage_shards[shard_id]
                     .delete_documents(doc_ids)
                     .await?;
             }
@@ -297,5 +328,3 @@ impl Datastore for RocksStore {
             .await
     }
 }
-
-

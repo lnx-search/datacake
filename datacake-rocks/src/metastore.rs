@@ -1,4 +1,5 @@
 use std::path::Path;
+
 use futures::channel::oneshot;
 use rocksdb::{IteratorMode, OptimisticTransactionDB};
 
@@ -7,7 +8,7 @@ use crate::{HLCTimestamp, Key, StateChanges};
 
 pub fn start_metastore(
     options: rocksdb::Options,
-    path: &Path
+    path: &Path,
 ) -> Result<MetastoreHandle> {
     let (tx, rx) = flume::bounded(100);
     let db = OptimisticTransactionDB::open(&options, path)?;
@@ -40,7 +41,11 @@ impl MetastoreHandle {
         let (tx, rx) = oneshot::channel();
 
         self.tx
-            .send_async(Op::GetKeys { is_tombstone, shard_id, tx })
+            .send_async(Op::GetKeys {
+                is_tombstone,
+                shard_id,
+                tx,
+            })
             .await
             .map_err(|_| RocksStoreError::DeadShard)?;
 
@@ -56,7 +61,12 @@ impl MetastoreHandle {
         let (tx, rx) = oneshot::channel();
 
         self.tx
-            .send_async(Op::UpdateKeys { is_tombstone, shard_id, changes, tx })
+            .send_async(Op::UpdateKeys {
+                is_tombstone,
+                shard_id,
+                changes,
+                tx,
+            })
             .await
             .map_err(|_| RocksStoreError::DeadShard)?;
 
@@ -72,14 +82,18 @@ impl MetastoreHandle {
         let (tx, rx) = oneshot::channel();
 
         self.tx
-            .send_async(Op::DeleteKeys { is_tombstone, shard_id, keys, tx })
+            .send_async(Op::DeleteKeys {
+                is_tombstone,
+                shard_id,
+                keys,
+                tx,
+            })
             .await
             .map_err(|_| RocksStoreError::DeadShard)?;
 
         rx.await.map_err(|_| RocksStoreError::DeadShard)?
     }
 }
-
 
 pub struct MetaStore {
     ops: flume::Receiver<Op>,
@@ -88,7 +102,7 @@ pub struct MetaStore {
 }
 
 impl MetaStore {
-    pub fn run(mut self)  {
+    pub fn run(mut self) {
         while let Ok(op) = self.ops.recv() {
             self.handle_op(op);
         }
@@ -96,26 +110,36 @@ impl MetaStore {
 
     fn handle_op(&mut self, op: Op) {
         match op {
-            Op::GetKeys { is_tombstone, shard_id, tx } => {
+            Op::GetKeys {
+                is_tombstone,
+                shard_id,
+                tx,
+            } => {
                 let res = self.get_keys(is_tombstone, shard_id);
                 let _ = tx.send(res);
-            }
-            Op::UpdateKeys { is_tombstone, shard_id, changes, tx } => {
+            },
+            Op::UpdateKeys {
+                is_tombstone,
+                shard_id,
+                changes,
+                tx,
+            } => {
                 let res = self.update_keys(is_tombstone, shard_id, changes);
                 let _ = tx.send(res);
-            }
-            Op::DeleteKeys { is_tombstone, shard_id, keys, tx } => {
+            },
+            Op::DeleteKeys {
+                is_tombstone,
+                shard_id,
+                keys,
+                tx,
+            } => {
                 let res = self.delete_keys(is_tombstone, shard_id, keys);
                 let _ = tx.send(res);
-            }
+            },
         }
     }
 
-    fn get_keys(
-        &mut self,
-        is_tombstone: bool,
-        shard_id: usize,
-    ) -> Result<StateChanges> {
+    fn get_keys(&mut self, is_tombstone: bool, shard_id: usize) -> Result<StateChanges> {
         let family = get_cf(is_tombstone, shard_id);
 
         // this is un-ideal, but rust's current borrow checker rules
@@ -124,13 +148,13 @@ impl MetaStore {
             Some(family) => family,
             None => {
                 self.db.create_cf(&family, &self.options)?;
-                self.db.cf_handle(&family)
+                self.db
+                    .cf_handle(&family)
                     .expect("Just created handle does not exist.")
-            }
+            },
         };
 
-        let iterator = self.db
-            .full_iterator_cf(cf, IteratorMode::Start);
+        let iterator = self.db.full_iterator_cf(cf, IteratorMode::Start);
 
         let mut changes = vec![];
         for row in iterator {
@@ -161,9 +185,10 @@ impl MetaStore {
             Some(family) => family,
             None => {
                 self.db.create_cf(&family, &self.options)?;
-                self.db.cf_handle(&family)
+                self.db
+                    .cf_handle(&family)
                     .expect("Just created handle does not exist.")
-            }
+            },
         };
 
         let transaction = self.db.transaction();
@@ -179,7 +204,7 @@ impl MetaStore {
                     error!(error = ?e, "Failed to complete rollback while handling error.");
                 }
 
-                return Err(e.into())
+                return Err(e.into());
             }
         }
 
@@ -202,9 +227,10 @@ impl MetaStore {
             Some(family) => family,
             None => {
                 self.db.create_cf(&family, &self.options)?;
-                self.db.cf_handle(&family)
+                self.db
+                    .cf_handle(&family)
                     .expect("Just created handle does not exist.")
-            }
+            },
         };
 
         let transaction = self.db.transaction();
@@ -218,7 +244,7 @@ impl MetaStore {
                     error!(error = ?e, "Failed to complete rollback while handling error.");
                 }
 
-                return Err(e.into())
+                return Err(e.into());
             }
         }
 
@@ -227,7 +253,6 @@ impl MetaStore {
         Ok(())
     }
 }
-
 
 enum Op {
     GetKeys {
@@ -248,7 +273,6 @@ enum Op {
         tx: oneshot::Sender<Result<()>>,
     },
 }
-
 
 fn get_cf(is_tombstone: bool, shard_id: usize) -> String {
     if is_tombstone {

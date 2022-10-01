@@ -1,15 +1,15 @@
 use std::path::Path;
+
+use datacake_cluster::Document;
 use futures::channel::oneshot;
 use rocksdb::OptimisticTransactionDB;
-use datacake_cluster::Document;
 
 use crate::error::{Result, RocksStoreError};
-
 
 pub fn start_shard(
     shard_id: usize,
     options: &rocksdb::Options,
-    path: &Path
+    path: &Path,
 ) -> Result<ShardHandle> {
     let (tx, rx) = flume::bounded(10);
     let db = OptimisticTransactionDB::open(options, path)?;
@@ -56,7 +56,10 @@ impl ShardHandle {
         rx.await.map_err(|_| RocksStoreError::DeadShard)?
     }
 
-    pub async fn upsert_documents(&self, documents: Vec<(RawKey, Vec<u8>)>) -> Result<()> {
+    pub async fn upsert_documents(
+        &self,
+        documents: Vec<(RawKey, Vec<u8>)>,
+    ) -> Result<()> {
         let (tx, rx) = oneshot::channel();
 
         self.tx
@@ -67,11 +70,19 @@ impl ShardHandle {
         rx.await.map_err(|_| RocksStoreError::DeadShard)?
     }
 
-    pub async fn upsert_document(&self, doc_id: RawKey, document: Vec<u8>) -> Result<()> {
+    pub async fn upsert_document(
+        &self,
+        doc_id: RawKey,
+        document: Vec<u8>,
+    ) -> Result<()> {
         let (tx, rx) = oneshot::channel();
 
         self.tx
-            .send_async(Op::UpsertDocument { doc_id, document, tx })
+            .send_async(Op::UpsertDocument {
+                doc_id,
+                document,
+                tx,
+            })
             .await
             .map_err(|_| RocksStoreError::DeadShard)?;
 
@@ -101,7 +112,6 @@ impl ShardHandle {
     }
 }
 
-
 pub struct StoreShard {
     shard_id: usize,
     ops: flume::Receiver<Op>,
@@ -109,7 +119,7 @@ pub struct StoreShard {
 }
 
 impl StoreShard {
-    pub fn run(mut self)  {
+    pub fn run(mut self) {
         while let Ok(op) = self.ops.recv() {
             self.handle_op(op);
         }
@@ -126,7 +136,11 @@ impl StoreShard {
             Op::UpsertDocuments { documents, tx } => {
                 let _ = tx.send(self.upsert_documents(documents));
             },
-            Op::UpsertDocument { doc_id, document, tx } => {
+            Op::UpsertDocument {
+                doc_id,
+                document,
+                tx,
+            } => {
                 let _ = tx.send(self.upsert_document(doc_id, document));
             },
             Op::DeleteDocuments { doc_ids, tx } => {
@@ -154,7 +168,8 @@ impl StoreShard {
     }
 
     fn get_document(&self, doc_id: RawKey) -> Result<Option<Document>> {
-        self.db.get_pinned(&doc_id)?
+        self.db
+            .get_pinned(&doc_id)?
             .map(|doc| {
                 rkyv::from_bytes::<Document>(doc.as_ref())
                     .map_err(|e| RocksStoreError::DeserializationError(e.to_string()))
@@ -175,7 +190,7 @@ impl StoreShard {
                     );
                 }
 
-                return Err(e.into())
+                return Err(e.into());
             }
         }
 
@@ -203,7 +218,7 @@ impl StoreShard {
                     );
                 }
 
-                return Err(e.into())
+                return Err(e.into());
             }
         }
 
@@ -217,7 +232,6 @@ impl StoreShard {
             .delete(doc_id)
             .map_err(RocksStoreError::RocksDbError)
     }
-
 }
 
 pub(crate) type RawKey = Vec<u8>;
