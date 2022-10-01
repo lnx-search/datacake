@@ -16,6 +16,7 @@ use chitchat::{
 use tokio::sync::watch;
 use tokio_stream::wrappers::WatchStream;
 use tokio_stream::StreamExt;
+
 use crate::DatacakeError;
 
 static PUBLIC_RPC_ADDR_KEY: &str = "public_rpc_addr";
@@ -86,7 +87,7 @@ impl DatacakeNode {
         transport: &dyn Transport,
     ) -> Result<Self, DatacakeError<E>>
     where
-        E: Display + Debug + Send + Sync + 'static
+        E: Display + Debug + Send + Sync + 'static,
     {
         info!(
             cluster_id = %cluster_id,
@@ -115,7 +116,8 @@ impl DatacakeNode {
             )],
             transport,
         )
-        .await.map_err(|e| DatacakeError::ChitChatError(e.to_string()))?;
+        .await
+        .map_err(|e| DatacakeError::ChitChatError(e.to_string()))?;
 
         let chitchat = chitchat_handle.chitchat();
         let (members_tx, members_rx) = watch::channel(Vec::new());
@@ -225,23 +227,18 @@ fn build_cluster_member<'a>(
     node_id: &'a NodeId,
     cluster_state_snapshot: &'a ClusterStateSnapshot,
 ) -> Result<ClusterMember, String> {
-    let node_state =
-        cluster_state_snapshot
-            .node_states
-            .get(&node_id.id)
-            .ok_or_else(|| {
-                format!(
-                    "Could not find node ID `{}` in ChitChat state.",
-                    node_id.id,
-                )
-            })?;
+    let node_state = cluster_state_snapshot
+        .node_states
+        .get(&node_id.id)
+        .ok_or_else(|| {
+            format!("Could not find node ID `{}` in ChitChat state.", node_id.id,)
+        })?;
     let public_rpc_address = node_state
         .get(PUBLIC_RPC_ADDR_KEY)
         .ok_or_else(|| {
             format!(
                 "Could not find `{}` key in node {:?} state.",
-                PUBLIC_RPC_ADDR_KEY,
-                node_id
+                PUBLIC_RPC_ADDR_KEY, node_id
             )
         })
         .map(|addr_str| addr_str.parse::<SocketAddr>())?
@@ -255,8 +252,7 @@ fn build_cluster_member<'a>(
             )
         })?;
 
-    let generation = generation_str.parse::<u64>()
-        .map_err(|e| e.to_string())?;
+    let generation = generation_str.parse::<u64>().map_err(|e| e.to_string())?;
 
     Ok(ClusterMember::new(
         node_unique_id.to_string(),
@@ -268,9 +264,9 @@ fn build_cluster_member<'a>(
 
 #[cfg(test)]
 mod tests {
-    use anyhow::Result;
     use std::sync::atomic::AtomicU16;
 
+    use anyhow::Result;
     use chitchat::transport::{ChannelTransport, Transport};
 
     use super::*;

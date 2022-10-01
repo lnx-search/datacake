@@ -11,7 +11,6 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Server;
 use tonic::{Code, Request, Response, Status};
-use crate::DatacakeError;
 
 use super::cluster_rpc_models::document_sync_server::{
     DocumentSync,
@@ -31,6 +30,7 @@ use super::cluster_rpc_models::{
 use super::{DataHandler, DocsBlock, RpcError};
 use crate::shard::state::StateWatcherHandle;
 use crate::shard::ShardGroupHandle;
+use crate::DatacakeError;
 
 type ResponseStream =
     Pin<Box<dyn Stream<Item = Result<DataFetchResponse, Status>> + Send>>;
@@ -42,7 +42,7 @@ pub async fn start_rpc_server<E>(
     bind: SocketAddr,
 ) -> Result<oneshot::Sender<()>, RpcError>
 where
-    E: Display + Debug + Send + Sync + 'static
+    E: Display + Debug + Send + Sync + 'static,
 {
     let server: RpcServer<E> = RpcServer {
         shards,
@@ -87,7 +87,7 @@ where
 
 pub struct RpcServer<E>
 where
-    E: Display + Debug + Send + Sync + 'static
+    E: Display + Debug + Send + Sync + 'static,
 {
     shards: ShardGroupHandle,
     shard_changes_watcher: StateWatcherHandle,
@@ -96,7 +96,7 @@ where
 
 impl<E> Clone for RpcServer<E>
 where
-    E: Display + Debug + Send + Sync + 'static
+    E: Display + Debug + Send + Sync + 'static,
 {
     fn clone(&self) -> Self {
         Self {
@@ -110,7 +110,7 @@ where
 #[tonic::async_trait]
 impl<E> DocumentSync for RpcServer<E>
 where
-    E: Display + Debug + Send + Sync + 'static
+    E: Display + Debug + Send + Sync + 'static,
 {
     async fn get_shard_state(
         &self,
@@ -172,7 +172,7 @@ async fn fetch_documents<E>(
     docs: &[Key],
 ) -> Result<DataFetchResponse, DatacakeError<E>>
 where
-    E: Display + Debug + Send + Sync + 'static
+    E: Display + Debug + Send + Sync + 'static,
 {
     let docs = handler
         .get_documents(docs)
@@ -195,7 +195,7 @@ where
 #[tonic::async_trait]
 impl<E> GeneralRpc for RpcServer<E>
 where
-    E: Display + Debug + Send + Sync + 'static
+    E: Display + Debug + Send + Sync + 'static,
 {
     async fn upsert_docs(
         &self,
@@ -251,9 +251,7 @@ where
     }
 }
 
-
-fn log_err<E: Debug + Display>(e: E) -> Status
-{
+fn log_err<E: Debug + Display>(e: E) -> Status {
     error!(error = ?e, "RPC Server failed to complete request due to internal error.");
     Status::internal(e.to_string())
 }

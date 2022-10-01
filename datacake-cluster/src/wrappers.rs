@@ -1,4 +1,5 @@
 use std::fmt::{Debug, Display};
+
 use datacake_crdt::{HLCTimestamp, Key, StateChanges};
 
 use crate::rpc::Document;
@@ -60,16 +61,11 @@ pub trait Metastore: Send + Sync + 'static {
 /// This manages the bulk of the data after it's been processed by Datacake.
 pub trait Datastore: Metastore {
     /// Get a set of documents from the datastore.
-    async fn get_documents(
-        &self,
-        doc_ids: &[Key],
-    ) -> Result<Vec<Document>, Self::Error>;
+    async fn get_documents(&self, doc_ids: &[Key])
+        -> Result<Vec<Document>, Self::Error>;
 
     /// Get a single document from the datastore.
-    async fn get_document(
-        &self,
-        doc_id: Key,
-    ) -> Result<Option<Document>, Self::Error> {
+    async fn get_document(&self, doc_id: Key) -> Result<Option<Document>, Self::Error> {
         Ok(self.get_documents(&[doc_id]).await?.pop())
     }
 

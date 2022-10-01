@@ -11,13 +11,13 @@ use futures::channel::oneshot;
 use futures::StreamExt;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::WatchStream;
-use crate::DatacakeError;
 
 use crate::node::{ClusterMember, DatacakeNode};
 use crate::rpc::{server, ClientCluster, DataHandler};
 use crate::shard::state::StateWatcherHandle;
 use crate::shard::{self, ShardGroupHandle};
 use crate::tasks::tombstone_purge_task;
+use crate::DatacakeError;
 
 /// All network related configs for both gossip and RPC.
 pub struct ConnectionCfg {
@@ -53,7 +53,7 @@ pub struct DatacakeClusterManager<E> {
 
 impl<E> DatacakeClusterManager<E>
 where
-    E: Display + Debug + Send + Sync + 'static
+    E: Display + Debug + Send + Sync + 'static,
 {
     pub async fn connect(
         node_id: String,
@@ -154,9 +154,8 @@ async fn watch_for_remote_state_changes<E>(
     rpc_clients: ClientCluster,
     data_handler: Arc<dyn DataHandler<Error = E>>,
     shard_group: ShardGroupHandle,
-)
-where
-    E: Display + Debug + Send + Sync + 'static
+) where
+    E: Display + Debug + Send + Sync + 'static,
 {
     let mut shard_states = HashMap::<String, SocketAddr>::new();
     while let Some(members) = changes.next().await {

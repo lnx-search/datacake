@@ -1,4 +1,5 @@
 use std::fmt::{Debug, Display};
+
 use bytecheck::CheckBytes;
 use bytes::Bytes;
 use datacake_crdt::{HLCTimestamp, Key};
@@ -11,9 +12,9 @@ mod cluster_rpc_models;
 pub mod server;
 
 pub use client_cluster::{Client, ClientCluster};
-use crate::DatacakeError;
 
 use crate::rpc::cluster_rpc_models::Timestamp;
+use crate::DatacakeError;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Archive)]
 #[archive_attr(derive(CheckBytes))]
@@ -62,7 +63,10 @@ pub trait DataHandler: Send + Sync + 'static {
     ///
     /// NOTE:
     ///  This should clear any associated tombstones on the document if applicable.
-    async fn upsert_document(&self, doc: Document) -> Result<(), DatacakeError<Self::Error>> {
+    async fn upsert_document(
+        &self,
+        doc: Document,
+    ) -> Result<(), DatacakeError<Self::Error>> {
         self.upsert_documents(vec![(doc.id, doc.last_modified, doc.data)])
             .await
     }

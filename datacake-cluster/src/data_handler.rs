@@ -3,10 +3,10 @@ use std::sync::Arc;
 
 use datacake_crdt::{HLCTimestamp, Key, OrSWotSet, StateChanges};
 
+use crate::error::DatacakeError;
 use crate::rpc::{DataHandler, Document};
 use crate::shard::ShardGroupHandle;
 use crate::{Clock, Datastore, NUMBER_OF_SHARDS};
-use crate::error::DatacakeError;
 
 #[derive(Clone)]
 pub struct StandardDataHandler<DS: Datastore> {
@@ -28,11 +28,14 @@ impl<DS: Datastore> StandardDataHandler<DS> {
         }
     }
 
-    pub(crate) async fn load_initial_shard_states(&self) -> Result<(), DatacakeError<DS::Error>> {
+    pub(crate) async fn load_initial_shard_states(
+        &self,
+    ) -> Result<(), DatacakeError<DS::Error>> {
         for shard_id in 0..NUMBER_OF_SHARDS {
             let mut set = OrSWotSet::default();
 
-            let mut live_docs = self.datastore
+            let mut live_docs = self
+                .datastore
                 .get_keys(shard_id)
                 .await
                 .map_err(DatacakeError::DatastoreError)?;
@@ -43,7 +46,8 @@ impl<DS: Datastore> StandardDataHandler<DS> {
                 set.insert(k, v);
             }
 
-            let mut tombstones = self.datastore
+            let mut tombstones = self
+                .datastore
                 .get_tombstone_keys(shard_id)
                 .await
                 .map_err(DatacakeError::DatastoreError)?;
@@ -65,14 +69,20 @@ impl<DS: Datastore> StandardDataHandler<DS> {
 impl<DS: Datastore> DataHandler for StandardDataHandler<DS> {
     type Error = DS::Error;
 
-    async fn get_documents(&self, doc_ids: &[Key]) -> Result<Vec<Document>, DatacakeError<Self::Error>> {
+    async fn get_documents(
+        &self,
+        doc_ids: &[Key],
+    ) -> Result<Vec<Document>, DatacakeError<Self::Error>> {
         self.datastore
             .get_documents(doc_ids)
             .await
             .map_err(DatacakeError::DatastoreError)
     }
 
-    async fn get_document(&self, doc_id: Key) -> Result<Option<Document>, DatacakeError<Self::Error>> {
+    async fn get_document(
+        &self,
+        doc_id: Key,
+    ) -> Result<Option<Document>, DatacakeError<Self::Error>> {
         self.datastore
             .get_document(doc_id)
             .await
@@ -134,7 +144,10 @@ impl<DS: Datastore> DataHandler for StandardDataHandler<DS> {
             .map_err(DatacakeError::DatastoreError)
     }
 
-    async fn upsert_document(&self, doc: Document) -> Result<(), DatacakeError<Self::Error>> {
+    async fn upsert_document(
+        &self,
+        doc: Document,
+    ) -> Result<(), DatacakeError<Self::Error>> {
         let shard_id = crate::shard::get_shard_id(doc.id);
 
         self.shard_group
@@ -232,7 +245,10 @@ impl<DS: Datastore> DataHandler for StandardDataHandler<DS> {
             .map_err(DatacakeError::DatastoreError)
     }
 
-    async fn clear_tombstone_documents(&self, doc_ids: Vec<Key>) -> Result<(), DatacakeError<Self::Error>> {
+    async fn clear_tombstone_documents(
+        &self,
+        doc_ids: Vec<Key>,
+    ) -> Result<(), DatacakeError<Self::Error>> {
         let mut shard_changes = HashMap::<usize, Vec<Key>>::new();
 
         for doc_id in doc_ids {

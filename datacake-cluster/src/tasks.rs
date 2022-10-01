@@ -16,7 +16,7 @@ const TOMBSTONE_PURGE_DELAY: Duration = Duration::from_secs(600);
 use crate::node::ClusterMember;
 use crate::rpc::{Client, RpcError};
 use crate::shard::{ShardGroupHandle, StateChangeTs};
-use crate::{ClientCluster, DatacakeError, DataHandler, NUMBER_OF_SHARDS};
+use crate::{ClientCluster, DataHandler, DatacakeError, NUMBER_OF_SHARDS};
 
 /// A background task for the node which purges any documents marked as tombstones
 /// once it is safe to completely remove any trace of them.
@@ -24,9 +24,8 @@ pub(crate) async fn tombstone_purge_task<E>(
     node_id: String,
     shards: ShardGroupHandle,
     handler: Arc<dyn DataHandler<Error = E>>,
-)
-where
-    E: Display + Debug + Send + Sync + 'static
+) where
+    E: Display + Debug + Send + Sync + 'static,
 {
     let mut interval = interval(TOMBSTONE_PURGE_DELAY);
 
@@ -73,7 +72,7 @@ where
 /// is dead and this task will be restarted once it reconnects.
 pub(crate) async fn shard_state_poller_task<E>(member: ClusterMember, node: NodeInfo<E>)
 where
-    E: Display + Debug + Send + Sync + 'static
+    E: Display + Debug + Send + Sync + 'static,
 {
     let mut interval = interval(CHANGES_POLLING_DURATION);
     interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
@@ -121,7 +120,7 @@ where
 
 pub(crate) struct NodeInfo<E>
 where
-    E: Display + Debug + Send + 'static
+    E: Display + Debug + Send + 'static,
 {
     pub(crate) rpc: Client,
     pub(crate) client_cluster: ClientCluster,
@@ -131,7 +130,7 @@ where
 
 impl<E> Clone for NodeInfo<E>
 where
-    E: Display + Debug + Send + 'static
+    E: Display + Debug + Send + 'static,
 {
     fn clone(&self) -> Self {
         Self {
@@ -155,9 +154,8 @@ async fn handle_node_state_change<E>(
     previous_state: &mut [StateChangeTs],
     node: NodeInfo<E>,
     stop: Arc<AtomicBool>,
-)
-where
-    E: Display + Debug + Send + 'static
+) where
+    E: Display + Debug + Send + 'static,
 {
     let completed = spawn_handlers(member, new_state, previous_state, node, stop).await;
 
@@ -174,7 +172,7 @@ async fn spawn_handlers<E>(
     stop: Arc<AtomicBool>,
 ) -> flume::Receiver<(usize, StateChangeTs)>
 where
-    E: Display + Debug + Send + 'static
+    E: Display + Debug + Send + 'static,
 {
     let shard_changes = new_state.iter().zip(previous_state.iter()).enumerate();
 
@@ -226,7 +224,9 @@ where
                         "Failed to handle shard state change due to an error occurring within the datastore.",
                     );
                 },
-                DatacakeError::RpcError(ref e) if matches!(e, RpcError::Disconnected) => {
+                DatacakeError::RpcError(ref e)
+                    if matches!(e, RpcError::Disconnected) =>
+                {
                     warn!(node_id = %node_id, "Node has lost connection to remote.");
                     stop.store(true, Ordering::Relaxed);
                     node.client_cluster.disconnect_node(&node_id);
@@ -238,7 +238,7 @@ where
                         error = ?e,
                         "Failed to handle shard state changes due to an RPC error.",
                     );
-                }
+                },
             }
         });
     }
@@ -267,7 +267,7 @@ async fn handle_shard_change<E>(
     node: NodeInfo<E>,
 ) -> Result<(), DatacakeError<E>>
 where
-    E: Display + Debug + Send + 'static
+    E: Display + Debug + Send + 'static,
 {
     let state = node.rpc.sync.get_doc_set(shard_id).await?;
 

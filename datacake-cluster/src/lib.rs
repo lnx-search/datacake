@@ -10,10 +10,10 @@ mod shard;
 mod shared;
 mod wrappers;
 
+pub mod error;
 mod tasks;
 #[cfg(feature = "test-utils")]
 pub mod test_utils;
-pub mod error;
 
 use std::fmt::{Debug, Display};
 use std::mem;
@@ -78,7 +78,11 @@ impl<DS: Datastore> DatacakeCluster<DS> {
         let shard_changes_watcher = shard::state::state_watcher().await;
 
         let shard_group = shard::create_shard_group(shard_changes_watcher.clone()).await;
-        let handler = StandardDataHandler::new(shard_group.clone(), datastore.clone(), clock.clone());
+        let handler = StandardDataHandler::new(
+            shard_group.clone(),
+            datastore.clone(),
+            clock.clone(),
+        );
 
         // Initialise the shard groups loading from the persisted state.
         handler.load_initial_shard_states().await?;
@@ -143,7 +147,7 @@ impl<DS: Datastore> Drop for DatacakeCluster<DS> {
 /// with your underlying datastore and the distribution system.
 pub struct DatacakeHandle<E>
 where
-    E: Display + Debug + Send + Sync + 'static
+    E: Display + Debug + Send + Sync + 'static,
 {
     data_handler: Arc<dyn DataHandler<Error = E>>,
     nodes: ClientCluster,
@@ -152,7 +156,7 @@ where
 
 impl<E> Clone for DatacakeHandle<E>
 where
-    E: Display + Debug + Send + Sync + 'static
+    E: Display + Debug + Send + Sync + 'static,
 {
     fn clone(&self) -> Self {
         Self {
@@ -165,7 +169,7 @@ where
 
 impl<E> DatacakeHandle<E>
 where
-    E: Display + Debug + Send + Sync + 'static
+    E: Display + Debug + Send + Sync + 'static,
 {
     async fn broadcast_upsert_to_nodes(
         &self,
@@ -251,7 +255,10 @@ where
     }
 
     /// Get many documents from a set of ids.
-    pub async fn get_many(&self, ids: &[Key]) -> Result<Vec<Document>, DatacakeError<E>> {
+    pub async fn get_many(
+        &self,
+        ids: &[Key],
+    ) -> Result<Vec<Document>, DatacakeError<E>> {
         self.data_handler.get_documents(ids).await
     }
 
