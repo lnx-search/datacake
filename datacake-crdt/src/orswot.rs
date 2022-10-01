@@ -11,13 +11,16 @@ use crate::timestamp::HLCTimestamp;
 pub type Key = u64;
 pub type StateChanges = Vec<(Key, HLCTimestamp)>;
 
-#[derive(Debug)]
+#[cfg(feature = "rkyv")]
+#[derive(Debug, thiserror::Error)]
+#[error("The set cannot be (de)serialized from the provided set of bytes.")]
 pub struct BadState;
 
-#[derive(Serialize, Deserialize, Archive, Debug, Default, Clone)]
-#[archive(compare(PartialEq))]
-#[archive_attr(derive(CheckBytes, Debug))]
-pub struct NodeVersions {
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "rkyv", derive(Serialize, Deserialize, Archive))]
+#[cfg_attr(feature = "rkyv", archive(compare(PartialEq)))]
+#[cfg_attr(feature = "rkyv", archive_attr(derive(CheckBytes, Debug)))]
+struct NodeVersions {
     nodes_max_stamps: HashMap<u32, HLCTimestamp>,
 }
 
@@ -49,9 +52,22 @@ impl NodeVersions {
     }
 }
 
-#[derive(Serialize, Deserialize, Archive, Debug, Default, Clone)]
-#[archive(compare(PartialEq))]
-#[archive_attr(derive(CheckBytes, Debug))]
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "rkyv", derive(Serialize, Deserialize, Archive))]
+#[cfg_attr(feature = "rkyv", archive(compare(PartialEq)))]
+#[cfg_attr(feature = "rkyv", archive_attr(derive(CheckBytes, Debug)))]
+/// A CRDT which supports purging of deleted entry tombstones.
+///
+/// This implementation is largely based on the Riak DB implementations
+/// of CRDTs. This set in particular is built around the [HLCTimestamp]
+/// which uses the uniqueness guarantees provided by the timestamp to
+/// resolve conflicts.
+///
+/// Entries can be marked as deleted via the standard `delete` method
+/// which internally marks the key as a tombstone.
+/// The tombstones can be purged safely once the set has observed other,
+/// newer operations from the original node which the entry is tied to.
+/// (This is tracked by checking the `node` field of the timestamp.)
 pub struct OrSWotSet {
     entries: BTreeMap<Key, HLCTimestamp>,
     dead: HashMap<Key, HLCTimestamp>,
@@ -59,19 +75,22 @@ pub struct OrSWotSet {
 }
 
 impl OrSWotSet {
+    #[cfg(feature = "rkyv")]
+    /// Deserializes a [OrSWotSet] from a array of bytes.
     pub fn from_bytes(data: &[u8]) -> Result<Self, BadState> {
         let deserialized = rkyv::from_bytes::<Self>(data).map_err(|_| BadState)?;
-
         Ok(deserialized)
     }
 
+    #[cfg(feature = "rkyv")]
+    /// Serializes the set into a buffer of bytes.
     pub fn as_bytes(&self) -> Result<Vec<u8>, BadState> {
         Ok(rkyv::to_bytes::<_, 2048>(self)
             .map_err(|_| BadState)?
             .into_vec())
     }
 
-    /// Calculated the determinisitic diffrence between two sets, returning the
+    /// Calculates the deterministic difference between two sets, returning the
     /// modified keys and the deleted keys.
     ///
     /// This follows the same logic as `set.merge(&other)` but does not modify
@@ -219,10 +238,17 @@ impl OrSWotSet {
         }
     }
 
+    /// Get an entry from the set.
+    ///
+    /// If the entry exists it's associated [HLCTimestamp] is returned.
     pub fn get(&mut self, k: &Key) -> Option<&HLCTimestamp> {
         self.entries.get(k)
     }
 
+    /// Purges and returns any safe to remove tombstone markers from the set.
+    ///
+    /// This is useful for conserving memory and preventing an infinitely
+    /// growing tombstone state.
     pub fn purge_old_deletes(&mut self) -> Vec<Key> {
         let mut deleted_keys = vec![];
         for (k, stamp) in mem::take(&mut self.dead) {
@@ -236,6 +262,13 @@ impl OrSWotSet {
         deleted_keys
     }
 
+    /// Insert a key into the set with a given timestamp.
+    ///
+    /// If the set has already observed events from the timestamp's
+    /// node, this operation is ignored. It is otherwise inserted.
+    ///
+    /// Returns if the value has actually been inserted/updated
+    /// in the set. If `false`, the set's state has not changed.
     pub fn insert(&mut self, k: Key, ts: HLCTimestamp) -> bool {
         let mut has_set = false;
 
@@ -267,6 +300,13 @@ impl OrSWotSet {
         has_set
     }
 
+    /// Attempts to remove a key from the set with a given timestamp.
+    ///
+    /// If the set has already observed events from the timestamp's
+    /// node, this operation is ignored. It is otherwise inserted.
+    ///
+    /// Returns if the value has actually been inserted/updated
+    /// in the set. If `false`, the set's state has not changed.
     pub fn delete(&mut self, k: Key, ts: HLCTimestamp) -> bool {
         let mut has_set = false;
 
