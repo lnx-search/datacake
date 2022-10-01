@@ -45,7 +45,7 @@ const MAX_DRIFT_MS: u64 = 60_000;
 /// node_b_set.insert(2, node_b.send().unwrap());
 ///
 /// // Let some time pass for demonstration purposes.
-/// std::thread::sleep(Duration::from_millis(500));
+/// std::thread::sleep(std::time::Duration::from_millis(500));
 ///
 /// // Set A has key `1` removed.
 /// node_a_set.delete(1, node_a.send().unwrap());
