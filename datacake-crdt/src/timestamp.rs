@@ -4,16 +4,18 @@ use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[cfg(feature = "rkyv-support")]
 use bytecheck::CheckBytes;
+#[cfg(feature = "rkyv-support")]
 use rkyv::{Archive, Deserialize, Serialize};
 
 /// Maximum physical clock drift allowed, in ms
 const MAX_DRIFT_MS: u64 = 60_000;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-#[cfg_attr(feature = "rkyv", derive(Serialize, Deserialize, Archive))]
-#[cfg_attr(feature = "rkyv", archive(compare(PartialEq)))]
-#[cfg_attr(feature = "rkyv", archive_attr(derive(CheckBytes, Debug)))]
+#[cfg_attr(feature = "rkyv-support", derive(Serialize, Deserialize, Archive))]
+#[cfg_attr(feature = "rkyv-support", archive(compare(PartialEq)))]
+#[cfg_attr(feature = "rkyv-support", archive_attr(derive(CheckBytes, Debug)))]
 /// A HLC (Hybrid Logical Clock) timestamp implementation.
 ///
 /// This implementation is largely a port of the JavaScript implementation

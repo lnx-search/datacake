@@ -2,11 +2,17 @@
 name = "datacake-crdt"
 version = "0.1.0"
 edition = "2021"
+description = "A conflict free replicated datatype based on a hybrid logical clock implementation for building eventually consistent data stores."
+license = "MIT"
+license-file = "../LICENSE.txt"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 thiserror = "1.0.33"
-bytecheck = "0.6.9"
 
+bytecheck = { version = "0.6.9", optional = true }
 rkyv = { version = "0.7.39", features = ["validation"], optional = true }
+
+[features]
+rkyv-support = ["rkyv", "bytecheck"]

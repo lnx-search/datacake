@@ -3,7 +3,9 @@ use std::collections::{BTreeMap, HashMap};
 use std::fmt::Debug;
 use std::mem;
 
+#[cfg(feature = "rkyv-support")]
 use bytecheck::CheckBytes;
+#[cfg(feature = "rkyv-support")]
 use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::timestamp::HLCTimestamp;
@@ -11,15 +13,15 @@ use crate::timestamp::HLCTimestamp;
 pub type Key = u64;
 pub type StateChanges = Vec<(Key, HLCTimestamp)>;
 
-#[cfg(feature = "rkyv")]
+#[cfg(feature = "rkyv-support")]
 #[derive(Debug, thiserror::Error)]
 #[error("The set cannot be (de)serialized from the provided set of bytes.")]
 pub struct BadState;
 
 #[derive(Debug, Default, Clone)]
-#[cfg_attr(feature = "rkyv", derive(Serialize, Deserialize, Archive))]
-#[cfg_attr(feature = "rkyv", archive(compare(PartialEq)))]
-#[cfg_attr(feature = "rkyv", archive_attr(derive(CheckBytes, Debug)))]
+#[cfg_attr(feature = "rkyv-support", derive(Serialize, Deserialize, Archive))]
+#[cfg_attr(feature = "rkyv-support", archive(compare(PartialEq)))]
+#[cfg_attr(feature = "rkyv-support", archive_attr(derive(CheckBytes, Debug)))]
 pub struct NodeVersions {
     nodes_max_stamps: HashMap<u32, HLCTimestamp>,
 }
