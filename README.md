@@ -15,7 +15,7 @@ Datacake provides several utility libraries as well as some pre-made data store 
 _In no particular order_
 
 - [x] Add basic working example.
-- [ ] Add unit tests to RPC layer.
-- [ ] Add integration/unit tests for cluster manager.
+- [x] Add unit tests to RPC layer.
+- [x] Add integration/unit tests for cluster manager.
 - [ ] Add ready to go RocksDB implementation.
-- [ ] Test and check HLCTimestamp implementation for correctness.
+- [x] Test and check HLCTimestamp implementation for correctness.
