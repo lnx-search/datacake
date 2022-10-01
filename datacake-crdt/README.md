@@ -8,7 +8,7 @@ which guarantees the timestamp will always be unique and monotonic (providing it
 
 ### Basic Example
 ```rust
-use datacake_crdt::{OrSwotSet, HLCTimestamp, get_unix_timestamp_ms};
+use datacake_crdt::{OrSWotSet, HLCTimestamp, get_unix_timestamp_ms};
 
 fn main() {
     let mut node_a = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 0);
