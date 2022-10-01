@@ -2,5 +2,6 @@
 members = [
     "datacake-cluster",
     "datacake-crdt",
+    "datacake-rocks",
     "examples/sled-cluster"
 ]
