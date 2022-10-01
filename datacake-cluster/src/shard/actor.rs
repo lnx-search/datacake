@@ -126,8 +126,10 @@ impl ShardActor {
                 let data = self.inner.transportable_buffer().await;
                 let _ = tx.send(data);
             },
-            Event::Merge { set, tx } => {
+            Event::Merge { set } => {
                 self.inner.merge(set);
+            },
+            Event::Purge { tx } => {
                 let purged_keys = self.inner.purge_old_deletes();
                 let _ = tx.send(purged_keys);
             },
@@ -163,6 +165,8 @@ pub enum Event {
     },
     Merge {
         set: OrSWotSet,
+    },
+    Purge {
         tx: oneshot::Sender<Vec<Key>>,
     },
     Diff {
@@ -236,11 +240,18 @@ impl ShardHandle {
         rx.await.map_err(|_| DeadShard)
     }
 
-    pub async fn merge(&self, set: OrSWotSet) -> Result<Vec<Key>, DeadShard> {
+    pub async fn merge(&self, set: OrSWotSet) -> Result<(), DeadShard> {
+        self.events_tx
+            .send_async(Event::Merge { set })
+            .await
+            .map_err(|_| DeadShard)
+    }
+
+    pub async fn purge(&self) -> Result<Vec<Key>, DeadShard> {
         let (tx, rx) = oneshot::channel();
 
         self.events_tx
-            .send_async(Event::Merge { set, tx })
+            .send_async(Event::Purge { tx })
             .await
             .map_err(|_| DeadShard)?;
 

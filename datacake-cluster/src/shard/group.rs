@@ -78,8 +78,15 @@ impl ShardGroupHandle {
         &self,
         shard_id: usize,
         set: OrSWotSet,
-    ) -> Result<Vec<Key>, DeadShard> {
+    ) -> Result<(), DeadShard> {
         self.handles[shard_id].merge(set).await
+    }
+
+    pub async fn purge(
+        &self,
+        shard_id: usize,
+    ) -> Result<Vec<Key>, DeadShard> {
+        self.handles[shard_id].purge().await
     }
 
     pub async fn diff(
