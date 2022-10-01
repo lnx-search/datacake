@@ -1,3 +1,4 @@
+use std::fmt::{Debug, Display};
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -10,6 +11,7 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Server;
 use tonic::{Code, Request, Response, Status};
+use crate::DatacakeError;
 
 use super::cluster_rpc_models::document_sync_server::{
     DocumentSync,
@@ -33,13 +35,16 @@ use crate::shard::ShardGroupHandle;
 type ResponseStream =
     Pin<Box<dyn Stream<Item = Result<DataFetchResponse, Status>> + Send>>;
 
-pub async fn start_rpc_server(
+pub async fn start_rpc_server<E>(
     shards: ShardGroupHandle,
     shard_changes_watcher: StateWatcherHandle,
-    handler: Arc<dyn DataHandler>,
+    handler: Arc<dyn DataHandler<Error = E>>,
     bind: SocketAddr,
-) -> Result<oneshot::Sender<()>, RpcError> {
-    let server = RpcServer {
+) -> Result<oneshot::Sender<()>, RpcError>
+where
+    E: Display + Debug + Send + Sync + 'static
+{
+    let server: RpcServer<E> = RpcServer {
         shards,
         shard_changes_watcher,
         handler,
@@ -80,15 +85,33 @@ pub async fn start_rpc_server(
     }
 }
 
-#[derive(Clone)]
-pub struct RpcServer {
+pub struct RpcServer<E>
+where
+    E: Display + Debug + Send + Sync + 'static
+{
     shards: ShardGroupHandle,
     shard_changes_watcher: StateWatcherHandle,
-    handler: Arc<dyn DataHandler>,
+    handler: Arc<dyn DataHandler<Error = E>>,
+}
+
+impl<E> Clone for RpcServer<E>
+where
+    E: Display + Debug + Send + Sync + 'static
+{
+    fn clone(&self) -> Self {
+        Self {
+            shards: self.shards.clone(),
+            shard_changes_watcher: self.shard_changes_watcher.clone(),
+            handler: self.handler.clone(),
+        }
+    }
 }
 
 #[tonic::async_trait]
-impl DocumentSync for RpcServer {
+impl<E> DocumentSync for RpcServer<E>
+where
+    E: Display + Debug + Send + Sync + 'static
+{
     async fn get_shard_state(
         &self,
         _request: Request<Blank>,
@@ -127,9 +150,9 @@ impl DocumentSync for RpcServer {
         let (tx, rx) = mpsc::channel(128);
         tokio::spawn(async move {
             for docs_block in req.requested_docs.chunks(10_000) {
-                let resp = fetch_documents(&data_handler, docs_block)
+                let resp = fetch_documents::<E>(&data_handler, docs_block)
                     .await
-                    .map_err(|e| Status::internal(e.to_string()));
+                    .map_err(log_err);
 
                 if let Err(_) = tx.send(resp).await {
                     break;
@@ -144,10 +167,13 @@ impl DocumentSync for RpcServer {
     }
 }
 
-async fn fetch_documents(
-    handler: &Arc<dyn DataHandler>,
+async fn fetch_documents<E>(
+    handler: &Arc<dyn DataHandler<Error = E>>,
     docs: &[Key],
-) -> anyhow::Result<DataFetchResponse> {
+) -> Result<DataFetchResponse, DatacakeError<E>>
+where
+    E: Display + Debug + Send + Sync + 'static
+{
     let docs = handler
         .get_documents(docs)
         .await?
@@ -167,7 +193,10 @@ async fn fetch_documents(
 }
 
 #[tonic::async_trait]
-impl GeneralRpc for RpcServer {
+impl<E> GeneralRpc for RpcServer<E>
+where
+    E: Display + Debug + Send + Sync + 'static
+{
     async fn upsert_docs(
         &self,
         request: Request<UpsertPayload>,
@@ -179,7 +208,7 @@ impl GeneralRpc for RpcServer {
             req.uncompressed_size as usize,
         )
         .await
-        .map_err(|e| Status::internal(e.to_string()))?;
+        .map_err(log_err)?;
 
         let iterator = DocsBlock {
             doc_ids: req.doc_ids,
@@ -195,7 +224,7 @@ impl GeneralRpc for RpcServer {
         self.handler
             .upsert_documents(Vec::from_iter(iterator))
             .await
-            .map_err(|e| Status::internal(e.to_string()))?;
+            .map_err(log_err)?;
 
         Ok(Response::new(Blank {}))
     }
@@ -216,8 +245,15 @@ impl GeneralRpc for RpcServer {
         self.handler
             .mark_tombstone_documents(doc_id_pairs)
             .await
-            .map_err(|e| Status::internal(e.to_string()))?;
+            .map_err(log_err)?;
 
         Ok(Response::new(Blank {}))
     }
+}
+
+
+fn log_err<E: Debug + Display>(e: E) -> Status
+{
+    error!(error = ?e, "RPC Server failed to complete request due to internal error.");
+    Status::internal(e.to_string())
 }

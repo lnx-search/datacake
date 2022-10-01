@@ -1,8 +1,9 @@
 use std::collections::HashMap;
+use std::fmt::{Debug, Display};
+use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use anyhow::Result;
 use chitchat::transport::UdpTransport;
 use chitchat::FailureDetectorConfig;
 use datacake_crdt::get_unix_timestamp_ms;
@@ -10,6 +11,7 @@ use futures::channel::oneshot;
 use futures::StreamExt;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::WatchStream;
+use crate::DatacakeError;
 
 use crate::node::{ClusterMember, DatacakeNode};
 use crate::rpc::{server, ClientCluster, DataHandler};
@@ -41,23 +43,27 @@ pub struct ConnectionCfg {
     pub rpc_listen_addr: SocketAddr,
 }
 
-pub struct DatacakeClusterManager {
+pub struct DatacakeClusterManager<E> {
     rpc_server_shutdown: oneshot::Sender<()>,
     rpc_clients: ClientCluster,
     tasks: Vec<JoinHandle<()>>,
     node: DatacakeNode,
+    _phantom: PhantomData<E>,
 }
 
-impl DatacakeClusterManager {
+impl<E> DatacakeClusterManager<E>
+where
+    E: Display + Debug + Send + Sync + 'static
+{
     pub async fn connect(
         node_id: String,
         connection_cfg: ConnectionCfg,
         cluster_id: String,
         seed_nodes: Vec<String>,
-        data_handler: Arc<dyn DataHandler>,
+        data_handler: Arc<dyn DataHandler<Error = E>>,
         shard_group: ShardGroupHandle,
         shard_changes_watcher: StateWatcherHandle,
-    ) -> Result<Self> {
+    ) -> Result<Self, DatacakeError<E>> {
         info!(
             cluster_id = %cluster_id,
             node_id = %node_id,
@@ -113,6 +119,7 @@ impl DatacakeClusterManager {
             rpc_clients,
             tasks: vec![purge_task, state_changes_task],
             node,
+            _phantom: PhantomData,
         })
     }
 
@@ -121,7 +128,7 @@ impl DatacakeClusterManager {
         &self.rpc_clients
     }
 
-    pub async fn shutdown(self) -> Result<()> {
+    pub async fn shutdown(self) -> Result<(), DatacakeError<E>> {
         self.node.shutdown().await;
         let _ = self.rpc_server_shutdown.send(());
 
@@ -141,13 +148,16 @@ impl DatacakeClusterManager {
 /// * The previous known state of the shard is checked to see if any of it's
 ///   shards have changed. If they have, the synchronisation process is triggered,
 ///   otherwise the member is ignored.
-async fn watch_for_remote_state_changes(
+async fn watch_for_remote_state_changes<E>(
     self_node_id: String,
     mut changes: WatchStream<Vec<ClusterMember>>,
     rpc_clients: ClientCluster,
-    data_handler: Arc<dyn DataHandler>,
+    data_handler: Arc<dyn DataHandler<Error = E>>,
     shard_group: ShardGroupHandle,
-) {
+)
+where
+    E: Display + Debug + Send + Sync + 'static
+{
     let mut shard_states = HashMap::<String, SocketAddr>::new();
     while let Some(members) = changes.next().await {
         info!(

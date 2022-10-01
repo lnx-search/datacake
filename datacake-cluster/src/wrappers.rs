@@ -1,3 +1,4 @@
+use std::fmt::{Debug, Display};
 use datacake_crdt::{HLCTimestamp, Key, StateChanges};
 
 use crate::rpc::Document;
@@ -11,15 +12,17 @@ use crate::rpc::Document;
 /// Typically this manages all the state shards data, which can amount to a lot of
 /// keys and timestamps at a larger scale.
 pub trait Metastore: Send + Sync + 'static {
+    type Error: Display + Debug + Send + Sync;
+
     /// Fetch all primary state keys
-    async fn get_keys(&self, shard_id: usize) -> Result<StateChanges, anyhow::Error>;
+    async fn get_keys(&self, shard_id: usize) -> Result<StateChanges, Self::Error>;
 
     /// Insert or update the given set of keys with their applicable timestamp into the primary state.
     async fn update_keys(
         &self,
         shard_id: usize,
         states: Vec<(Key, HLCTimestamp)>,
-    ) -> Result<(), anyhow::Error>;
+    ) -> Result<(), Self::Error>;
 
     /// Remove the following keys from the primary state.
     ///
@@ -28,27 +31,27 @@ pub trait Metastore: Send + Sync + 'static {
         &self,
         shard_id: usize,
         states: Vec<Key>,
-    ) -> Result<(), anyhow::Error>;
+    ) -> Result<(), Self::Error>;
 
     /// Get all tombstone state keys.
     async fn get_tombstone_keys(
         &self,
         shard_id: usize,
-    ) -> Result<StateChanges, anyhow::Error>;
+    ) -> Result<StateChanges, Self::Error>;
 
     /// Mark or update the existing keys as tombstones.
     async fn update_tombstone_keys(
         &self,
         shard_id: usize,
         states: Vec<(Key, HLCTimestamp)>,
-    ) -> Result<(), anyhow::Error>;
+    ) -> Result<(), Self::Error>;
 
     /// Remove the following keys from the tombstone states.
     async fn remove_tombstone_keys(
         &self,
         shard_id: usize,
         states: Vec<Key>,
-    ) -> Result<(), anyhow::Error>;
+    ) -> Result<(), Self::Error>;
 }
 
 #[tonic::async_trait]
@@ -60,13 +63,13 @@ pub trait Datastore: Metastore {
     async fn get_documents(
         &self,
         doc_ids: &[Key],
-    ) -> Result<Vec<Document>, anyhow::Error>;
+    ) -> Result<Vec<Document>, Self::Error>;
 
     /// Get a single document from the datastore.
     async fn get_document(
         &self,
         doc_id: Key,
-    ) -> Result<Option<Document>, anyhow::Error> {
+    ) -> Result<Option<Document>, Self::Error> {
         Ok(self.get_documents(&[doc_id]).await?.pop())
     }
 
@@ -74,18 +77,18 @@ pub trait Datastore: Metastore {
     async fn upsert_documents(
         &self,
         documents: Vec<Document>,
-    ) -> Result<(), anyhow::Error>;
+    ) -> Result<(), Self::Error>;
 
     /// Insert or update a single document in the datastore.
-    async fn upsert_document(&self, document: Document) -> Result<(), anyhow::Error> {
+    async fn upsert_document(&self, document: Document) -> Result<(), Self::Error> {
         self.upsert_documents(vec![document]).await
     }
 
     /// Delete a set of documents from the datastore.
-    async fn delete_documents(&self, doc_ids: &[Key]) -> Result<(), anyhow::Error>;
+    async fn delete_documents(&self, doc_ids: &[Key]) -> Result<(), Self::Error>;
 
     /// Insert or update a single document in the datastore.
-    async fn delete_document(&self, doc_id: Key) -> Result<(), anyhow::Error> {
+    async fn delete_document(&self, doc_id: Key) -> Result<(), Self::Error> {
         self.delete_documents(&[doc_id]).await
     }
 }

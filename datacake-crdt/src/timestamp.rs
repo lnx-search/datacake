@@ -17,9 +17,10 @@ const MAX_DRIFT_MS: u64 = 60_000;
 /// A HLC (Hybrid Logical Clock) timestamp implementation.
 ///
 /// This implementation is largely a port of the JavaScript implementation
-/// by @jlongster as provided here: https://github.com/jlongster/crdt-example-app
+/// by @jlongster as provided here: <https://github.com/jlongster/crdt-example-app>
+///
 /// The demo its self implemented the concepts talked about in this talk:
-/// https://www.youtube.com/watch?v=DEcwa68f-jY
+/// <https://www.youtube.com/watch?v=DEcwa68f-jY>
 ///
 /// The timestamp doubles as a lock which can be used to maintain and consistently
 /// unique and monotonic clock.

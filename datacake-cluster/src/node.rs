@@ -1,9 +1,9 @@
+use std::fmt::{Debug, Display};
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{anyhow, Result};
 use chitchat::transport::Transport;
 use chitchat::{
     spawn_chitchat,
@@ -16,6 +16,7 @@ use chitchat::{
 use tokio::sync::watch;
 use tokio_stream::wrappers::WatchStream;
 use tokio_stream::StreamExt;
+use crate::DatacakeError;
 
 static PUBLIC_RPC_ADDR_KEY: &str = "public_rpc_addr";
 const GOSSIP_INTERVAL: Duration = if cfg!(test) {
@@ -76,14 +77,17 @@ pub struct DatacakeNode {
 }
 
 impl DatacakeNode {
-    pub async fn connect(
+    pub async fn connect<E>(
         me: ClusterMember,
         listen_addr: SocketAddr,
         cluster_id: String,
         seed_nodes: Vec<String>,
         failure_detector_config: FailureDetectorConfig,
         transport: &dyn Transport,
-    ) -> Result<Self> {
+    ) -> Result<Self, DatacakeError<E>>
+    where
+        E: Display + Debug + Send + Sync + 'static
+    {
         info!(
             cluster_id = %cluster_id,
             node_id = %me.node_id,
@@ -111,7 +115,7 @@ impl DatacakeNode {
             )],
             transport,
         )
-        .await?;
+        .await.map_err(|e| DatacakeError::ChitChatError(e.to_string()))?;
 
         let chitchat = chitchat_handle.chitchat();
         let (members_tx, members_rx) = watch::channel(Vec::new());
@@ -165,7 +169,7 @@ impl DatacakeNode {
                 }
             }
 
-            Result::<(), anyhow::Error>::Ok(())
+            Result::<(), DatacakeError<E>>::Ok(())
         });
 
         Ok(cluster)
@@ -200,7 +204,7 @@ impl DatacakeNode {
         self: &DatacakeNode,
         mut predicate: F,
         timeout_after: Duration,
-    ) -> Result<()>
+    ) -> Result<(), anyhow::Error>
     where
         F: FnMut(&Vec<ClusterMember>) -> bool,
     {
@@ -220,13 +224,13 @@ impl DatacakeNode {
 fn build_cluster_member<'a>(
     node_id: &'a NodeId,
     cluster_state_snapshot: &'a ClusterStateSnapshot,
-) -> Result<ClusterMember> {
+) -> Result<ClusterMember, String> {
     let node_state =
         cluster_state_snapshot
             .node_states
             .get(&node_id.id)
             .ok_or_else(|| {
-                anyhow::anyhow!(
+                format!(
                     "Could not find node ID `{}` in ChitChat state.",
                     node_id.id,
                 )
@@ -234,23 +238,26 @@ fn build_cluster_member<'a>(
     let public_rpc_address = node_state
         .get(PUBLIC_RPC_ADDR_KEY)
         .ok_or_else(|| {
-            anyhow!(
+            format!(
                 "Could not find `{}` key in node {:?} state.",
                 PUBLIC_RPC_ADDR_KEY,
                 node_id
             )
         })
-        .map(|addr_str| addr_str.parse::<SocketAddr>())??;
+        .map(|addr_str| addr_str.parse::<SocketAddr>())?
+        .map_err(|e| e.to_string())?;
 
     let (node_unique_id, generation_str) =
         node_id.id.split_once('/').ok_or_else(|| {
-            anyhow!(
+            format!(
                 "Failed to create cluster member instance from NodeId {:?}.",
                 node_id
             )
         })?;
 
-    let generation = generation_str.parse()?;
+    let generation = generation_str.parse::<u64>()
+        .map_err(|e| e.to_string())?;
+
     Ok(ClusterMember::new(
         node_unique_id.to_string(),
         generation,
@@ -261,6 +268,7 @@ fn build_cluster_member<'a>(
 
 #[cfg(test)]
 mod tests {
+    use anyhow::Result;
     use std::sync::atomic::AtomicU16;
 
     use chitchat::transport::{ChannelTransport, Transport};
@@ -334,7 +342,7 @@ mod tests {
         let gossip_advertise_addr: SocketAddr = ([127, 0, 0, 1], node_id).into();
         let node_id = format!("node_{node_id}");
         let failure_detector_config = create_failure_detector_config_for_test();
-        let node = DatacakeNode::connect(
+        let node = DatacakeNode::connect::<String>(
             ClusterMember::new(
                 node_id,
                 1,
