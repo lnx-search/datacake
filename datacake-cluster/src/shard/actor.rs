@@ -55,6 +55,7 @@ impl ShardActor {
                 Ok(Ok(event)) => event,
                 Ok(Err(_)) => break false,
                 Err(_) => {
+                    #[cfg(not(feature = "memory-compression"))]
                     if let Err(e) = self.inner.try_compress_data().await {
                         warn!(error = ?e, "Failed to compress memory buffer due to invalid state. This is likely a bug.");
                     }
@@ -62,11 +63,13 @@ impl ShardActor {
                 },
             };
 
+            #[cfg(not(feature = "memory-compression"))]
             if !event.needs_decompressed_view() {
                 self.handle_event(event).await;
                 continue;
             }
 
+            #[cfg(not(feature = "memory-compression"))]
             if let Err(e) = self.inner.try_decompress_data().await {
                 error!(error = ?e, "Compressed memory state is invalid. This suggests that the shard's state has been invalidated. This is a bug.");
 
@@ -137,6 +140,7 @@ impl ShardActor {
                 let diff = self.inner.diff(&set);
                 let _ = tx.send(diff);
             },
+            #[cfg(not(feature = "memory-compression"))]
             Event::Compress => {
                 let _ = self.inner.try_compress_data();
             },
@@ -173,9 +177,11 @@ pub enum Event {
         set: OrSWotSet,
         tx: oneshot::Sender<(StateChanges, StateChanges)>,
     },
+    #[cfg(not(feature = "memory-compression"))]
     Compress,
 }
 
+#[cfg(not(feature = "memory-compression"))]
 impl Event {
     fn needs_decompressed_view(&self) -> bool {
         !matches!(self, Self::Compress | Self::GetSerialized { .. })
@@ -272,6 +278,7 @@ impl ShardHandle {
         rx.await.map_err(|_| DeadShard)
     }
 
+    #[cfg(not(feature = "memory-compression"))]
     pub async fn compress_state(&self) -> Result<(), DeadShard> {
         self.events_tx
             .send_async(Event::Compress)
