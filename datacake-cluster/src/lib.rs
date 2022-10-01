@@ -64,7 +64,7 @@ impl DatacakeCluster {
         let shard_changes_watcher = shard::state::state_watcher().await;
 
         let shard_group = shard::create_shard_group(shard_changes_watcher.clone()).await;
-        let handler = StandardDataHandler::new(shard_group.clone(), datastore.clone());
+        let handler = StandardDataHandler::new(shard_group.clone(), datastore.clone(), clock.clone());
 
         // Initialise the shard groups loading from the persisted state.
         handler.load_initial_shard_states().await?;

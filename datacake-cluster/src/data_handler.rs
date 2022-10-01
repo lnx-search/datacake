@@ -16,7 +16,11 @@ pub struct StandardDataHandler<DS: Datastore> {
 }
 
 impl<DS: Datastore> StandardDataHandler<DS> {
-    pub(crate) fn new(shard_group: ShardGroupHandle, datastore: Arc<DS>, clock: Clock) -> Self {
+    pub(crate) fn new(
+        shard_group: ShardGroupHandle,
+        datastore: Arc<DS>,
+        clock: Clock,
+    ) -> Self {
         Self {
             shard_group,
             datastore,

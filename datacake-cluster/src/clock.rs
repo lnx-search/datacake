@@ -47,10 +47,7 @@ pub enum Event {
     Register(HLCTimestamp),
 }
 
-async fn run_clock(
-    mut clock: HLCTimestamp,
-    reqs: flume::Receiver<Event>,
-) {
+async fn run_clock(mut clock: HLCTimestamp, reqs: flume::Receiver<Event>) {
     while let Ok(event) = reqs.recv_async().await {
         match event {
             Event::Get(tx) => {
@@ -63,13 +60,14 @@ async fn run_clock(
                 let _ = tx.send(ts);
             },
             Event::Register(remote_ts) => {
-                clock.recv(&remote_ts)
+                clock
+                    .recv(&remote_ts)
                     .expect("Clock counter should not overflow");
 
                 if clock.counter() >= u16::MAX - 10 {
                     tokio::time::sleep(Duration::from_millis(1)).await;
                 }
-            }
+            },
         }
     }
 }

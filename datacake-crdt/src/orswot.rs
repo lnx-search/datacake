@@ -20,7 +20,7 @@ pub struct BadState;
 #[cfg_attr(feature = "rkyv", derive(Serialize, Deserialize, Archive))]
 #[cfg_attr(feature = "rkyv", archive(compare(PartialEq)))]
 #[cfg_attr(feature = "rkyv", archive_attr(derive(CheckBytes, Debug)))]
-struct NodeVersions {
+pub struct NodeVersions {
     nodes_max_stamps: HashMap<u32, HLCTimestamp>,
 }
 
