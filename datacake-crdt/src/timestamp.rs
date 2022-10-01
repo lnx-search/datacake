@@ -1,6 +1,5 @@
 use std::cmp;
 use std::cmp::Ordering;
-use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -11,9 +10,19 @@ use rkyv::{Archive, Deserialize, Serialize};
 /// Maximum physical clock drift allowed, in ms
 const MAX_DRIFT_MS: u64 = 60_000;
 
-#[derive(Serialize, Deserialize, Archive, Debug, Copy, Clone, Eq, PartialEq)]
-#[archive(compare(PartialEq))]
-#[archive_attr(derive(CheckBytes, Debug))]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[cfg_attr(feature = "rkyv", derive(Serialize, Deserialize, Archive))]
+#[cfg_attr(feature = "rkyv", archive(compare(PartialEq)))]
+#[cfg_attr(feature = "rkyv", archive_attr(derive(CheckBytes, Debug)))]
+/// A HLC (Hybrid Logical Clock) timestamp implementation.
+///
+/// This implementation is largely a port of the JavaScript implementation
+/// by @jlongster as provided here: https://github.com/jlongster/crdt-example-app
+/// The demo its self implemented the concepts talked about in this talk:
+/// https://www.youtube.com/watch?v=DEcwa68f-jY
+///
+/// The timestamp doubles as a lock which can be used to maintain and consistently
+/// unique and monotonic clock.
 pub struct HLCTimestamp {
     millis: u64,
     counter: u16,
@@ -33,6 +42,10 @@ impl Ord for HLCTimestamp {
 }
 
 impl HLCTimestamp {
+    /// Create a new [HLCTimestamp].
+    ///
+    /// You may wish to use [get_unix_timestamp_ms] to get a unix timestamp
+    /// suitable for the initial clock state.
     pub fn new(millis: u64, counter: u16, node: u32) -> Self {
         Self {
             millis,
@@ -55,8 +68,9 @@ impl HLCTimestamp {
     pub fn millis(&self) -> u64 {
         self.millis
     }
+
     /// Timestamp send. Generates a unique, monotonic timestamp suitable
-    /// for transmission to another system in string format
+    /// for transmission to another system.
     pub fn send(&mut self) -> Result<Self, TimestampError> {
         let ts = get_unix_timestamp_ms();
 
@@ -86,7 +100,7 @@ impl HLCTimestamp {
 
     /// Timestamp receive. Parses and merges a timestamp from a remote
     /// system with the local time-global uniqueness and monotonicity are
-    /// preserved
+    /// preserved.
     pub fn recv(&mut self, msg: &Self) -> Result<Self, TimestampError> {
         if self.node == msg.node {
             return Err(TimestampError::DuplicatedNode(msg.node));
@@ -173,14 +187,10 @@ impl FromStr for HLCTimestamp {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, thiserror::Error)]
+#[error("Invalid timestamp format.")]
+/// The provided timestamp in the given string format is invalid and unable to be parsed.
 pub struct InvalidFormat;
-impl Display for InvalidFormat {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "InvalidFormat")
-    }
-}
-impl Error for InvalidFormat {}
 
 #[derive(Debug, thiserror::Error)]
 pub enum TimestampError {
@@ -194,6 +204,7 @@ pub enum TimestampError {
     Overflow,
 }
 
+/// Get the current time since the [UNIX_EPOCH] in milliseconds.
 pub fn get_unix_timestamp_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
