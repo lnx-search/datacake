@@ -16,6 +16,8 @@ pub struct MockDataStore {
 
 #[tonic::async_trait]
 impl Metastore for MockDataStore {
+    type Error = <MemStore as Metastore>::Error;
+
     async fn get_keys(&self, shard_id: usize) -> Result<StateChanges, Error> {
         self.inner.get_keys(shard_id).await
     }
