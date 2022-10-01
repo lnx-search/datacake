@@ -25,6 +25,7 @@ impl Clock {
             .send_async(tx)
             .await
             .expect("Clock actor should never die");
+
         rx.await.expect("Responder should not be dropped")
     }
 }

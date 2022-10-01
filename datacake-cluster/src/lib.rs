@@ -10,9 +10,9 @@ mod shard;
 mod shared;
 mod wrappers;
 
+mod tasks;
 #[cfg(feature = "test-utils")]
 pub mod test_utils;
-mod tasks;
 
 use std::mem;
 use std::sync::Arc;

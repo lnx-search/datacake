@@ -73,4 +73,3 @@ async fn test_document_removal_propagation() -> Result<()> {
 
     Ok(())
 }
-

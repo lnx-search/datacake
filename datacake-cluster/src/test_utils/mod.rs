@@ -29,7 +29,8 @@ pub async fn make_test_node(
     rpc_addr: &str,
     seeds: Vec<&str>,
 ) -> Result<DatacakeCluster> {
-    make_test_node_with_store(node_id, gossip_addr, rpc_addr, seeds, MemStore::default()).await
+    make_test_node_with_store(node_id, gossip_addr, rpc_addr, seeds, MemStore::default())
+        .await
 }
 
 pub async fn make_test_node_with_store<DS: Datastore>(

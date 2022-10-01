@@ -74,18 +74,11 @@ impl ShardGroupHandle {
         self.handles[shard_id].get_serialized().await
     }
 
-    pub async fn merge(
-        &self,
-        shard_id: usize,
-        set: OrSWotSet,
-    ) -> Result<(), DeadShard> {
+    pub async fn merge(&self, shard_id: usize, set: OrSWotSet) -> Result<(), DeadShard> {
         self.handles[shard_id].merge(set).await
     }
 
-    pub async fn purge(
-        &self,
-        shard_id: usize,
-    ) -> Result<Vec<Key>, DeadShard> {
+    pub async fn purge(&self, shard_id: usize) -> Result<Vec<Key>, DeadShard> {
         self.handles[shard_id].purge().await
     }
 

@@ -17,7 +17,6 @@ use crate::shard::state::StateWatcherHandle;
 use crate::shard::{self, ShardGroupHandle};
 use crate::tasks::tombstone_purge_task;
 
-
 /// All network related configs for both gossip and RPC.
 pub struct ConnectionCfg {
     /// The address that other nodes can use to connect

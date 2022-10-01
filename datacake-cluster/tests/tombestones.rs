@@ -1,10 +1,11 @@
 use std::sync::Arc;
 use std::time::Duration;
+
 use anyhow::{Error, Result};
-use parking_lot::Mutex;
-use datacake_cluster::{Datastore, Document, Metastore, NUMBER_OF_SHARDS, test_utils};
 use datacake_cluster::test_utils::MemStore;
+use datacake_cluster::{test_utils, Datastore, Document, Metastore, NUMBER_OF_SHARDS};
 use datacake_crdt::{HLCTimestamp, Key, StateChanges};
+use parking_lot::Mutex;
 
 #[derive(Default, Clone)]
 pub struct MockDataStore {
@@ -19,7 +20,11 @@ impl Metastore for MockDataStore {
         self.inner.get_keys(shard_id).await
     }
 
-    async fn update_keys(&self, shard_id: usize, states: Vec<(Key, HLCTimestamp)>) -> Result<(), Error> {
+    async fn update_keys(
+        &self,
+        shard_id: usize,
+        states: Vec<(Key, HLCTimestamp)>,
+    ) -> Result<(), Error> {
         self.inner.update_keys(shard_id, states).await
     }
 
@@ -31,13 +36,21 @@ impl Metastore for MockDataStore {
         self.inner.get_tombstone_keys(shard_id).await
     }
 
-    async fn update_tombstone_keys(&self, shard_id: usize, states: Vec<(Key, HLCTimestamp)>) -> Result<(), Error> {
+    async fn update_tombstone_keys(
+        &self,
+        shard_id: usize,
+        states: Vec<(Key, HLCTimestamp)>,
+    ) -> Result<(), Error> {
         self.tombstones.lock().extend(states.iter().map(|v| v.0));
 
         self.inner.update_tombstone_keys(shard_id, states).await
     }
 
-    async fn remove_tombstone_keys(&self, shard_id: usize, states: Vec<Key>) -> Result<(), Error> {
+    async fn remove_tombstone_keys(
+        &self,
+        shard_id: usize,
+        states: Vec<Key>,
+    ) -> Result<(), Error> {
         self.deleted.lock().extend(states.iter().copied());
 
         self.inner.remove_tombstone_keys(shard_id, states).await
@@ -59,7 +72,6 @@ impl Datastore for MockDataStore {
     }
 }
 
-
 #[tokio::test]
 async fn test_documents_marked_as_tombstones() -> Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
@@ -80,14 +92,20 @@ async fn test_documents_marked_as_tombstones() -> Result<()> {
     handle.delete(1).await?;
 
     let tombstones = store.tombstones.lock();
-    assert_eq!(&*tombstones, &[1], "Expected document to be marked as a tombstone.");
+    assert_eq!(
+        &*tombstones,
+        &[1],
+        "Expected document to be marked as a tombstone."
+    );
 
     let dead = store.deleted.lock();
-    assert_eq!(&*dead, &[0; 0], "Expected no documents to be marked as dead.");
+    assert_eq!(
+        &*dead, &[0; 0],
+        "Expected no documents to be marked as dead."
+    );
 
     Ok(())
 }
-
 
 #[tokio::test]
 async fn test_documents_purged_after_observation() -> Result<()> {

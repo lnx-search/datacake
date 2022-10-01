@@ -70,7 +70,6 @@ async fn test_document_addition_propagation() -> Result<()> {
     Ok(())
 }
 
-
 #[tokio::test]
 async fn test_document_addition_data_race() -> Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
@@ -106,8 +105,12 @@ async fn test_document_addition_data_race() -> Result<()> {
     // These will technically happen at the same time.
     // So we want to make sure that all the data becomes consistent and all nodes
     // see the same document by the end of it.
-    node_1_handle.insert(1, b"Hello, World! From node 1.".to_vec()).await?;
-    node_2_handle.insert(1, b"Hello, World! From node 2.".to_vec()).await?;
+    node_1_handle
+        .insert(1, b"Hello, World! From node 1.".to_vec())
+        .await?;
+    node_2_handle
+        .insert(1, b"Hello, World! From node 2.".to_vec())
+        .await?;
 
     tokio::time::sleep(Duration::from_secs(5)).await;
 

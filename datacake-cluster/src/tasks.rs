@@ -1,9 +1,9 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::Semaphore;
 
-use tokio::time::{interval, MissedTickBehavior, timeout};
+use tokio::sync::Semaphore;
+use tokio::time::{interval, timeout, MissedTickBehavior};
 
 const CHANGES_POLLING_DURATION: Duration = Duration::from_secs(1);
 
@@ -12,11 +12,10 @@ const TOMBSTONE_PURGE_DELAY: Duration = Duration::from_secs(1);
 #[cfg(not(feature = "test-utils"))]
 const TOMBSTONE_PURGE_DELAY: Duration = Duration::from_secs(600);
 
-use crate::{ClientCluster, DataHandler, NUMBER_OF_SHARDS};
 use crate::node::ClusterMember;
 use crate::rpc::{Client, RpcError};
 use crate::shard::{DeadShard, ShardGroupHandle, StateChangeTs};
-
+use crate::{ClientCluster, DataHandler, NUMBER_OF_SHARDS};
 
 /// A background task for the node which purges any documents marked as tombstones
 /// once it is safe to completely remove any trace of them.
@@ -37,7 +36,7 @@ pub(crate) async fn tombstone_purge_task(
                 Err(e) => {
                     error!(node_id = %node_id, error = ?e, "Failed to purge shard tombstones.");
                     continue;
-                }
+                },
             };
 
             keys.extend(purged);
@@ -62,7 +61,6 @@ pub(crate) async fn tombstone_purge_task(
         );
     }
 }
-
 
 /// A polling task that check the remote node's shard changes
 /// every given period of time.
