@@ -70,6 +70,39 @@ impl NodeVersions {
 /// The tombstones can be purged safely once the set has observed other,
 /// newer operations from the original node which the entry is tied to.
 /// (This is tracked by checking the `node` field of the timestamp.)
+/// 
+/// ```
+/// use datacake_crdt::{OrSWotSet, HLCTimestamp, get_unix_timestamp_ms};
+///
+/// let mut node_a = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 0);
+///
+/// // Simulating a node begin slightly ahead.
+/// let mut node_b = HLCTimestamp::new(get_unix_timestamp_ms() + 5000, 0, 1);
+///
+/// let mut node_a_set = OrSWotSet::default();
+/// let mut node_b_set = OrSWotSet::default();
+///
+/// // Insert a new key with a new timestamp in set A.
+/// node_a_set.insert(1, node_a.send().unwrap());
+///
+/// // Insert a new entry in set B.
+/// node_b_set.insert(2, node_b.send().unwrap());
+///
+/// // Let some time pass for demonstration purposes.
+/// std::thread::sleep(std::time::Duration::from_millis(500));
+///
+/// // Set A has key `1` removed.
+/// node_a_set.delete(1, node_a.send().unwrap());
+///
+/// // Merging set B with set A and vice versa.
+/// // Our sets are now aligned without conflicts.
+/// node_b_set.merge(node_a_set.clone());
+/// node_a_set.merge(node_b_set);
+///
+/// // Set A and B should both see that key `1` has been deleted.
+/// assert!(node_a_set.get(&1).is_none(), "Key a was not correctly removed.");
+/// assert!(node_b_set.get(&1).is_none(), "Key a was not correctly removed.");
+/// ```
 pub struct OrSWotSet {
     entries: BTreeMap<Key, HLCTimestamp>,
     dead: HashMap<Key, HLCTimestamp>,

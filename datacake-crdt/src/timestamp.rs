@@ -28,36 +28,21 @@ const MAX_DRIFT_MS: u64 = 60_000;
 /// unique and monotonic clock.
 ///
 /// ```
-/// use datacake_crdt::{OrSWotSet, HLCTimestamp, get_unix_timestamp_ms};
+/// use datacake_crdt::{HLCTimestamp, get_unix_timestamp_ms};
 ///
+/// // Let's make two clocks, but we'll refer to them as our nodes, node-a and node-b.
 /// let mut node_a = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 0);
 ///
-/// // Simulating a node begin slightly ahead.
+/// // Node-b has a clock drift of 5 seconds.
 /// let mut node_b = HLCTimestamp::new(get_unix_timestamp_ms() + 5000, 0, 1);
 ///
-/// let mut node_a_set = OrSWotSet::default();
-/// let mut node_b_set = OrSWotSet::default();
+/// // Node-b sends a payload with a new timestamp which we get by calling `send()`.
+/// // this makes sure our timestamp is unique and monotonic.
+/// let timestamp = node_b.send().unwrap();
 ///
-/// // Insert a new key with a new timestamp in set A.
-/// node_a_set.insert(1, node_a.send().unwrap());
-///
-/// // Insert a new entry in set B.
-/// node_b_set.insert(2, node_b.send().unwrap());
-///
-/// // Let some time pass for demonstration purposes.
-/// std::thread::sleep(std::time::Duration::from_millis(500));
-///
-/// // Set A has key `1` removed.
-/// node_a_set.delete(1, node_a.send().unwrap());
-///
-/// // Merging set B with set A and vice versa.
-/// // Our sets are now aligned without conflicts.
-/// node_b_set.merge(node_a_set.clone());
-/// node_a_set.merge(node_b_set);
-///
-/// // Set A and B should both see that key `1` has been deleted.
-/// assert!(node_a_set.get(&1).is_none(), "Key a was not correctly removed.");
-/// assert!(node_b_set.get(&1).is_none(), "Key a was not correctly removed.");
+/// // Node-a gets this payload with the timestamp and so we call `recv()` on our clock.
+/// // This was node-a is also unique and monotonic.
+/// node_a.recv(&timestamp).unwrap();
 /// ```
 pub struct HLCTimestamp {
     millis: u64,
