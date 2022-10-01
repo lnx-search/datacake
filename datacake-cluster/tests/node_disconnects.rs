@@ -68,7 +68,6 @@ async fn test_node_failure() -> Result<()> {
     Ok(())
 }
 
-
 #[tokio::test]
 async fn test_node_failure_and_recover() -> Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
