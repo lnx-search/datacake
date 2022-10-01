@@ -2,6 +2,11 @@
 name = "datacake-cluster"
 version = "0.1.0"
 edition = "2021"
+description = "Eventually consistent state replication as a library (consensus, RPC and conflict resolution) for building your own eventually consistent databases."
+license = "MIT"
+keywords = ["crdt", "databases", "distributed", "tokio", "async"]
+categories = ["concurrency", "data-structures", "ssynchronous"]
+repository = "https://github.com/lnx-search/datacake"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -14,7 +19,6 @@ flume = "0.10.14"
 prost = "0.11.0"
 futures = "0.3.23"
 itertools = "0.10.3"
-arc-swap = "1.5.1"
 bytes = "1.2.1"
 thiserror = "1"
 lz4_flex = "0.9.5"

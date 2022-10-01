@@ -4,7 +4,9 @@ version = "0.1.0"
 edition = "2021"
 description = "A conflict free replicated datatype based on a hybrid logical clock implementation for building eventually consistent data stores."
 license = "MIT"
-license-file = "../LICENSE.txt"
+keywords = ["crdt", "databases", "distributed"]
+categories = ["concurrency", "data-structures"]
+repository = "https://github.com/lnx-search/datacake"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
