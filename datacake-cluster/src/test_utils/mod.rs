@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use anyhow::Result;
 
-use crate::{ConnectionCfg, DatacakeCluster};
+use crate::{ConnectionCfg, DatacakeCluster, Datastore};
 
 mod memstore;
 pub use memstore::MemStore;
@@ -29,6 +29,16 @@ pub async fn make_test_node(
     rpc_addr: &str,
     seeds: Vec<&str>,
 ) -> Result<DatacakeCluster> {
+    make_test_node_with_store(node_id, gossip_addr, rpc_addr, seeds, MemStore::default()).await
+}
+
+pub async fn make_test_node_with_store<DS: Datastore>(
+    node_id: &str,
+    gossip_addr: &str,
+    rpc_addr: &str,
+    seeds: Vec<&str>,
+    store: DS,
+) -> Result<DatacakeCluster> {
     let cfg =
         make_connection_config(gossip_addr.parse().unwrap(), rpc_addr.parse().unwrap());
 
@@ -37,7 +47,7 @@ pub async fn make_test_node(
         "cluster-1",
         cfg,
         seeds.into_iter().map(|v| v.into()).collect(),
-        MemStore::default(),
+        store,
     )
     .await?;
 
