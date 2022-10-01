@@ -1,6 +1,6 @@
 [package]
 name = "datacake-cluster"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
 description = "Eventually consistent state replication as a library (consensus, RPC and conflict resolution) for building your own eventually consistent databases."
 license = "MIT"
@@ -30,7 +30,7 @@ tokio = { version = "1", default-features = false, features = ["sync", "time"] }
 rkyv = { version = "0.7.9", features = ["bytecheck"] }
 bytecheck = "0.6.9"
 
-datacake-crdt = { path = "../datacake-crdt", version = "0.1", features = ["rkyv"] }
+datacake-crdt = { path = "../datacake-crdt", version = "0.1", features = ["rkyv-support"] }
 
 anyhow = { version = "1", optional = true }
 
