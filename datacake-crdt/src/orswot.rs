@@ -243,7 +243,7 @@ impl OrSWotSet {
     /// Get an entry from the set.
     ///
     /// If the entry exists it's associated [HLCTimestamp] is returned.
-    pub fn get(&mut self, k: &Key) -> Option<&HLCTimestamp> {
+    pub fn get(&self, k: &Key) -> Option<&HLCTimestamp> {
         self.entries.get(k)
     }
 
