@@ -1,6 +1,6 @@
 [package]
 name = "datacake-rocks"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
 description = "A pre-built implementation of the require Metastore and Datastore traits for the Datacake cluster. Built on top of RocksDB."
 license = "MIT"
@@ -24,7 +24,7 @@ tokio = { version = "1", features = ["rt"] }
 rocksdb = { version = "0.19.0", features = ["lz4"] }
 moka = { version = "0.9", optional = true }
 
-datacake-cluster = { path = "../datacake-cluster" }
+datacake-cluster = { path = "../datacake-cluster", version = "0.0.1" }
 
 [features]
 cache = ["moka"]

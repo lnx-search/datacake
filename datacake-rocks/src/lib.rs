@@ -30,10 +30,26 @@ use crate::shard::{RawKey, ShardHandle};
 ///
 /// An optional cache size can be set after creation in order to use a LRU cache
 /// to cache frequently access documents. The cache size is a optimistic
-/// estimate to limit memory usage. This requires the `cache` feature to be enabled.
+/// estimate to limit memory usage. This requires the `cache` feature to be enabled.///
+/// ```
+/// use datacake_rocks::open_store;
+///
+/// # let rt = tokio::runtime::Builder::new_multi_thread()
+/// #            .enable_all()
+/// #            .build()
+/// #            .unwrap();
+/// #
+/// # rt.block_on(async move {
+/// #
+/// // Create a ready to use store that we can feed into a DatacakeCluster.
+/// let my_store = open_store(12, "/my-data/path-here")
+///     .await
+///     .expect("Open our database.");
+/// # })
+/// ```
 pub async fn open_store(
     num_shard: usize,
-    base_path: &Path,
+    base_path: impl AsRef<Path>,
 ) -> Result<RocksStore, RocksStoreError> {
     let mut options = rocksdb::Options::default();
     options.create_if_missing(true);
@@ -53,12 +69,30 @@ pub async fn open_store(
 /// An optional cache size can be provided in order to use a LRU cache
 /// to cache frequently access documents. The cache size is a optimistic
 /// estimate to limit memory usage. This requires the `cache` feature to be enabled.
+///
+/// ```
+/// use datacake_rocks::open_store_with_options;
+///
+/// # let rt = tokio::runtime::Builder::new_multi_thread()
+/// #            .enable_all()
+/// #            .build()
+/// #            .unwrap();
+/// #
+/// # rt.block_on(async move {
+/// #
+/// let mut options = rocksdb::Options::default();
+/// // Create a ready to use store with out own options that we can feed into a DatacakeCluster.
+/// let my_store = open_store_with_options(12, options, "/my-data/path-here")
+///     .await
+///     .expect("Open our database.");
+/// # })
+/// ```
 pub async fn open_store_with_options(
     num_shard: usize,
     options: rocksdb::Options,
-    base_path: &Path,
+    base_path: impl AsRef<Path>,
 ) -> Result<RocksStore, RocksStoreError> {
-    let base_path = base_path.to_path_buf();
+    let base_path = base_path.as_ref().to_path_buf();
 
     let (metadata, storage_shards) = tokio::task::spawn_blocking(move || {
         let meta_path = base_path.join("metadata");
@@ -108,6 +142,8 @@ impl RocksStore {
     /// The size of each entry is a best effort estimate
     /// and do not directly track the size used in memory by allocations.
     pub fn set_cache_size(&mut self, cache_size_byte: u64) {
+        use std::mem;
+
         let cache = Cache::builder()
             .weigher(|_k, v: &Document| {
                 let total = mem::size_of::<Key>()
