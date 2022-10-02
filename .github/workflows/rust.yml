@@ -16,20 +16,25 @@ jobs:
       matrix:
         os: [ubuntu-latest, macOS-latest, windows-latest]
         rust: [stable]
-    - uses: actions/checkout@v2
+
+    steps:
+      - uses: actions/checkout@v2
       - name: Install Protoc
-    - name: Install cargo-hack
-      run: cargo install cargo-hack
-    - uses: arduino/setup-protoc@v1
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
-    - name: Install cargo-hack
-      run: cargo install cargo-hack
-    - uses: Swatinem/rust-cache@v1
-    - name: Check features
-      run: cargo hack check --all --ignore-private --each-feature --no-dev-deps
-    - name: Check all targets
-      run: cargo check --all --all-targets --all-features
+        uses: arduino/setup-protoc@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install cargo-hack
+        run: cargo install cargo-hack
+      - uses: arduino/setup-protoc@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install cargo-hack
+        run: cargo install cargo-hack
+      - uses: Swatinem/rust-cache@v1
+      - name: Check features
+        run: cargo hack check --all --ignore-private --each-feature --no-dev-deps
+      - name: Check all targets
+        run: cargo check --all --all-targets --all-features
 
   build:
     runs-on: ${{ matrix.os }}
@@ -39,11 +44,11 @@ jobs:
         rust: [stable]
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Install Protoc
-      uses: arduino/setup-protoc@v1
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
-    - uses: Swatinem/rust-cache@v1
-    - name: Run main tests
-      run: cargo test --all --all-features
+      - uses: actions/checkout@v2
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: Swatinem/rust-cache@v1
+      - name: Run main tests
+        run: cargo test --all --all-features
