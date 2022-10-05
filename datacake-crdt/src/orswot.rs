@@ -97,7 +97,7 @@ impl NodeVersions {
 /// // Merging set B with set A and vice versa.
 /// // Our sets are now aligned without conflicts.
 /// node_b_set.merge(node_a_set.clone());
-/// node_a_set.merge(node_b_set);
+/// node_a_set.merge(node_b_set.clone());
 ///
 /// // Set A and B should both see that key `1` has been deleted.
 /// assert!(node_a_set.get(&1).is_none(), "Key a was not correctly removed.");
@@ -307,9 +307,7 @@ impl OrSWotSet {
     pub fn insert(&mut self, k: Key, ts: HLCTimestamp) -> bool {
         let mut has_set = false;
 
-        if !self.versions.try_update_max_stamp(ts) {
-            return has_set;
-        }
+        self.versions.try_update_max_stamp(ts);
 
         if let Some(deleted_ts) = self.dead.remove(&k) {
             // Our deleted timestamp is newer, so we don't want to adjust our markings.
