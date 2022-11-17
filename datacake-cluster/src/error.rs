@@ -2,17 +2,12 @@ use std::fmt::{Debug, Display};
 
 use thiserror::Error;
 
-use crate::rpc::RpcError;
-use crate::shard::DeadShard;
+// use crate::rpc::RpcError;
 
 #[derive(Debug, Error)]
 pub enum DatacakeError<E: Display + Debug> {
-    #[error("A failure occurred within the RPC system: {0}")]
-    RpcError(#[from] RpcError),
-
-    #[error("The shard state actor has died unexpectedly. This is a bug.")]
-    DeadShard(#[from] DeadShard),
-
+    // #[error("A failure occurred within the RPC system: {0}")]
+    // RpcError(#[from] RpcError),
     #[error("{0}")]
     ChitChatError(String),
 

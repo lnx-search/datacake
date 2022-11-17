@@ -12,7 +12,6 @@ readme = "README.md"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-chitchat = "0.4.1"
 tracing = "0.1.36"
 tonic = "0.8.0"
 tokio-stream = "0.1.9"
@@ -22,21 +21,21 @@ futures = "0.3.23"
 itertools = "0.10.3"
 bytes = "1.2.1"
 thiserror = "1"
-lz4_flex = "0.9.5"
 parking_lot = "0.12.1"
 crc32fast = "1.3.2"
+async-trait = "0.1.58"
+arc-swap = "1.5.1"
+anyhow = "1"
 
+chitchat = { git = "https://github.com/ChillFish8/chitchat.git", rev = "7436860" }
 tokio = { version = "1", default-features = false, features = ["sync", "time"] }
-rkyv = { version = "0.7.9", features = ["bytecheck"] }
+rkyv = { version = "0.7.9", features = ["validation"] }
 bytecheck = "0.6.9"
 
 datacake-crdt = { path = "../datacake-crdt", version = "0.1", features = ["rkyv-support"] }
 
-anyhow = { version = "1", optional = true }
-
 [features]
-test-utils = ["anyhow"]
-memory-compression = []
+test-utils = []
 
 [dev-dependencies]
 anyhow = "1"
