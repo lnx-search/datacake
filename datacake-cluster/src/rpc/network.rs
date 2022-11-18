@@ -11,6 +11,7 @@ pub const TIMEOUT_LIMIT: Duration = Duration::from_secs(2);
 pub const CONNECT_TIMEOUT_LIMIT: Duration = Duration::from_secs(5);
 
 #[derive(Clone)]
+/// A collection of RPC client connections which can be reused and multiplexed.
 pub struct ClientNetwork {
     clients: Arc<RwLock<HashMap<SocketAddr, Channel>>>,
 }

@@ -1,4 +1,6 @@
 mod chitchat_impl;
+mod consistency_impl;
+mod replication_impl;
 
 use std::net::SocketAddr;
 

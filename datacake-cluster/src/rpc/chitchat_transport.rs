@@ -46,9 +46,16 @@ impl Transport for GrpcTransport {
 }
 
 pub struct GrpcTransportInner {
+    /// The RPC clients available to this cluster.
     network: ClientNetwork,
+
+    /// Context to be passed when binding a new RPC server instance.
     ctx: super::server::Context,
+
+    /// The set of server handles that should be kept alive until the system shuts down.
     shutdown_handles: Mutex<Vec<oneshot::Sender<()>>>,
+
+    /// Received messages to be sent to the Chitchat cluster.
     messages: flume::Receiver<(SocketAddr, ChitchatMessage)>,
 }
 

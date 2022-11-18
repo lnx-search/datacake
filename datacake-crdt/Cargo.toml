@@ -18,4 +18,5 @@ bytecheck = { version = "0.6.9", optional = true }
 rkyv = { version = "0.7.39", features = ["validation"], optional = true }
 
 [features]
+# Enables (de)serialization support for all data types.
 rkyv-support = ["rkyv", "bytecheck"]
