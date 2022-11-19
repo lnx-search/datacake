@@ -1,3 +1,5 @@
+use std::fmt::{Debug, Formatter};
+
 use datacake_crdt::{HLCTimestamp, Key};
 
 use crate::rpc::datacake_api;
@@ -11,6 +13,21 @@ pub struct Document {
 
     /// The raw binary data of the document's value.
     pub data: Vec<u8>,
+}
+
+impl Debug for Document {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut f = f.debug_struct("Document");
+        f.field("id", &self.id);
+        f.field("last_updated", &self.last_updated);
+
+        #[cfg(test)]
+        {
+            f.field("data", &bytes::Bytes::copy_from_slice(&self.data));
+        }
+
+        f.finish()
+    }
 }
 
 impl From<datacake_api::Document> for Document {

@@ -12,7 +12,7 @@ use rkyv::{Archive, Deserialize, Serialize};
 /// Maximum physical clock drift allowed, in ms
 const MAX_DRIFT_MS: u64 = 60_000;
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Hash, Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "rkyv-support", derive(Serialize, Deserialize, Archive))]
 #[cfg_attr(feature = "rkyv-support", archive(compare(PartialEq)))]
 #[cfg_attr(feature = "rkyv-support", archive_attr(derive(CheckBytes, Debug)))]

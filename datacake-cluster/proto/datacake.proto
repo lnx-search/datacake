@@ -10,10 +10,10 @@ service ConsistencyApi {
   // Adds a set of documents to the state.
   rpc multi_put(MultiPutPayload) returns (Empty);
 
-  /// Removes a document from the state.
+  // Removes a document from the state.
   rpc remove(RemovePayload) returns (Empty);
 
-  /// Removes a set of documents from the state.
+  // Removes a set of documents from the state.
   rpc multi_remove(MultiRemovePayload) returns (Empty);
 }
 

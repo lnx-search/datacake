@@ -12,11 +12,11 @@ pub const CONNECT_TIMEOUT_LIMIT: Duration = Duration::from_secs(5);
 
 #[derive(Clone)]
 /// A collection of RPC client connections which can be reused and multiplexed.
-pub struct ClientNetwork {
+pub struct RpcNetwork {
     clients: Arc<RwLock<HashMap<SocketAddr, Channel>>>,
 }
 
-impl ClientNetwork {
+impl RpcNetwork {
     /// Attempts to get an already existing connection or creates a new connection.
     pub async fn get_or_connect(&self, addr: SocketAddr) -> Result<Channel, Error> {
         {

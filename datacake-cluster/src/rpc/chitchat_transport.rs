@@ -11,7 +11,7 @@ use tokio::sync::oneshot;
 
 use crate::rpc::chitchat_transport_api::chitchat_transport_client::ChitchatTransportClient;
 use crate::rpc::chitchat_transport_api::ChitchatRpcMessage;
-use crate::rpc::network::ClientNetwork;
+use crate::rpc::network::RpcNetwork;
 use crate::storage::Storage;
 
 #[derive(Clone)]
@@ -19,6 +19,23 @@ use crate::storage::Storage;
 ///
 /// This allows us to maintain a single connection rather than both a UDP and TCP connection.
 pub struct GrpcTransport<S: Storage>(Arc<GrpcTransportInner<S>>);
+
+impl<S: Storage> GrpcTransport<S> {
+    /// Creates a new GRPC transport instances.
+    pub fn new(
+        network: RpcNetwork,
+        ctx: super::server::Context<S>,
+        shutdown_handles: Mutex<Vec<oneshot::Sender<()>>>,
+        messages: flume::Receiver<(SocketAddr, ChitchatMessage)>,
+    ) -> Self {
+        Self(Arc::new(GrpcTransportInner {
+            network,
+            ctx,
+            shutdown_handles,
+            messages,
+        }))
+    }
+}
 
 impl<S: Storage> Deref for GrpcTransport<S> {
     type Target = GrpcTransportInner<S>;
@@ -48,7 +65,7 @@ impl<S: Storage + Sync + Send + 'static> Transport for GrpcTransport<S> {
 
 pub struct GrpcTransportInner<S: Storage> {
     /// The RPC clients available to this cluster.
-    network: ClientNetwork,
+    network: RpcNetwork,
 
     /// Context to be passed when binding a new RPC server instance.
     ctx: super::server::Context<S>,
@@ -62,7 +79,7 @@ pub struct GrpcTransportInner<S: Storage> {
 
 pub struct GrpcConnection {
     self_addr: SocketAddr,
-    network: ClientNetwork,
+    network: RpcNetwork,
     messages: flume::Receiver<(SocketAddr, ChitchatMessage)>,
 }
 

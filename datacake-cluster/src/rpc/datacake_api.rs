@@ -200,7 +200,7 @@ pub mod consistency_api_client {
             );
             self.inner.unary(request.into_request(), path, codec).await
         }
-        #[doc = "/ Removes a document from the state."]
+        /// Removes a document from the state.
         pub async fn remove(
             &mut self,
             request: impl tonic::IntoRequest<super::RemovePayload>,
@@ -220,7 +220,7 @@ pub mod consistency_api_client {
             );
             self.inner.unary(request.into_request(), path, codec).await
         }
-        #[doc = "/ Removes a set of documents from the state."]
+        /// Removes a set of documents from the state.
         pub async fn multi_remove(
             &mut self,
             request: impl tonic::IntoRequest<super::MultiRemovePayload>,
@@ -392,12 +392,12 @@ pub mod consistency_api_server {
             &self,
             request: tonic::Request<super::MultiPutPayload>,
         ) -> Result<tonic::Response<super::Empty>, tonic::Status>;
-        #[doc = "/ Removes a document from the state."]
+        /// Removes a document from the state.
         async fn remove(
             &self,
             request: tonic::Request<super::RemovePayload>,
         ) -> Result<tonic::Response<super::Empty>, tonic::Status>;
-        #[doc = "/ Removes a set of documents from the state."]
+        /// Removes a set of documents from the state.
         async fn multi_remove(
             &self,
             request: tonic::Request<super::MultiRemovePayload>,

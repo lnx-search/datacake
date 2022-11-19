@@ -1,10 +1,11 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
+use bytecheck::CheckBytes;
 use datacake_crdt::{get_unix_timestamp_ms, HLCTimestamp, Key, OrSWotSet, StateChanges};
 use parking_lot::RwLock;
 use rkyv::{Archive, Deserialize, Serialize};
@@ -12,15 +13,61 @@ use tokio::sync::oneshot;
 
 use crate::storage::Storage;
 
-#[derive(Archive, Serialize, Deserialize, Hash, Eq, PartialEq)]
-#[archive_attr(derive(Hash, Eq, PartialEq))]
+#[derive(Archive, Serialize, Deserialize, Clone, Debug, Hash, Eq, PartialEq)]
+#[archive_attr(derive(CheckBytes, Hash, Eq, PartialEq))]
 /// A wrapper around a `Cow<'static, str>`.
 ///
 /// This is needed so that we can serialize the whole keyspace map due to the ways
 /// `rkyv` can serialize Cow's, we need to explicitly say how we want it to behave.
 pub struct CounterKey(#[with(rkyv::with::AsOwned)] pub Cow<'static, str>);
 
-pub type KeyspaceTimestamps = HashMap<CounterKey, Arc<AtomicU64>>;
+#[derive(Archive, Serialize, Deserialize, Debug, Default)]
+#[archive_attr(derive(CheckBytes))]
+#[repr(C)]
+pub struct KeyspaceTimestamps(pub HashMap<CounterKey, Arc<AtomicU64>>);
+
+impl KeyspaceTimestamps {
+    /// Works out the entries which are different in the current timestamps vs the provided on.
+    ///
+    /// This compares both the keys and the values.
+    pub fn diff(&self, other: &Self) -> impl Iterator<Item = Cow<'static, str>> {
+        let entries = self.iter().chain(other.iter());
+        let mut processed = HashMap::with_capacity(self.len());
+
+        for (key, v) in entries {
+            let val = v.load(Ordering::Relaxed);
+            processed
+                .entry(key.0.clone())
+                .and_modify(|existing: &mut (u64, usize, bool)| {
+                    existing.1 += 1;
+
+                    if existing.0 != val {
+                        existing.2 = true;
+                    }
+                })
+                .or_insert_with(|| (val, 1, false));
+        }
+
+        processed
+            .into_iter()
+            .filter(|(_, (_, counter, is_diff))| *is_diff || (*counter != 2))
+            .map(|(key, _)| key)
+    }
+}
+
+impl Deref for KeyspaceTimestamps {
+    type Target = HashMap<CounterKey, Arc<AtomicU64>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for KeyspaceTimestamps {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
 
 /// A collection of several keyspace states.
 ///
@@ -386,4 +433,101 @@ async fn run_state_actor(
     }
 
     info!(keyspace = %keyspace, "All keyspace handles have been dropped, shutting down actor.");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_timestamp_diff() {
+        let set1 = KeyspaceTimestamps::default();
+        let set2 = KeyspaceTimestamps::default();
+        let diff = set1.diff(&set2).collect::<Vec<_>>();
+        assert_eq!(
+            diff,
+            Vec::<Cow<str>>::new(),
+            "Set difference should be the same as expected."
+        );
+
+        let mut set1 = KeyspaceTimestamps::default();
+        set1.insert(
+            CounterKey(Cow::Borrowed("key-1")),
+            Arc::new(AtomicU64::new(1)),
+        );
+        let mut set2 = KeyspaceTimestamps::default();
+        set2.insert(
+            CounterKey(Cow::Borrowed("key-2")),
+            Arc::new(AtomicU64::new(1)),
+        );
+        let diff = set1.diff(&set2).collect::<Vec<_>>();
+        assert_eq!(
+            diff,
+            vec![Cow::Borrowed("key-1"), Cow::Borrowed("key-2"),],
+            "Set difference should be the same as expected.",
+        );
+
+        let mut set1 = KeyspaceTimestamps::default();
+        set1.insert(
+            CounterKey(Cow::Borrowed("key-1")),
+            Arc::new(AtomicU64::new(1)),
+        );
+        set1.insert(
+            CounterKey(Cow::Borrowed("key-2")),
+            Arc::new(AtomicU64::new(1)),
+        );
+        let mut set2 = KeyspaceTimestamps::default();
+        set2.insert(
+            CounterKey(Cow::Borrowed("key-2")),
+            Arc::new(AtomicU64::new(1)),
+        );
+        let diff = set1.diff(&set2).collect::<Vec<_>>();
+        assert_eq!(
+            diff,
+            vec![Cow::Borrowed("key-1")],
+            "Set difference should be the same as expected.",
+        );
+
+        let mut set1 = KeyspaceTimestamps::default();
+        set1.insert(
+            CounterKey(Cow::Borrowed("key-1")),
+            Arc::new(AtomicU64::new(1)),
+        );
+        set1.insert(
+            CounterKey(Cow::Borrowed("key-2")),
+            Arc::new(AtomicU64::new(2)),
+        );
+        let mut set2 = KeyspaceTimestamps::default();
+        set2.insert(
+            CounterKey(Cow::Borrowed("key-2")),
+            Arc::new(AtomicU64::new(1)),
+        );
+        let diff = set1.diff(&set2).collect::<Vec<_>>();
+        assert_eq!(
+            diff,
+            vec![Cow::Borrowed("key-1"), Cow::Borrowed("key-2"),],
+            "Set difference should be the same as expected.",
+        );
+
+        let mut set1 = KeyspaceTimestamps::default();
+        set1.insert(
+            CounterKey(Cow::Borrowed("key-1")),
+            Arc::new(AtomicU64::new(1)),
+        );
+        set1.insert(
+            CounterKey(Cow::Borrowed("key-2")),
+            Arc::new(AtomicU64::new(2)),
+        );
+        let mut set2 = KeyspaceTimestamps::default();
+        set2.insert(
+            CounterKey(Cow::Borrowed("key-1")),
+            Arc::new(AtomicU64::new(3)),
+        );
+        let diff = set1.diff(&set2).collect::<Vec<_>>();
+        assert_eq!(
+            diff,
+            vec![Cow::Borrowed("key-1"), Cow::Borrowed("key-2"),],
+            "Set difference should be the same as expected.",
+        );
+    }
 }
