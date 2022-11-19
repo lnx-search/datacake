@@ -7,8 +7,8 @@ use std::net::SocketAddr;
 use chitchat::ChitchatMessage;
 use tokio::sync::oneshot;
 use tonic::transport::{Error, Server};
-use crate::keyspace::KeyspaceGroup;
 
+use crate::keyspace::KeyspaceGroup;
 use crate::rpc::chitchat_transport_api::chitchat_transport_server::ChitchatTransportServer;
 use crate::rpc::datacake_api::consistency_api_server::ConsistencyApiServer;
 use crate::rpc::datacake_api::replication_api_server::ReplicationApiServer;
@@ -31,6 +31,7 @@ impl<S: Storage> Clone for Context<S> {
     }
 }
 
+/// Create a new RPC server with a given context.
 pub(crate) async fn connect_server<S: Storage + Send + Sync + 'static>(
     listen_addr: SocketAddr,
     ctx: Context<S>,

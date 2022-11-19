@@ -1,4 +1,5 @@
 use std::fmt::{Debug, Display};
+
 use async_trait::async_trait;
 use datacake_crdt::{HLCTimestamp, Key};
 
@@ -52,11 +53,7 @@ pub trait Storage {
     ///
     /// If the given `keyspace` does not exist, it should be created. A new keyspace name should
     /// not result in an error being returned by the storage trait.
-    async fn put(
-        &self,
-        keyspace: &str,
-        document: Document,
-    ) -> Result<(), Self::Error>;
+    async fn put(&self, keyspace: &str, document: Document) -> Result<(), Self::Error>;
 
     /// Inserts or updates a set of documents in the persistent store.
     ///
@@ -74,11 +71,7 @@ pub trait Storage {
     ///
     /// If the given `keyspace` does not exist, it should be created. A new keyspace name should
     /// not result in an error being returned by the storage trait.
-    async fn del(
-        &self,
-        keyspace: &str,
-        doc_id: Key,
-    ) -> Result<(), Self::Error>;
+    async fn del(&self, keyspace: &str, doc_id: Key) -> Result<(), Self::Error>;
 
     /// Removes a set of documents from the persistent store.
     ///
@@ -100,7 +93,7 @@ pub trait Storage {
     ) -> Result<Option<Document>, Self::Error>;
 
     /// Retrieves a set of documents belonging to a given keyspace from the store.
-    /// 
+    ///
     /// No error should be returned if a document id cannot be found, instead it should
     /// just be ignored.
     async fn multi_get(
@@ -109,5 +102,3 @@ pub trait Storage {
         doc_ids: impl Iterator<Item = Key>,
     ) -> Result<Self::DocsIter, Self::Error>;
 }
-
-

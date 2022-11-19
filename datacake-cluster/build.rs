@@ -7,11 +7,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .out_dir("src/rpc")
         .compile_with_config(
             config,
-            &[
-                "proto/chitchat.proto",
-                "proto/datacake.proto",
-            ],
-            &["proto"]
+            &["proto/chitchat.proto", "proto/datacake.proto"],
+            &["proto"],
         )?;
 
     Ok(())

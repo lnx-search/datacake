@@ -2,12 +2,13 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::ops::Deref;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use tokio::sync::oneshot;
-use parking_lot::RwLock;
-use rkyv::{Archive, Serialize, Deserialize};
+use std::sync::Arc;
+
 use datacake_crdt::{get_unix_timestamp_ms, HLCTimestamp, Key, OrSWotSet, StateChanges};
+use parking_lot::RwLock;
+use rkyv::{Archive, Deserialize, Serialize};
+use tokio::sync::oneshot;
 
 use crate::storage::Storage;
 
@@ -17,10 +18,7 @@ use crate::storage::Storage;
 ///
 /// This is needed so that we can serialize the whole keyspace map due to the ways
 /// `rkyv` can serialize Cow's, we need to explicitly say how we want it to behave.
-pub struct CounterKey(
-	#[with(rkyv::with::AsOwned)]
-    pub Cow<'static, str>
-);
+pub struct CounterKey(#[with(rkyv::with::AsOwned)] pub Cow<'static, str>);
 
 pub type KeyspaceTimestamps = HashMap<CounterKey, Arc<AtomicU64>>;
 
@@ -91,7 +89,6 @@ impl<S: Storage> KeyspaceGroup<S> {
         self.add_state(name.to_string(), OrSWotSet::default()).await
     }
 
-
     /// Loads a set of existing keyspace states.
     pub async fn load_states(
         &self,
@@ -108,7 +105,8 @@ impl<S: Storage> KeyspaceGroup<S> {
                 name.clone(),
                 state,
                 update_counter.clone(),
-            ).await;
+            )
+            .await;
 
             counters.push((name.clone(), update_counter));
             created_states.push((name, state));
@@ -143,7 +141,8 @@ impl<S: Storage> KeyspaceGroup<S> {
             name.clone(),
             state,
             update_counter.clone(),
-        ).await;
+        )
+        .await;
 
         {
             let mut guard = self.group.write();
@@ -158,7 +157,6 @@ impl<S: Storage> KeyspaceGroup<S> {
         state
     }
 }
-
 
 pub struct KeyspaceState<S: Storage> {
     keyspace: Cow<'static, str>,
@@ -190,7 +188,12 @@ impl<S: Storage> KeyspaceState<S> {
 
         tokio::spawn(run_state_actor(keyspace.clone(), state, rx));
 
-        Self { keyspace, tx, storage, update_counter }
+        Self {
+            keyspace,
+            tx,
+            storage,
+            update_counter,
+        }
     }
 
     #[inline]
@@ -201,7 +204,8 @@ impl<S: Storage> KeyspaceState<S> {
 
     /// Sets a entry in the set.
     pub async fn put(&self, key: Key, ts: HLCTimestamp) -> Result<(), S::Error> {
-        self.update_counter.store(get_unix_timestamp_ms(), Ordering::Relaxed);
+        self.update_counter
+            .store(get_unix_timestamp_ms(), Ordering::Relaxed);
 
         self.storage
             .set_metadata(&self.keyspace, key, ts, false)
@@ -221,7 +225,8 @@ impl<S: Storage> KeyspaceState<S> {
 
     /// Sets multiple keys in the set.
     pub async fn multi_put(&self, key_ts_pairs: StateChanges) -> Result<(), S::Error> {
-        self.update_counter.store(get_unix_timestamp_ms(), Ordering::Relaxed);
+        self.update_counter
+            .store(get_unix_timestamp_ms(), Ordering::Relaxed);
 
         self.storage
             .set_many_metadata(&self.keyspace, key_ts_pairs.iter().cloned(), false)
@@ -241,7 +246,8 @@ impl<S: Storage> KeyspaceState<S> {
 
     /// Removes a entry in the set.
     pub async fn del(&self, key: Key, ts: HLCTimestamp) -> Result<(), S::Error> {
-        self.update_counter.store(get_unix_timestamp_ms(), Ordering::Relaxed);
+        self.update_counter
+            .store(get_unix_timestamp_ms(), Ordering::Relaxed);
 
         self.storage
             .set_metadata(&self.keyspace, key, ts, true)
@@ -260,7 +266,8 @@ impl<S: Storage> KeyspaceState<S> {
 
     /// Removes multiple keys in the set.
     pub async fn multi_del(&self, key_ts_pairs: StateChanges) -> Result<(), S::Error> {
-        self.update_counter.store(get_unix_timestamp_ms(), Ordering::Relaxed);
+        self.update_counter
+            .store(get_unix_timestamp_ms(), Ordering::Relaxed);
 
         self.storage
             .set_many_metadata(&self.keyspace, key_ts_pairs.iter().cloned(), true)
@@ -309,12 +316,30 @@ impl<S: Storage> KeyspaceState<S> {
 pub struct CorruptedState;
 
 enum Op {
-    Set { key: Key, ts: HLCTimestamp, tx: oneshot::Sender<()> },
-    MultiSet { key_ts_pairs: StateChanges, tx: oneshot::Sender<()> },
-    Del { key: Key, ts: HLCTimestamp, tx: oneshot::Sender<()> },
-    MultiDel { key_ts_pairs: StateChanges, tx: oneshot::Sender<()> },
-    Serialize { tx: oneshot::Sender<Result<Vec<u8>, CorruptedState>> },
-    PurgeDeletes { tx: oneshot::Sender<Vec<Key>> },
+    Set {
+        key: Key,
+        ts: HLCTimestamp,
+        tx: oneshot::Sender<()>,
+    },
+    MultiSet {
+        key_ts_pairs: StateChanges,
+        tx: oneshot::Sender<()>,
+    },
+    Del {
+        key: Key,
+        ts: HLCTimestamp,
+        tx: oneshot::Sender<()>,
+    },
+    MultiDel {
+        key_ts_pairs: StateChanges,
+        tx: oneshot::Sender<()>,
+    },
+    Serialize {
+        tx: oneshot::Sender<Result<Vec<u8>, CorruptedState>>,
+    },
+    PurgeDeletes {
+        tx: oneshot::Sender<Vec<Key>>,
+    },
 }
 
 #[instrument("keyspace-state", skip_all)]
@@ -356,7 +381,7 @@ async fn run_state_actor(
             Op::PurgeDeletes { tx } => {
                 let keys = state.purge_old_deletes();
                 let _ = tx.send(keys);
-            }
+            },
         }
     }
 

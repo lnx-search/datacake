@@ -1,8 +1,8 @@
 #[macro_use]
 extern crate tracing;
 
-pub mod error;
-mod rpc;
 mod core;
+pub mod error;
 mod keyspace;
+mod rpc;
 mod storage;

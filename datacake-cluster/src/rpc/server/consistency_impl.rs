@@ -1,11 +1,17 @@
 use async_trait::async_trait;
-use tonic::{Request, Response, Status};
 use datacake_crdt::HLCTimestamp;
+use tonic::{Request, Response, Status};
 
 use crate::core::Document;
 use crate::keyspace::KeyspaceGroup;
 use crate::rpc::datacake_api::consistency_api_server::ConsistencyApi;
-use crate::rpc::datacake_api::{Empty, MultiPutPayload, MultiRemovePayload, PutPayload, RemovePayload};
+use crate::rpc::datacake_api::{
+    Empty,
+    MultiPutPayload,
+    MultiRemovePayload,
+    PutPayload,
+    RemovePayload,
+};
 use crate::storage::Storage;
 
 pub struct ConsistencyService<S: Storage> {
@@ -14,15 +20,16 @@ pub struct ConsistencyService<S: Storage> {
 
 impl<S: Storage> ConsistencyService<S> {
     pub fn new(group: KeyspaceGroup<S>) -> Self {
-        Self {
-            group
-        }
+        Self { group }
     }
 }
 
 #[async_trait]
 impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S> {
-    async fn put(&self, request: Request<PutPayload>) -> Result<Response<Empty>, Status> {
+    async fn put(
+        &self,
+        request: Request<PutPayload>,
+    ) -> Result<Response<Empty>, Status> {
         let inner = request.into_inner();
         let document = Document::from(inner.document.unwrap());
         let doc_id = document.id;
@@ -34,29 +41,28 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
 
-        let keyspace = self.group
-            .get_or_create_keyspace(&inner.keyspace)
-            .await;
+        let keyspace = self.group.get_or_create_keyspace(&inner.keyspace).await;
 
         keyspace
             .put(doc_id, last_updated)
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
 
-        Ok(Response::new(Empty{}))
+        Ok(Response::new(Empty {}))
     }
 
-    async fn multi_put(&self, request: Request<MultiPutPayload>) -> Result<Response<Empty>, Status> {
+    async fn multi_put(
+        &self,
+        request: Request<MultiPutPayload>,
+    ) -> Result<Response<Empty>, Status> {
         let inner = request.into_inner();
 
         let mut entries = Vec::new();
-        let documents = inner.documents
-            .into_iter()
-            .map(|doc| {
-                let doc =  Document::from(doc);
-                entries.push((doc.id, doc.last_updated));
-                doc
-            });
+        let documents = inner.documents.into_iter().map(|doc| {
+            let doc = Document::from(doc);
+            entries.push((doc.id, doc.last_updated));
+            doc
+        });
 
         self.group
             .storage()
@@ -64,19 +70,20 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
 
-        let keyspace = self.group
-            .get_or_create_keyspace(&inner.keyspace)
-            .await;
+        let keyspace = self.group.get_or_create_keyspace(&inner.keyspace).await;
 
         keyspace
             .multi_put(entries)
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
 
-        Ok(Response::new(Empty{}))
+        Ok(Response::new(Empty {}))
     }
 
-    async fn remove(&self, request: Request<RemovePayload>) -> Result<Response<Empty>, Status> {
+    async fn remove(
+        &self,
+        request: Request<RemovePayload>,
+    ) -> Result<Response<Empty>, Status> {
         let inner = request.into_inner();
         let document = inner.document.unwrap();
         let doc_id = document.id;
@@ -88,29 +95,28 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
 
-        let keyspace = self.group
-            .get_or_create_keyspace(&inner.keyspace)
-            .await;
+        let keyspace = self.group.get_or_create_keyspace(&inner.keyspace).await;
 
         keyspace
             .del(doc_id, last_updated)
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
 
-        Ok(Response::new(Empty{}))
+        Ok(Response::new(Empty {}))
     }
 
-    async fn multi_remove(&self, request: Request<MultiRemovePayload>) -> Result<Response<Empty>, Status> {
+    async fn multi_remove(
+        &self,
+        request: Request<MultiRemovePayload>,
+    ) -> Result<Response<Empty>, Status> {
         let inner = request.into_inner();
 
         let mut entries = Vec::new();
-        let documents = inner.documents
-            .into_iter()
-            .map(|doc| {
-                let ts = HLCTimestamp::from(doc.last_updated.unwrap());
-                entries.push((doc.id, ts));
-                doc.id
-            });
+        let documents = inner.documents.into_iter().map(|doc| {
+            let ts = HLCTimestamp::from(doc.last_updated.unwrap());
+            entries.push((doc.id, ts));
+            doc.id
+        });
 
         self.group
             .storage()
@@ -118,15 +124,13 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
 
-        let keyspace = self.group
-            .get_or_create_keyspace(&inner.keyspace)
-            .await;
+        let keyspace = self.group.get_or_create_keyspace(&inner.keyspace).await;
 
         keyspace
             .multi_del(entries)
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
 
-        Ok(Response::new(Empty{}))
+        Ok(Response::new(Empty {}))
     }
 }
