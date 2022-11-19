@@ -10,7 +10,7 @@ pub struct MultiPutPayload {
     #[prost(string, tag = "1")]
     pub keyspace: ::prost::alloc::string::String,
     #[prost(message, repeated, tag = "2")]
-    pub document: ::prost::alloc::vec::Vec<Document>,
+    pub documents: ::prost::alloc::vec::Vec<Document>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RemovePayload {
@@ -27,13 +27,10 @@ pub struct MultiRemovePayload {
     pub documents: ::prost::alloc::vec::Vec<DocumentMetadata>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct KeyspaceTimestamps {
+pub struct KeyspaceInfo {
     /// A mapping of a given keyspace and the timestamp of when it was last updated.
-    #[prost(map = "string, message", tag = "1")]
-    pub keyspace_timestamps: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        Timestamp,
-    >,
+    #[prost(bytes = "vec", tag = "1")]
+    pub keyspace_timestamps: ::prost::alloc::vec::Vec<u8>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetState {
@@ -44,8 +41,8 @@ pub struct GetState {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct KeyspaceOrSwotSet {
     /// The timestamp in which the keyspace was last updated.
-    #[prost(message, optional, tag = "1")]
-    pub last_updated: ::core::option::Option<Timestamp>,
+    #[prost(uint64, tag = "1")]
+    pub last_updated: u64,
     /// The serialized data form of the keyspace orswot set.
     #[prost(bytes = "vec", tag = "2")]
     pub set_data: ::prost::alloc::vec::Vec<u8>,
@@ -320,7 +317,7 @@ pub mod replication_api_client {
         pub async fn poll_keyspace(
             &mut self,
             request: impl tonic::IntoRequest<super::Empty>,
-        ) -> Result<tonic::Response<super::KeyspaceTimestamps>, tonic::Status> {
+        ) -> Result<tonic::Response<super::KeyspaceInfo>, tonic::Status> {
             self.inner
                 .ready()
                 .await
@@ -670,7 +667,7 @@ pub mod replication_api_server {
         async fn poll_keyspace(
             &self,
             request: tonic::Request<super::Empty>,
-        ) -> Result<tonic::Response<super::KeyspaceTimestamps>, tonic::Status>;
+        ) -> Result<tonic::Response<super::KeyspaceInfo>, tonic::Status>;
         /// Fetches a given ORSWOT set for a given keyspace.
         async fn get_state(
             &self,
@@ -746,7 +743,7 @@ pub mod replication_api_server {
                     struct poll_keyspaceSvc<T: ReplicationApi>(pub Arc<T>);
                     impl<T: ReplicationApi> tonic::server::UnaryService<super::Empty>
                     for poll_keyspaceSvc<T> {
-                        type Response = super::KeyspaceTimestamps;
+                        type Response = super::KeyspaceInfo;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,

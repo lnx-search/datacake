@@ -21,7 +21,7 @@ service ReplicationApi {
   // Fetches the live state of the keyspace states.
   // This is a set keyspace and the timestamps that they were
   // last updated at.
-  rpc poll_keyspace(Empty) returns (KeyspaceTimestamps);
+  rpc poll_keyspace(Empty) returns (KeyspaceInfo);
 
   // Fetches a given ORSWOT set for a given keyspace.
   rpc get_state(GetState) returns (KeyspaceOrSwotSet);
@@ -37,7 +37,7 @@ message PutPayload {
 
 message MultiPutPayload {
   string keyspace = 1;
-  repeated Document document = 2;
+  repeated Document documents = 2;
 }
 
 message RemovePayload {
@@ -50,9 +50,9 @@ message MultiRemovePayload {
   repeated DocumentMetadata documents = 2;
 }
 
-message KeyspaceTimestamps {
+message KeyspaceInfo {
   // A mapping of a given keyspace and the timestamp of when it was last updated.
-  map<string, Timestamp> keyspace_timestamps = 1;
+  bytes keyspace_timestamps = 1;
 }
 
 message GetState {
@@ -62,7 +62,7 @@ message GetState {
 
 message KeyspaceOrSwotSet {
   // The timestamp in which the keyspace was last updated.
-  Timestamp last_updated = 1;
+  uint64 last_updated = 1;
   // The serialized data form of the keyspace orswot set.
   bytes set_data = 2;
 }

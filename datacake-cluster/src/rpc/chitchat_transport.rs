@@ -12,15 +12,16 @@ use tokio::sync::oneshot;
 use crate::rpc::chitchat_transport_api::chitchat_transport_client::ChitchatTransportClient;
 use crate::rpc::chitchat_transport_api::ChitchatRpcMessage;
 use crate::rpc::network::ClientNetwork;
+use crate::storage::Storage;
 
 #[derive(Clone)]
 /// Chitchat compatible transport built on top of an existing GRPC connection.
 ///
 /// This allows us to maintain a single connection rather than both a UDP and TCP connection.
-pub struct GrpcTransport(Arc<GrpcTransportInner>);
+pub struct GrpcTransport<S: Storage>(Arc<GrpcTransportInner<S>>);
 
-impl Deref for GrpcTransport {
-    type Target = GrpcTransportInner;
+impl<S: Storage> Deref for GrpcTransport<S> {
+    type Target = GrpcTransportInner<S>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -28,7 +29,7 @@ impl Deref for GrpcTransport {
 }
 
 #[async_trait]
-impl Transport for GrpcTransport {
+impl<S: Storage + Sync + Send + 'static> Transport for GrpcTransport<S> {
     async fn open(&self, listen_addr: SocketAddr) -> anyhow::Result<Box<dyn Socket>> {
         let shutdown =
             super::server::connect_server(listen_addr, self.ctx.clone()).await?;
@@ -45,12 +46,12 @@ impl Transport for GrpcTransport {
     }
 }
 
-pub struct GrpcTransportInner {
+pub struct GrpcTransportInner<S: Storage> {
     /// The RPC clients available to this cluster.
     network: ClientNetwork,
 
     /// Context to be passed when binding a new RPC server instance.
-    ctx: super::server::Context,
+    ctx: super::server::Context<S>,
 
     /// The set of server handles that should be kept alive until the system shuts down.
     shutdown_handles: Mutex<Vec<oneshot::Sender<()>>>,
