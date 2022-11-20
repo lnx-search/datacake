@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::fmt::{Debug, Display};
 
 use async_trait::async_trait;
@@ -7,7 +8,7 @@ use crate::core::Document;
 
 #[async_trait]
 pub trait Storage {
-    type Error: Display + Debug;
+    type Error: Error + Send + Sync + 'static;
     type DocsIter: Iterator<Item = Document>;
     type MetadataIter: Iterator<Item = (Key, HLCTimestamp, bool)>;
 
@@ -120,7 +121,6 @@ pub mod test_suite {
     use datacake_crdt::{get_unix_timestamp_ms, HLCTimestamp, Key};
 
     use crate::core::Document;
-    use crate::storage::mem_store::MemStore;
     use crate::storage::Storage;
 
     pub struct InstrumentedStorage<S: Storage>(pub S);
@@ -231,6 +231,8 @@ pub mod test_suite {
 
     #[tokio::test]
     async fn test_suite_semantics() {
+        use crate::storage::mem_store::MemStore;
+
         let _ = tracing_subscriber::fmt::try_init();
         run_test_suite(MemStore::default()).await
     }
@@ -546,9 +548,13 @@ pub mod mem_store {
         data: RwLock<HashMap<String, HashMap<Key, Document>>>,
     }
 
+    #[derive(Debug, thiserror::Error)]
+    #[error("{0}")]
+    pub struct MemStoreError(#[from] pub anyhow::Error);
+
     #[async_trait]
     impl Storage for MemStore {
-        type Error = anyhow::Error;
+        type Error = MemStoreError;
         type DocsIter = std::vec::IntoIter<Document>;
         type MetadataIter = std::vec::IntoIter<(Key, HLCTimestamp, bool)>;
 

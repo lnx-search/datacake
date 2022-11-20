@@ -249,6 +249,18 @@ impl<S: Storage> KeyspaceState<S> {
         self.update_counter.load(Ordering::Relaxed)
     }
 
+    #[inline]
+    /// Gets a reference to the keyspace storage implementation.
+    pub fn storage(&self) -> &S {
+        &self.storage
+    }
+    
+    #[inline]
+    /// The name of the keyspace.
+    pub fn name(&self) -> &str {
+        self.keyspace.as_ref()
+    }
+    
     /// Sets a entry in the set.
     pub async fn put(&self, key: Key, ts: HLCTimestamp) -> Result<(), S::Error> {
         self.update_counter
@@ -343,6 +355,9 @@ impl<S: Storage> KeyspaceState<S> {
         rx.await.expect("Get actor response")
     }
 
+    /// Purges any tombstones which have had operations observed after them.
+    ///
+    /// This is used to clear the state of deletes reducing memory usage.
     pub async fn purge_tombstones(&self) -> Result<(), S::Error> {
         let (tx, rx) = oneshot::channel();
 
@@ -355,6 +370,18 @@ impl<S: Storage> KeyspaceState<S> {
         self.storage
             .remove_many_metadata(&self.keyspace, keys.into_iter())
             .await
+    }
+
+    /// Calculates the difference between the current state and another provided state.
+    pub async fn diff(&self, set: OrSWotSet) -> (StateChanges, StateChanges) {
+        let (tx, rx) = oneshot::channel();
+
+        self.tx
+            .send_async(Op::Diff { set, tx })
+            .await
+            .expect("Contact keyspace actor");
+
+        rx.await.expect("Get actor response")
     }
 }
 
@@ -387,6 +414,10 @@ enum Op {
     PurgeDeletes {
         tx: oneshot::Sender<Vec<Key>>,
     },
+    Diff {
+        set: OrSWotSet,
+        tx: oneshot::Sender<(StateChanges, StateChanges)>,
+    }
 }
 
 #[instrument("keyspace-state", skip_all)]
@@ -429,6 +460,10 @@ async fn run_state_actor(
                 let keys = state.purge_old_deletes();
                 let _ = tx.send(keys);
             },
+            Op::Diff { set, tx } => {
+                let diff = state.diff(&set);
+                let _ = tx.send(diff);
+            }
         }
     }
 
