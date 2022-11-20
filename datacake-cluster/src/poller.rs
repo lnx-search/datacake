@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use datacake_crdt::StateChanges;
 use tokio::task::JoinHandle;
-use tokio::time::{Interval, interval};
+use tokio::time::{interval, Interval};
 use tonic::transport::Channel;
 
 use crate::keyspace::{CounterKey, KeyspaceGroup, KeyspaceState, KeyspaceTimestamps};
@@ -73,7 +73,7 @@ where
             channel: rpc_channel,
             shutdown: Arc::new(AtomicBool::new(false)),
             interval: interval(interval_duration),
-            handles: Default::default()
+            handles: Default::default(),
         }
     }
 
