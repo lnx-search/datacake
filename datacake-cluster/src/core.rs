@@ -1,9 +1,11 @@
 use std::fmt::{Debug, Formatter};
+use std::hash::{Hash, Hasher};
 
 use datacake_crdt::{HLCTimestamp, Key};
 
 use crate::rpc::datacake_api;
 
+#[derive(Clone, Eq, PartialEq)]
 pub struct Document {
     /// The unique id of the document.
     pub id: Key,
@@ -13,6 +15,12 @@ pub struct Document {
 
     /// The raw binary data of the document's value.
     pub data: Vec<u8>,
+}
+
+impl Hash for Document {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state)
+    }
 }
 
 impl Debug for Document {
