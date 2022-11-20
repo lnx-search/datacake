@@ -5,12 +5,12 @@ use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use anyhow::anyhow;
-use tokio::task::JoinHandle;
 
+use anyhow::anyhow;
+use datacake_crdt::StateChanges;
+use tokio::task::JoinHandle;
 use tokio::time::Interval;
 use tonic::transport::Channel;
-use datacake_crdt::StateChanges;
 
 use crate::keyspace::{CounterKey, KeyspaceGroup, KeyspaceState, KeyspaceTimestamps};
 use crate::rpc::ReplicationClient;
@@ -75,7 +75,8 @@ where
             target_rpc_addr: self.target_rpc_addr,
             group: self.group.clone(),
             keyspace: keyspace.clone(),
-            timestamp: self.last_keyspace_timestamps
+            timestamp: self
+                .last_keyspace_timestamps
                 .get(&CounterKey(keyspace))
                 .cloned()
                 .unwrap_or_default(),
@@ -179,7 +180,7 @@ where
         if let Some(handle) = state.handles.remove(&keyspace) {
             if handle.is_timeout() {
                 handle.handle.abort();
-                continue
+                continue;
             }
 
             if !handle.is_done() {
@@ -216,7 +217,9 @@ where
             }
         });
 
-        state.handles.insert(keyspace, KeyspacePollHandle::new(inner, done));
+        state
+            .handles
+            .insert(keyspace, KeyspacePollHandle::new(inner, done));
     }
 
     Ok(())
@@ -232,9 +235,7 @@ where
     S: Storage + Send + Sync + 'static,
 {
     let keyspace = state.group.get_or_create_keyspace(&state.keyspace).await;
-    let (last_updated, set) = state.client
-        .get_state(keyspace.name())
-        .await?;
+    let (last_updated, set) = state.client.get_state(keyspace.name()).await?;
 
     let (modified, removed) = keyspace.diff(set).await;
 
@@ -264,12 +265,7 @@ where
 {
     let doc_id_chunks = modified
         .chunks(MAX_NUMBER_OF_DOCS_PER_FETCH)
-        .map(|entries| {
-            entries
-                .iter()
-                .map(|(k, _)| *k)
-                .collect::<Vec<_>>()
-        });
+        .map(|entries| entries.iter().map(|(k, _)| *k).collect::<Vec<_>>());
 
     let storage = keyspace.storage();
     for doc_ids in doc_id_chunks {
@@ -282,22 +278,17 @@ where
                 doc
             });
 
-        storage
-            .multi_put(keyspace.name(), docs)
-            .await?;
+        storage.multi_put(keyspace.name(), docs).await?;
 
         // We only update the metadata if the persistence has passed.
         // If we were to do this the other way around, we could potentially
         // end up being in a situation where the state *thinks* it's up to date
         // but in reality it's not.
-        keyspace
-            .multi_put(doc_timestamps)
-            .await?;
+        keyspace.multi_put(doc_timestamps).await?;
     }
 
     Ok(())
 }
-
 
 /// Removes the marked documents from the persisted storage and then
 /// marks the document metadata as a tombstone.
@@ -317,9 +308,7 @@ where
         let (key, ts) = removed.pop().expect("get element");
 
         storage.del(keyspace.name(), key).await?;
-        keyspace
-            .del(key, ts)
-            .await?;
+        keyspace.del(key, ts).await?;
         return Ok::<_, S::Error>(());
     }
 
@@ -327,9 +316,7 @@ where
         .multi_del(keyspace.name(), removed.iter().map(|(k, _)| *k))
         .await?;
 
-    keyspace
-        .multi_del(removed)
-        .await
+    keyspace.multi_del(removed).await
 }
 
 pub struct KeyspacePollHandle {

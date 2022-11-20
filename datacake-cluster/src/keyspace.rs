@@ -254,13 +254,13 @@ impl<S: Storage> KeyspaceState<S> {
     pub fn storage(&self) -> &S {
         &self.storage
     }
-    
+
     #[inline]
     /// The name of the keyspace.
     pub fn name(&self) -> &str {
         self.keyspace.as_ref()
     }
-    
+
     /// Sets a entry in the set.
     pub async fn put(&self, key: Key, ts: HLCTimestamp) -> Result<(), S::Error> {
         self.update_counter
@@ -417,7 +417,7 @@ enum Op {
     Diff {
         set: OrSWotSet,
         tx: oneshot::Sender<(StateChanges, StateChanges)>,
-    }
+    },
 }
 
 #[instrument("keyspace-state", skip_all)]
@@ -463,7 +463,7 @@ async fn run_state_actor(
             Op::Diff { set, tx } => {
                 let diff = state.diff(&set);
                 let _ = tx.send(diff);
-            }
+            },
         }
     }
 
