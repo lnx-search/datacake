@@ -1,4 +1,3 @@
-use std::any;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -6,10 +5,9 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use anyhow::anyhow;
 use datacake_crdt::StateChanges;
 use tokio::task::JoinHandle;
-use tokio::time::Interval;
+use tokio::time::{Interval, interval};
 use tonic::transport::Channel;
 
 use crate::keyspace::{CounterKey, KeyspaceGroup, KeyspaceState, KeyspaceTimestamps};
@@ -21,7 +19,7 @@ const MAX_NUMBER_OF_DOCS_PER_FETCH: usize = 100_000;
 
 /// A actor responsible for continuously polling a node's keyspace state
 /// and triggering the required callbacks.
-pub struct NodePollerState<S>
+pub(crate) struct NodePollerState<S>
 where
     S: Storage + Send + Sync + 'static,
 {
@@ -59,6 +57,35 @@ impl<S> NodePollerState<S>
 where
     S: Storage + Send + Sync + 'static,
 {
+    /// Creates a new poller state.
+    pub(crate) fn new(
+        target_node_id: u32,
+        target_rpc_addr: SocketAddr,
+        keyspace_group: KeyspaceGroup<S>,
+        rpc_channel: Channel,
+        interval_duration: Duration,
+    ) -> Self {
+        Self {
+            target_node_id,
+            target_rpc_addr,
+            group: keyspace_group,
+            last_keyspace_timestamps: Default::default(),
+            channel: rpc_channel,
+            shutdown: Arc::new(AtomicBool::new(false)),
+            interval: interval(interval_duration),
+            handles: Default::default()
+        }
+    }
+
+    /// Creates a new handle to the poller state's shutdown flag.
+    pub(crate) fn shutdown_handle(&self) -> ShutdownHandle {
+        ShutdownHandle(self.shutdown.clone())
+    }
+
+    /// Checks if the poller should shutdown or not, then waits until the given
+    /// polling interval has elapsed, where the shutdown flag is re-checked.
+    ///
+    /// Returns if the poller should exit or not.
     async fn tick(&mut self) -> bool {
         if self.shutdown.load(Ordering::Relaxed) {
             return true;
@@ -69,6 +96,10 @@ where
         self.shutdown.load(Ordering::Relaxed)
     }
 
+    /// Creates the state that a given synchronisation task requires in order
+    /// to operate.
+    ///
+    /// This is effectively a copy of the main state but with some adjustments.
     fn create_task_state(&self, keyspace: Cow<'static, str>) -> TaskState<S> {
         TaskState {
             target_node_id: self.target_node_id,
@@ -83,6 +114,15 @@ where
             done: Arc::new(AtomicBool::new(false)),
             client: ReplicationClient::from(self.channel.clone()),
         }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ShutdownHandle(Arc<AtomicBool>);
+impl ShutdownHandle {
+    /// Kill's the poller which this handle belongs to.
+    pub fn kill(&self) {
+        self.0.store(true, Ordering::Relaxed);
     }
 }
 
@@ -116,6 +156,8 @@ impl<S> TaskState<S>
 where
     S: Storage + Send + Sync + 'static,
 {
+    /// Set's the keyspace last updated timestamp and marks
+    /// itself as completed.
     fn set_done(&self, ts: u64) {
         self.timestamp.store(ts, Ordering::SeqCst);
         self.done.store(true, Ordering::SeqCst);
@@ -123,7 +165,12 @@ where
 }
 
 #[instrument(name = "node-poller", skip_all)]
-async fn node_poller<S>(mut state: NodePollerState<S>)
+/// A polling task which continuously checks if the remote node's
+/// state has changed.
+///
+/// If the state has changed it spawns handlers to synchronise the keyspace
+/// with the new changes.
+pub(crate) async fn node_poller<S>(mut state: NodePollerState<S>)
 where
     S: Storage + Send + Sync + 'static,
 {
