@@ -17,7 +17,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chitchat::FailureDetectorConfig;
-use datacake_crdt::get_unix_timestamp_ms;
+use datacake_crdt::{get_unix_timestamp_ms, Key};
 #[cfg(feature = "test-utils")]
 pub use storage::test_suite;
 pub use storage::Storage;
@@ -25,6 +25,7 @@ use tokio_stream::wrappers::WatchStream;
 use tokio_stream::StreamExt;
 
 use crate::clock::Clock;
+use crate::core::Document;
 use crate::keyspace::KeyspaceGroup;
 use crate::node::{ClusterMember, DatacakeNode};
 use crate::poller::ShutdownHandle;
@@ -120,8 +121,147 @@ where
     pub async fn shutdown(self) {
         self.node.shutdown().await;
     }
+
+    /// Creates a new handle to the underlying storage system.
+    ///
+    /// Changes applied to the handle are distributed across the cluster.
+    pub fn handle(&self) -> DatacakeHandle<S> {
+        DatacakeHandle {
+            network: self.network.clone(),
+            group: self.group.clone(),
+            clock: self.clock.clone(),
+        }
+    }
 }
 
+
+/// A cheaply cloneable handle to control the data store.
+pub struct DatacakeHandle<S>
+where
+    S: Storage + Send + Sync + 'static,
+{
+    network: RpcNetwork,
+    group: KeyspaceGroup<S>,
+    clock: Clock,
+}
+
+impl<S> Clone for DatacakeHandle<S>
+where
+    S: Storage + Send + Sync + 'static,
+{
+    fn clone(&self) -> Self {
+        Self {
+            network: self.network.clone(),
+            group: self.group.clone(),
+            clock: self.clock.clone(),
+        }
+    }
+}
+
+impl<S> DatacakeHandle<S>
+where
+    S: Storage + Send + Sync + 'static,
+{
+    /// Retrieves a document from the underlying storage.
+    pub async fn get(&self, keyspace: &str, doc_id: Key) -> Result<Option<Document>, S::Error> {
+        let storage = self.group.storage();
+        storage.get(keyspace, doc_id).await
+    }
+
+    /// Retrieves a set of documents from the underlying storage.
+    ///
+    /// If a document does not exist with the given ID, it is simply not part
+    /// of the returned iterator.
+    pub async fn get_many<I, T>(
+        &self,
+        keyspace: &str,
+        doc_ids: I,
+    ) -> Result<S::DocsIter, S::Error>
+    where
+        T: Iterator<Item = Key> + Send,
+        I: IntoIterator<IntoIter = T> + Send
+    {
+        let storage = self.group.storage();
+        storage.multi_get(keyspace, doc_ids.into_iter()).await
+    }
+
+    /// Insert or update a single document into the datastore.
+    pub async fn put(
+        &self,
+        keyspace: &str,
+        doc_id: Key,
+        data: Vec<u8>,
+    ) -> Result<(), error::DatacakeError<S::Error>> {
+        let last_updated = self.clock.get_time().await;
+        let document = Document {
+            id: doc_id,
+            last_updated,
+            data
+        };
+
+        core::put_data(keyspace, document, &self.group).await?;
+
+        Ok(())
+    }
+
+    /// Insert or update multiple documents into the datastore at once.
+    pub async fn put_many(
+        &self,
+        keyspace: &str,
+        documents: Vec<(Key, Vec<u8>)>,
+    ) -> Result<(), error::DatacakeError<S::Error>> {
+        let mut docs = Vec::with_capacity(documents.len());
+        for (id, data) in documents {
+            let last_updated = self.clock.get_time().await;
+            docs.push(Document {
+                id,
+                last_updated,
+                data,
+            });
+        }
+
+        core::put_many_data(keyspace, docs.into_iter(), &self.group).await?;
+
+        Ok(())
+    }
+
+    /// Delete a document from the datastore with a given doc ID.
+    pub async fn del(
+        &self,
+        keyspace: &str,
+        doc_id: Key,
+    ) -> Result<(), error::DatacakeError<S::Error>> {
+        let last_updated = self.clock.get_time().await;
+
+        core::del_data(keyspace, doc_id, last_updated, &self.group).await?;
+
+        Ok(())
+    }
+
+
+    /// Delete multiple documents from the datastore from the set of doc IDs.
+    pub async fn del_many(
+        &self,
+        keyspace: &str,
+        doc_ids: Vec<Key>,
+    ) -> Result<(), error::DatacakeError<S::Error>> {
+        let mut docs = Vec::with_capacity(doc_ids.len());
+        for id in doc_ids {
+            let last_updated = self.clock.get_time().await;
+            docs.push((id, last_updated));
+        }
+
+        core::del_many_data(keyspace, docs.into_iter(), &self.group).await?;
+
+        Ok(())
+    }
+}
+
+
+/// Connects to the chitchat cluster.
+///
+/// The node will attempt to establish connections to the seed nodes and
+/// will broadcast the node's public address to communicate.
 async fn connect_node<S>(
     node_id: String,
     cluster_id: String,
@@ -155,6 +295,8 @@ where
     Ok(node)
 }
 
+/// Starts the background task which watches for membership changes
+/// intern starting and stopping polling services for each member.
 async fn setup_poller<S>(
     keyspace_group: KeyspaceGroup<S>,
     network: RpcNetwork,
@@ -168,6 +310,9 @@ where
     Ok(())
 }
 
+/// Watches for changes in the cluster membership.
+///
+/// When nodes leave and join, pollers are stopped and started as required.
 async fn watch_membership_changes<S>(
     keyspace_group: KeyspaceGroup<S>,
     network: RpcNetwork,

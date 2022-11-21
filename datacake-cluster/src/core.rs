@@ -1,11 +1,13 @@
 use std::fmt::{Debug, Formatter};
+#[cfg(test)]
 use std::hash::{Hash, Hasher};
 
 use datacake_crdt::{HLCTimestamp, Key};
 
 use crate::rpc::datacake_api;
+use crate::{error, KeyspaceGroup, Storage};
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone)]
 pub struct Document {
     /// The unique id of the document.
     pub id: Key,
@@ -17,6 +19,17 @@ pub struct Document {
     pub data: Vec<u8>,
 }
 
+#[cfg(test)]
+impl Eq for Document {}
+
+#[cfg(test)]
+impl PartialEq for Document {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+#[cfg(test)]
 impl Hash for Document {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.id.hash(state)
@@ -76,4 +89,114 @@ impl From<HLCTimestamp> for datacake_api::Timestamp {
             node_id: ts.node(),
         }
     }
+}
+
+
+/// Inserts or updates the given keyspace locally and updates the given keyspace state.
+pub(crate) async fn put_data<S>(
+    keyspace: &str,
+    document: Document,
+    group: &KeyspaceGroup<S>,
+) -> Result<(), error::DatacakeError<S::Error>>
+where
+    S: Storage + Send + Sync + 'static,
+{
+    let doc_id = document.id;
+    let last_updated = document.last_updated;
+
+    group
+        .storage()
+        .put(keyspace, document)
+        .await?;
+
+    let keyspace = group.get_or_create_keyspace(keyspace).await;
+
+    keyspace
+        .put(doc_id, last_updated)
+        .await?;
+
+    Ok(())
+}
+
+/// Inserts or updates many entries in the given keyspace
+/// locally and updates the given keyspace state.
+pub(crate) async fn put_many_data<S>(
+    keyspace: &str,
+    documents: impl Iterator<Item = Document> + Send,
+    group: &KeyspaceGroup<S>,
+) -> Result<(), error::DatacakeError<S::Error>>
+where
+    S: Storage + Send + Sync + 'static,
+{
+    let mut entries = Vec::new();
+    let documents = documents.map(|doc| {
+        entries.push((doc.id, doc.last_updated));
+        doc
+    });
+
+    group
+        .storage()
+        .multi_put(keyspace, documents)
+        .await?;
+
+    let keyspace = group.get_or_create_keyspace(keyspace).await;
+
+    keyspace
+        .multi_put(entries)
+        .await?;
+
+    Ok(())
+}
+
+/// Removes a document from the local keyspace and updates the given keyspace state.
+pub(crate) async fn del_data<S>(
+    keyspace: &str,
+    doc_id: Key,
+    last_updated: HLCTimestamp,
+    group: &KeyspaceGroup<S>,
+) -> Result<(), error::DatacakeError<S::Error>>
+where
+    S: Storage + Send + Sync + 'static,
+{
+    group
+        .storage()
+        .del(keyspace, doc_id)
+        .await?;
+
+    let keyspace = group.get_or_create_keyspace(keyspace).await;
+
+    keyspace
+        .del(doc_id, last_updated)
+        .await?;
+
+    Ok(())
+}
+
+/// Removes multiple documents from the local keyspace and updates the given keyspace state.
+pub(crate) async fn del_many_data<S>(
+    keyspace: &str,
+    documents: impl Iterator<Item = (Key, HLCTimestamp)> + Send,
+    group: &KeyspaceGroup<S>,
+) -> Result<(), error::DatacakeError<S::Error>>
+where
+    S: Storage + Send + Sync + 'static,
+{
+    let mut entries = Vec::new();
+    let documents = documents.map(|doc| {
+        entries.push(doc);
+        doc.0
+    });
+
+    group
+        .storage()
+        .multi_del(keyspace, documents)
+        .await?;
+
+    let keyspace = group.get_or_create_keyspace(keyspace).await;
+
+    keyspace
+        .multi_del(entries)
+        .await?;
+
+    Ok(())
 }

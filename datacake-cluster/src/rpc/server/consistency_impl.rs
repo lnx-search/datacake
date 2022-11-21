@@ -32,19 +32,8 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
     ) -> Result<Response<Empty>, Status> {
         let inner = request.into_inner();
         let document = Document::from(inner.document.unwrap());
-        let doc_id = document.id;
-        let last_updated = document.last_updated;
 
-        self.group
-            .storage()
-            .put(&inner.keyspace, document)
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?;
-
-        let keyspace = self.group.get_or_create_keyspace(&inner.keyspace).await;
-
-        keyspace
-            .put(doc_id, last_updated)
+        crate::core::put_data(&inner.keyspace, document, &self.group)
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
 
@@ -56,24 +45,11 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
         request: Request<MultiPutPayload>,
     ) -> Result<Response<Empty>, Status> {
         let inner = request.into_inner();
+        let documents = inner.documents
+            .into_iter()
+            .map(Document::from);
 
-        let mut entries = Vec::new();
-        let documents = inner.documents.into_iter().map(|doc| {
-            let doc = Document::from(doc);
-            entries.push((doc.id, doc.last_updated));
-            doc
-        });
-
-        self.group
-            .storage()
-            .multi_put(&inner.keyspace, documents)
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?;
-
-        let keyspace = self.group.get_or_create_keyspace(&inner.keyspace).await;
-
-        keyspace
-            .multi_put(entries)
+        crate::core::put_many_data(&inner.keyspace, documents, &self.group)
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
 
@@ -89,16 +65,7 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
         let doc_id = document.id;
         let last_updated = HLCTimestamp::from(document.last_updated.unwrap());
 
-        self.group
-            .storage()
-            .del(&inner.keyspace, doc_id)
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?;
-
-        let keyspace = self.group.get_or_create_keyspace(&inner.keyspace).await;
-
-        keyspace
-            .del(doc_id, last_updated)
+        crate::core::del_data(&inner.keyspace, doc_id, last_updated, &self.group)
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
 
@@ -111,23 +78,14 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
     ) -> Result<Response<Empty>, Status> {
         let inner = request.into_inner();
 
-        let mut entries = Vec::new();
-        let documents = inner.documents.into_iter().map(|doc| {
-            let ts = HLCTimestamp::from(doc.last_updated.unwrap());
-            entries.push((doc.id, ts));
-            doc.id
-        });
+        let documents = inner.documents
+            .into_iter()
+            .map(|doc| {
+                let ts = HLCTimestamp::from(doc.last_updated.unwrap());
+                (doc.id, ts)
+            });
 
-        self.group
-            .storage()
-            .multi_del(&inner.keyspace, documents)
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?;
-
-        let keyspace = self.group.get_or_create_keyspace(&inner.keyspace).await;
-
-        keyspace
-            .multi_del(entries)
+        crate::core::del_many_data(&inner.keyspace, documents, &self.group)
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
 
