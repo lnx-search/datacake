@@ -146,7 +146,8 @@ impl<S: Storage> KeyspaceGroup<S> {
             let keyspace = Cow::Owned(keyspace);
             let mut state = OrSWotSet::default();
 
-            let mut entries = self.storage
+            let mut entries = self
+                .storage
                 .iter_metadata(&keyspace)
                 .await?
                 .collect::<Vec<(Key, HLCTimestamp, bool)>>();
@@ -162,9 +163,7 @@ impl<S: Storage> KeyspaceGroup<S> {
                 }
             }
 
-            states
-                .entry(keyspace)
-                .or_insert(state);
+            states.entry(keyspace).or_insert(state);
         }
 
         info!(

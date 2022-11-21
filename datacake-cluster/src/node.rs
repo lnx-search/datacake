@@ -36,11 +36,7 @@ pub struct ClusterMember {
 }
 
 impl ClusterMember {
-    pub fn new(
-        node_id: String,
-        generation: u64,
-        public_addr: SocketAddr,
-    ) -> Self {
+    pub fn new(node_id: String, generation: u64, public_addr: SocketAddr) -> Self {
         Self {
             node_id,
             generation,
@@ -103,13 +99,9 @@ impl DatacakeNode {
             is_ready_predicate: None,
         };
 
-        let chitchat_handle = spawn_chitchat(
-            cfg,
-            vec![],
-            transport,
-        )
-        .await
-        .map_err(|e| DatacakeError::ChitChatError(e.to_string()))?;
+        let chitchat_handle = spawn_chitchat(cfg, vec![], transport)
+            .await
+            .map_err(|e| DatacakeError::ChitChatError(e.to_string()))?;
 
         let chitchat = chitchat_handle.chitchat();
         let (members_tx, members_rx) = watch::channel(Vec::new());
@@ -306,11 +298,7 @@ mod tests {
         let node_id = format!("node_{node_id}");
         let failure_detector_config = create_failure_detector_config_for_test();
         let node = DatacakeNode::connect::<TestError>(
-            ClusterMember::new(
-                node_id,
-                1,
-                public_addr,
-            ),
+            ClusterMember::new(node_id, 1, public_addr),
             public_addr,
             cluster_id,
             seeds,

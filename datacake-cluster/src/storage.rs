@@ -160,9 +160,7 @@ pub mod test_suite {
 
         async fn get_keyspace_list(&self) -> Result<Vec<String>, Self::Error> {
             info!("get_keyspace_list");
-            self.0
-                .get_keyspace_list()
-                .await
+            self.0.get_keyspace_list().await
         }
 
         async fn iter_metadata(
@@ -317,7 +315,11 @@ pub mod test_suite {
             .get_keyspace_list()
             .await
             .expect("Get keyspace list");
-        assert_eq!(keyspace_list, vec![KEYSPACE.to_string()], "Returned keyspace list (left) should match value provided (right).");
+        assert_eq!(
+            keyspace_list,
+            vec![KEYSPACE.to_string()],
+            "Returned keyspace list (left) should match value provided (right)."
+        );
 
         let metadata = storage
             .iter_metadata("second-keyspace")
@@ -609,11 +611,7 @@ pub mod mem_store {
         }
 
         async fn get_keyspace_list(&self) -> Result<Vec<String>, Self::Error> {
-            Ok(self.metadata
-                .read()
-                .keys()
-                .cloned()
-                .collect())
+            Ok(self.metadata.read().keys().cloned().collect())
         }
 
         async fn iter_metadata(

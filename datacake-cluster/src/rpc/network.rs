@@ -46,7 +46,7 @@ impl RpcNetwork {
 
         Ok(channel)
     }
-    
+
     /// Creates a new endpoint channel which connects lazily to the node.
     pub fn connect_lazy(&self, addr: SocketAddr) -> Channel {
         let uri = format!("http://{}", addr);
@@ -63,7 +63,7 @@ impl RpcNetwork {
 
         channel
     }
-    
+
     /// Removes a client from the network.
     pub fn disconnect(&self, addr: SocketAddr) {
         let mut guard = self.clients.write();

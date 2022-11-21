@@ -1,28 +1,28 @@
 #[macro_use]
 extern crate tracing;
 
+mod clock;
 mod core;
 pub mod error;
 mod keyspace;
+mod node;
 mod poller;
 mod rpc;
 mod storage;
-mod node;
-mod clock;
 
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
-use chitchat::FailureDetectorConfig;
-use tokio_stream::StreamExt;
-use tokio_stream::wrappers::WatchStream;
-use datacake_crdt::get_unix_timestamp_ms;
 
+use chitchat::FailureDetectorConfig;
+use datacake_crdt::get_unix_timestamp_ms;
 #[cfg(feature = "test-utils")]
 pub use storage::test_suite;
 pub use storage::Storage;
+use tokio_stream::wrappers::WatchStream;
+use tokio_stream::StreamExt;
 
 use crate::clock::Clock;
 use crate::keyspace::KeyspaceGroup;
@@ -96,13 +96,10 @@ where
             listen_addr,
             public_addr,
             seed_nodes,
-        ).await?;
+        )
+        .await?;
 
-        setup_poller(
-            group.clone(),
-            network.clone(),
-            &node
-        ).await?;
+        setup_poller(group.clone(), network.clone(), &node).await?;
 
         info!(
             node_id = %node_id,
@@ -115,7 +112,7 @@ where
             node,
             network,
             group,
-            clock
+            clock,
         })
     }
 
@@ -144,7 +141,7 @@ where
     };
     let transport = GrpcTransport::new(network.clone(), context, chitchat_rx);
 
-    let me = ClusterMember::new(node_id,get_unix_timestamp_ms(), public_addr);
+    let me = ClusterMember::new(node_id, get_unix_timestamp_ms(), public_addr);
     let node = DatacakeNode::connect(
         me,
         listen_addr,
@@ -152,7 +149,8 @@ where
         seed_nodes,
         FailureDetectorConfig::default(),
         &transport,
-    ).await?;
+    )
+    .await?;
 
     Ok(node)
 }
@@ -170,19 +168,18 @@ where
     Ok(())
 }
 
-
 async fn watch_membership_changes<S>(
     keyspace_group: KeyspaceGroup<S>,
     network: RpcNetwork,
     mut changes: WatchStream<Vec<ClusterMember>>,
-)
-where
+) where
     S: Storage + Send + Sync + 'static,
 {
     let mut poller_handles = HashMap::<SocketAddr, ShutdownHandle>::new();
     let mut last_network_set = HashSet::new();
     while let Some(members) = changes.next().await {
-        let new_network_set = members.iter()
+        let new_network_set = members
+            .iter()
             .map(|member| (member.node_id.clone(), member.public_addr))
             .collect::<HashSet<_>>();
 
@@ -225,7 +222,7 @@ where
                     );
 
                     network.connect_lazy(*addr)
-                }
+                },
             };
 
             let state = poller::NodePollerState::new(
