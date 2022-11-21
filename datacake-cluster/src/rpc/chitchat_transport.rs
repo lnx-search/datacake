@@ -25,13 +25,12 @@ impl<S: Storage> GrpcTransport<S> {
     pub fn new(
         network: RpcNetwork,
         ctx: super::server::Context<S>,
-        shutdown_handles: Mutex<Vec<oneshot::Sender<()>>>,
         messages: flume::Receiver<(SocketAddr, ChitchatMessage)>,
     ) -> Self {
         Self(Arc::new(GrpcTransportInner {
             network,
             ctx,
-            shutdown_handles,
+            shutdown_handles: Default::default(),
             messages,
         }))
     }

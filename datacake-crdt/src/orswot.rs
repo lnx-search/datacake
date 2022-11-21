@@ -109,7 +109,7 @@ pub struct OrSWotSet {
     versions: NodeVersions,
 }
 
-impl OrSWotSet {
+impl OrSWotSet {    
     #[cfg(feature = "rkyv")]
     /// Deserializes a [OrSWotSet] from a array of bytes.
     pub fn from_bytes(data: &[u8]) -> Result<Self, BadState> {

@@ -1,5 +1,5 @@
 use std::error::Error;
-use std::fmt::{Debug, Display};
+use std::fmt::Debug;
 
 use async_trait::async_trait;
 use datacake_crdt::{HLCTimestamp, Key};
@@ -40,6 +40,9 @@ pub trait Storage {
         pairs: impl Iterator<Item = (Key, HLCTimestamp)> + Send,
         is_tombstone: bool,
     ) -> Result<(), Self::Error>;
+
+    /// Retrieves all keyspace currently persisted.
+    async fn get_keyspace_list(&self) -> Result<Vec<String>, Self::Error>;
 
     /// Retrieves an iterator producing all values contained within the metadata store.
     async fn iter_metadata(
@@ -152,6 +155,13 @@ pub mod test_suite {
             info!(keyspace = keyspace, pairs = ?pairs, is_tombstone = is_tombstone, "set_many_metadata");
             self.0
                 .set_many_metadata(keyspace, pairs.into_iter(), is_tombstone)
+                .await
+        }
+
+        async fn get_keyspace_list(&self) -> Result<Vec<String>, Self::Error> {
+            info!("get_keyspace_list");
+            self.0
+                .get_keyspace_list()
                 .await
         }
 
@@ -302,6 +312,12 @@ pub mod test_suite {
             2,
             "First keyspace should contain 2 entries."
         );
+
+        let keyspace_list = storage
+            .get_keyspace_list()
+            .await
+            .expect("Get keyspace list");
+        assert_eq!(keyspace_list, vec![KEYSPACE.to_string()], "Returned keyspace list (left) should match value provided (right).");
 
         let metadata = storage
             .iter_metadata("second-keyspace")
@@ -590,6 +606,14 @@ pub mod mem_store {
                     )
                 });
             Ok(())
+        }
+
+        async fn get_keyspace_list(&self) -> Result<Vec<String>, Self::Error> {
+            Ok(self.metadata
+                .read()
+                .keys()
+                .cloned()
+                .collect())
         }
 
         async fn iter_metadata(

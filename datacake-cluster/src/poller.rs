@@ -24,7 +24,7 @@ where
     S: Storage + Send + Sync + 'static,
 {
     /// The ID of the node being polled.
-    target_node_id: u32,
+    target_node_id: Cow<'static, str>,
 
     /// The target node's RPC address.
     target_rpc_addr: SocketAddr,
@@ -59,7 +59,7 @@ where
 {
     /// Creates a new poller state.
     pub(crate) fn new(
-        target_node_id: u32,
+        target_node_id: Cow<'static, str>,
         target_rpc_addr: SocketAddr,
         keyspace_group: KeyspaceGroup<S>,
         rpc_channel: Channel,
@@ -102,7 +102,7 @@ where
     /// This is effectively a copy of the main state but with some adjustments.
     fn create_task_state(&self, keyspace: Cow<'static, str>) -> TaskState<S> {
         TaskState {
-            target_node_id: self.target_node_id,
+            target_node_id: self.target_node_id.clone(),
             target_rpc_addr: self.target_rpc_addr,
             group: self.group.clone(),
             keyspace: keyspace.clone(),
@@ -131,7 +131,7 @@ where
     S: Storage + Send + Sync + 'static,
 {
     /// The ID of the node being polled.
-    target_node_id: u32,
+    target_node_id: Cow<'static, str>,
 
     /// The target node's RPC address.
     target_rpc_addr: SocketAddr,

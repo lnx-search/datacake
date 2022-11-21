@@ -10,6 +10,7 @@ use datacake_crdt::{get_unix_timestamp_ms, HLCTimestamp, Key, OrSWotSet, StateCh
 use parking_lot::RwLock;
 use rkyv::{Archive, Deserialize, Serialize};
 use tokio::sync::oneshot;
+use tokio::time::Instant;
 
 use crate::storage::Storage;
 
@@ -136,10 +137,51 @@ impl<S: Storage> KeyspaceGroup<S> {
         self.add_state(name.to_string(), OrSWotSet::default()).await
     }
 
+    /// Loads existing states from the given storage implementation.
+    pub async fn load_states_from_storage(&self) -> Result<(), S::Error> {
+        let start = Instant::now();
+        let mut states = HashMap::new();
+
+        for keyspace in self.storage.get_keyspace_list().await? {
+            let keyspace = Cow::Owned(keyspace);
+            let mut state = OrSWotSet::default();
+
+            let mut entries = self.storage
+                .iter_metadata(&keyspace)
+                .await?
+                .collect::<Vec<(Key, HLCTimestamp, bool)>>();
+
+            // Must be time ordered to avoid skipping entries.
+            entries.sort_by_key(|entry| entry.1);
+
+            for (key, ts, tombstone) in entries {
+                if tombstone {
+                    state.delete(key, ts);
+                } else {
+                    state.insert(key, ts);
+                }
+            }
+
+            states
+                .entry(keyspace)
+                .or_insert(state);
+        }
+
+        info!(
+            elapsed = ?start.elapsed(),
+            keyspace_count = states.len(),
+            "Loaded persisted state from storage.",
+        );
+
+        self.load_states(states.into_iter()).await;
+
+        Ok(())
+    }
+
     /// Loads a set of existing keyspace states.
     pub async fn load_states(
         &self,
-        states: Vec<(impl Into<Cow<'static, str>>, OrSWotSet)>,
+        states: impl Iterator<Item = (impl Into<Cow<'static, str>>, OrSWotSet)>,
     ) {
         let mut counters = Vec::new();
         let mut created_states = Vec::new();

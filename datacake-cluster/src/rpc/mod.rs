@@ -7,3 +7,5 @@ mod server;
 
 pub use client::{ConsistencyClient, ReplicationClient};
 pub use network::RpcNetwork;
+pub use chitchat_transport::GrpcTransport;
+pub use server::Context;

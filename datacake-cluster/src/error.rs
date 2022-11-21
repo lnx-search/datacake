@@ -1,9 +1,10 @@
-use std::fmt::{Debug, Display};
+use std::error::Error;
+use std::fmt::Debug;
 
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum DatacakeError<E: Display + Debug> {
+pub enum DatacakeError<E: Error> {
     #[error("{0}")]
     ChitChatError(String),
 
@@ -13,5 +14,5 @@ pub enum DatacakeError<E: Display + Debug> {
     #[error(
         "A failure occurred within the user provided `DataStore` implementation: {0}"
     )]
-    DatastoreError(E),
+    StorageError(#[from] E),
 }
