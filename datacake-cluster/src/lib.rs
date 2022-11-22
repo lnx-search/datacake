@@ -27,7 +27,7 @@ use tokio_stream::StreamExt;
 use crate::clock::Clock;
 use crate::core::Document;
 use crate::keyspace::KeyspaceGroup;
-use crate::node::{ClusterMember, DatacakeNode};
+use crate::node::{ClusterMember, DatacakeNode, DEFAULT_DATA_CENTER};
 use crate::poller::ShutdownHandle;
 use crate::rpc::{Context, GrpcTransport, RpcNetwork};
 
@@ -75,6 +75,7 @@ where
         listen_addr: SocketAddr,
         public_addr: SocketAddr,
         seed_nodes: Vec<String>,
+        data_center: Option<impl AsRef<str>>,
         datastore: S,
     ) -> Result<Self, error::DatacakeError<S::Error>> {
         let node_id = node_id.into();
@@ -89,14 +90,20 @@ where
         // Load the keyspace states.
         group.load_states_from_storage().await?;
 
+        let cluster_info = ClusterInfo {
+            listen_addr,
+            public_addr,
+            seed_nodes,
+            data_center: data_center
+                .as_ref()
+                .map(|v| v.as_ref()),
+        };
         let node = connect_node(
             node_id.clone(),
             cluster_id.clone(),
             group.clone(),
             network.clone(),
-            listen_addr,
-            public_addr,
-            seed_nodes,
+            cluster_info,
         )
         .await?;
 
@@ -132,6 +139,16 @@ where
             clock: self.clock.clone(),
         }
     }
+
+    /// Creates a new handle to the underlying storage system with a preset keyspace.
+    ///
+    /// Changes applied to the handle are distributed across the cluster.
+    pub fn handle_with_keyspace(&self, keyspace: impl Into<String>) -> DatacakeKeyspaceHandle<S> {
+        DatacakeKeyspaceHandle {
+            inner: self.handle(),
+            keyspace: Cow::Owned(keyspace.into()),
+        }
+    }
 }
 
 
@@ -162,6 +179,16 @@ impl<S> DatacakeHandle<S>
 where
     S: Storage + Send + Sync + 'static,
 {
+    /// Creates a new handle to the underlying storage system with a preset keyspace.
+    ///
+    /// Changes applied to the handle are distributed across the cluster.
+    pub fn with_keyspace(&self, keyspace: impl Into<String>) -> DatacakeKeyspaceHandle<S> {
+        DatacakeKeyspaceHandle {
+            inner: self.clone(),
+            keyspace: Cow::Owned(keyspace.into()),
+        }
+    }
+
     /// Retrieves a document from the underlying storage.
     pub async fn get(&self, keyspace: &str, doc_id: Key) -> Result<Option<Document>, S::Error> {
         let storage = self.group.storage();
@@ -258,6 +285,95 @@ where
 }
 
 
+/// A convenience wrapper which creates a new handle with a preset keyspace.
+pub struct DatacakeKeyspaceHandle<S>
+where
+    S: Storage + Send + Sync + 'static,
+{
+    inner: DatacakeHandle<S>,
+    keyspace: Cow<'static, str>,
+}
+
+impl<S> Clone for DatacakeKeyspaceHandle<S>
+where
+    S: Storage + Send + Sync + 'static,
+{
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            keyspace: self.keyspace.clone(),
+        }
+    }
+}
+
+impl<S> DatacakeKeyspaceHandle<S>
+where
+    S: Storage + Send + Sync + 'static,
+{
+    /// Retrieves a document from the underlying storage.
+    pub async fn get(&self, doc_id: Key) -> Result<Option<Document>, S::Error> {
+        self.inner.get(self.keyspace.as_ref(), doc_id).await
+    }
+
+    /// Retrieves a set of documents from the underlying storage.
+    ///
+    /// If a document does not exist with the given ID, it is simply not part
+    /// of the returned iterator.
+    pub async fn get_many<I, T>(
+        &self,
+        doc_ids: I,
+    ) -> Result<S::DocsIter, S::Error>
+    where
+        T: Iterator<Item = Key> + Send,
+        I: IntoIterator<IntoIter = T> + Send
+    {
+        self.inner.get_many(self.keyspace.as_ref(), doc_ids).await
+    }
+
+    /// Insert or update a single document into the datastore.
+    pub async fn put(
+        &self,
+        doc_id: Key,
+        data: Vec<u8>,
+    ) -> Result<(), error::DatacakeError<S::Error>> {
+        self.inner.put(self.keyspace.as_ref(), doc_id, data).await
+    }
+
+    /// Insert or update multiple documents into the datastore at once.
+    pub async fn put_many(
+        &self,
+        documents: Vec<(Key, Vec<u8>)>,
+    ) -> Result<(), error::DatacakeError<S::Error>> {
+        self.inner.put_many(self.keyspace.as_ref(), documents).await
+    }
+
+    /// Delete a document from the datastore with a given doc ID.
+    pub async fn del(
+        &self,
+        doc_id: Key,
+    ) -> Result<(), error::DatacakeError<S::Error>> {
+        self.inner.del(self.keyspace.as_ref(), doc_id).await
+    }
+
+
+    /// Delete multiple documents from the datastore from the set of doc IDs.
+    pub async fn del_many(
+        &self,
+        doc_ids: Vec<Key>,
+    ) -> Result<(), error::DatacakeError<S::Error>> {
+        self.inner.del_many(self.keyspace.as_ref(), doc_ids).await
+    }
+}
+
+
+struct ClusterInfo<'a> {
+    listen_addr: SocketAddr,
+    public_addr: SocketAddr,
+    seed_nodes: Vec<String>,
+    data_center: Option<&'a str>,
+}
+
+
 /// Connects to the chitchat cluster.
 ///
 /// The node will attempt to establish connections to the seed nodes and
@@ -267,9 +383,7 @@ async fn connect_node<S>(
     cluster_id: String,
     group: KeyspaceGroup<S>,
     network: RpcNetwork,
-    listen_addr: SocketAddr,
-    public_addr: SocketAddr,
-    seed_nodes: Vec<String>,
+    cluster_info: ClusterInfo<'_>,
 ) -> Result<DatacakeNode, error::DatacakeError<S::Error>>
 where
     S: Storage + Send + Sync + 'static,
@@ -281,12 +395,17 @@ where
     };
     let transport = GrpcTransport::new(network.clone(), context, chitchat_rx);
 
-    let me = ClusterMember::new(node_id, get_unix_timestamp_ms(), public_addr);
+    let me = ClusterMember::new(
+        node_id,
+        get_unix_timestamp_ms(),
+        cluster_info.public_addr,
+         cluster_info.data_center.unwrap_or(DEFAULT_DATA_CENTER),
+    );
     let node = DatacakeNode::connect(
         me,
-        listen_addr,
+         cluster_info.listen_addr,
         cluster_id,
-        seed_nodes,
+         cluster_info.seed_nodes,
         FailureDetectorConfig::default(),
         &transport,
     )
