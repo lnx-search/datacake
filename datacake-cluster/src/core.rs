@@ -1,5 +1,4 @@
 use std::fmt::{Debug, Formatter};
-#[cfg(test)]
 use std::hash::{Hash, Hasher};
 
 use datacake_crdt::{HLCTimestamp, Key};
@@ -19,17 +18,16 @@ pub struct Document {
     pub data: Vec<u8>,
 }
 
-#[cfg(test)]
 impl Eq for Document {}
 
-#[cfg(test)]
 impl PartialEq for Document {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
+            && self.last_updated == other.last_updated
+            && self.data == other.data
     }
 }
 
-#[cfg(test)]
 impl Hash for Document {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.id.hash(state)
