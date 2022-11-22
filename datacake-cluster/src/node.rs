@@ -6,19 +6,15 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chitchat::transport::Transport;
-use chitchat::{
-    spawn_chitchat,
-    ChitchatConfig,
-    ChitchatHandle,
-    FailureDetectorConfig,
-    NodeId,
-};
+use chitchat::{spawn_chitchat, ChitchatConfig, ChitchatHandle, FailureDetectorConfig, NodeId, ClusterStateSnapshot};
 use tokio::sync::watch;
 use tokio_stream::wrappers::WatchStream;
 use tokio_stream::StreamExt;
 
 use crate::error::DatacakeError;
 
+static DATA_CENTER_KEY: &str = "data_center";
+pub static DEFAULT_DATA_CENTER: &str = "lnx-dc-unknown";
 const GOSSIP_INTERVAL: Duration = if cfg!(test) {
     Duration::from_millis(200)
 } else {
@@ -33,14 +29,19 @@ pub struct ClusterMember {
     pub generation: u64,
     /// The public address of the nod.
     pub public_addr: SocketAddr,
+    /// The data center / availability zone the node is in.
+    ///
+    /// This is used to select nodes for sending consistency tasks to.
+    pub data_center: String,
 }
 
 impl ClusterMember {
-    pub fn new(node_id: String, generation: u64, public_addr: SocketAddr) -> Self {
+    pub fn new(node_id: String, generation: u64, public_addr: SocketAddr, data_center: impl Into<String>) -> Self {
         Self {
             node_id,
             generation,
             public_addr,
+            data_center: data_center.into(),
         }
     }
 
@@ -125,9 +126,11 @@ impl DatacakeNode {
             let mut node_change_rx = chitchat.lock().await.ready_nodes_watcher();
 
             while let Some(members_set) = node_change_rx.next().await {
+                let state_snapshot = chitchat.lock().await.state_snapshot();
+
                 let mut members = members_set
                     .into_iter()
-                    .map(|node_id| build_cluster_member(&node_id))
+                    .map(|node_id| build_cluster_member(&node_id, &state_snapshot))
                     .filter_map(|member_res| {
                         // Just log an error for members that cannot be built.
                         if let Err(error) = &member_res {
@@ -205,7 +208,7 @@ impl DatacakeNode {
     }
 }
 
-fn build_cluster_member(node_id: &NodeId) -> Result<ClusterMember, String> {
+fn build_cluster_member<'a>(node_id: &'a NodeId, state: &'a ClusterStateSnapshot) -> Result<ClusterMember, String> {
     let (node_unique_id, generation_str) =
         node_id.id.split_once('/').ok_or_else(|| {
             format!(
@@ -214,12 +217,24 @@ fn build_cluster_member(node_id: &NodeId) -> Result<ClusterMember, String> {
             )
         })?;
 
+    let node_state = state
+        .node_states
+        .get(&node_id.id)
+        .ok_or_else(|| {
+            format!("Could not find node ID `{}` in ChitChat state.", node_id.id,)
+        })?;
+
+    let data_center = node_state
+        .get(DATA_CENTER_KEY)
+        .unwrap_or(DEFAULT_DATA_CENTER);
+
     let generation = generation_str.parse::<u64>().map_err(|e| e.to_string())?;
 
     Ok(ClusterMember::new(
         node_unique_id.to_string(),
         generation,
         node_id.gossip_public_address,
+        data_center,
     ))
 }
 
@@ -298,7 +313,7 @@ mod tests {
         let node_id = format!("node_{node_id}");
         let failure_detector_config = create_failure_detector_config_for_test();
         let node = DatacakeNode::connect::<TestError>(
-            ClusterMember::new(node_id, 1, public_addr),
+            ClusterMember::new(node_id, 1, public_addr, DATA_CENTER_KEY),
             public_addr,
             cluster_id,
             seeds,
