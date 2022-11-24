@@ -82,11 +82,8 @@ pub trait NodeSelector {
     ) -> Result<Vec<SocketAddr>, ConsistencyError> ;
 }
 
-
+#[derive(Debug, Copy, Clone)]
 pub struct DCAwareSelector;
-
-impl DCAwareSelector {
-}
 
 impl NodeSelector for DCAwareSelector {
     fn select_nodes(
@@ -103,14 +100,76 @@ impl NodeSelector for DCAwareSelector {
             Consistency::One => return select_n_nodes(local_node, local_dc, 1, total_nodes, data_centers),
             Consistency::Two => return select_n_nodes(local_node, local_dc, 2, total_nodes, data_centers),
             Consistency::Three => return select_n_nodes(local_node, local_dc, 3, total_nodes, data_centers),
-            Consistency::Quorum => {},
-            Consistency::LocalQuorum => {},
+            Consistency::Quorum => {
+                // The majority is not `(len / 2) + 1` here as the local node will also
+                // be setting the value, giving us out `n + 1` majority.
+                let majority = total_nodes / 2;
+
+                let mut dcs_iterators = data_centers.iter()
+                    .map(|(_, nodes)|
+                        nodes
+                            .get_nodes()
+                            .iter()
+                            .copied()
+                            .filter(|addr| addr != &local_node)
+                    )
+                    .collect::<Vec<_>>();
+                let mut previous_total = selected_nodes.len();
+                while selected_nodes.len() < majority  {
+                    let nodes = dcs_iterators
+                        .iter_mut()
+                        .filter_map(|iter| iter.next());
+                    selected_nodes.extend(nodes);
+
+                    // We have no more nodes to add.
+                    if previous_total == selected_nodes.len() {
+                        return Err(ConsistencyError::NotEnoughNodes { live: selected_nodes.len(), required: majority });
+                    }
+
+                    previous_total = selected_nodes.len();
+                }
+            },
+            Consistency::LocalQuorum => {
+                if let Some(nodes) = data_centers.get(local_dc) {
+                    // The majority is not `(len / 2) + 1` here as the local node will also
+                    // be setting the value, giving us out `n + 1` majority.
+                    let majority = nodes.len() / 2;
+                    selected_nodes.extend(
+                        nodes
+                            .get_nodes()
+                            .iter()
+                            .copied()
+                            .filter(|addr| addr != &local_node)
+                            .take(majority)
+                    );
+                }
+            },
             Consistency::All => selected_nodes.extend(
                 data_centers
                     .values()
                     .flat_map(|cycler| cycler.nodes.clone())
+                    .filter(|addr| addr != &local_node)
             ),
-            Consistency::EachQuorum => {},
+            Consistency::EachQuorum => {
+                for (name, nodes) in data_centers {
+                    let majority = if name == local_dc {
+                        // The majority is not `(len / 2) + 1` here as the local node will also
+                        // be setting the value, giving us out `n + 1` majority.
+                        nodes.len() / 2
+                    } else {
+                        (nodes.len() / 2) + 1
+                    };
+
+                    selected_nodes.extend(
+                        nodes
+                            .get_nodes()
+                            .iter()
+                            .copied()
+                            .filter(|addr| addr != &local_node)
+                            .take(majority)
+                    );
+                }
+            },
             Consistency::None => {}
         }
 
@@ -263,7 +322,13 @@ impl NodeCycler {
         &mut self.nodes
     }
 
+    /// Gets a immutable reference to the inner nodes buffer.
+    pub fn get_nodes(&self) -> &Vec<SocketAddr> {
+        &self.nodes
+    }
+
     #[inline]
+    /// Gets the number of nodes in the cycler.
     pub fn len(&self) -> usize {
         self.nodes.len()
     }
@@ -301,7 +366,55 @@ mod tests {
     use std::collections::BTreeMap;
     use std::fmt::Display;
     use std::net::{IpAddr, SocketAddr};
-    use crate::nodes_selector::{NodeCycler, select_n_nodes};
+
+    use crate::nodes_selector::{Consistency, DCAwareSelector, NodeCycler, NodeSelector, select_n_nodes};
+
+    #[test]
+    fn test_dc_aware_selector() {
+        let addr = make_addr(0, 0);
+        let total_nodes = 6;
+        let mut dc = make_dc(vec![3, 2, 1]);
+        let mut selector = DCAwareSelector;
+
+        let nodes = selector
+            .select_nodes(addr, "dc-0", total_nodes, &mut dc, Consistency::All)
+            .expect("Get nodes");
+        assert_eq!(nodes.len(), total_nodes - 1, "Expected all nodes to be selected except for local node.");
+
+        let nodes = selector
+            .select_nodes(addr, "dc-0", total_nodes, &mut dc, Consistency::None)
+            .expect("Get nodes");
+        assert!(nodes.is_empty(), "Expected no nodes to be selected.");
+
+        let nodes = selector
+            .select_nodes(addr, "dc-0", total_nodes, &mut dc, Consistency::EachQuorum)
+            .expect("Get nodes");
+        assert_eq!(
+            nodes,
+            vec![
+                make_addr(0, 1),
+                make_addr(1, 0),
+                make_addr(1, 1),
+                make_addr(2, 0),
+            ]
+        );
+
+        let nodes = selector
+            .select_nodes(addr, "dc-0", total_nodes, &mut dc, Consistency::LocalQuorum)
+            .expect("Get nodes");
+        assert_eq!(nodes, vec![make_addr(0, 1)]);
+
+        let nodes = selector
+            .select_nodes(addr, "dc-0", total_nodes, &mut dc, Consistency::Quorum)
+            .expect("Get nodes");
+        assert_eq!(
+            nodes,
+            vec![
+                make_addr(0, 1),
+                make_addr(1, 0),
+                make_addr(2, 0),
+            ]);
+    }
 
     #[test]
     fn test_select_n_nodes_equal_dc_count() {
