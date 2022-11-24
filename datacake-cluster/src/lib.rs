@@ -9,6 +9,7 @@ mod node;
 mod poller;
 mod rpc;
 mod storage;
+mod nodes_selector;
 
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
