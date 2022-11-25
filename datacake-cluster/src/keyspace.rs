@@ -12,9 +12,9 @@ use parking_lot::RwLock;
 use rkyv::{Archive, Deserialize, Serialize};
 use tokio::sync::oneshot;
 use tokio::time::{interval, Instant};
-use crate::Clock;
 
 use crate::storage::Storage;
+use crate::Clock;
 
 #[derive(Archive, Serialize, Deserialize, Clone, Debug, Hash, Eq, PartialEq)]
 #[archive_attr(derive(CheckBytes, Hash, Eq, PartialEq))]
