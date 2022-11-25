@@ -123,7 +123,7 @@ pub enum ConsistencyError {
         "Failed to achieve the desired consistency level before the timeout \
         ({timeout:?}) elapsed. Got {responses} responses but needed {required} responses."
     )]
-    ConsistencyTimeout {
+    ConsistencyFailure {
         responses: usize,
         required: usize,
         timeout: Duration,

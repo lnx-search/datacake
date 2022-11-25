@@ -14,25 +14,28 @@ mod nodes_selector;
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::Display;
+use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
+use bytes::Bytes;
 
 use chitchat::FailureDetectorConfig;
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
 use datacake_crdt::{get_unix_timestamp_ms, Key};
 #[cfg(feature = "test-utils")]
 pub use storage::test_suite;
 pub use storage::Storage;
 use tokio_stream::wrappers::WatchStream;
-use tokio_stream::StreamExt;
 
 use crate::clock::Clock;
 use crate::core::Document;
 use crate::keyspace::KeyspaceGroup;
 use crate::node::{ClusterMember, DatacakeNode};
-use crate::nodes_selector::{DCAwareSelector, NodeSelector, NodeSelectorHandle};
+use crate::nodes_selector::{Consistency, ConsistencyError, NodeSelector, NodeSelectorHandle};
 use crate::poller::ShutdownHandle;
-use crate::rpc::{Context, GrpcTransport, RpcNetwork};
+use crate::rpc::{ConsistencyClient, Context, GrpcTransport, RpcNetwork, TIMEOUT_LIMIT};
 
 pub static DEFAULT_DATA_CENTER: &str = "datacake-dc-unknown";
 pub static DEFAULT_CLUSTER_ID: &str = "datacake-cluster-unknown";
@@ -86,6 +89,7 @@ where
     network: RpcNetwork,
     group: KeyspaceGroup<S>,
     clock: Clock,
+    node_selector: NodeSelectorHandle,
 }
 
 impl<S> DatacakeCluster<S>
@@ -122,7 +126,7 @@ where
         let clock = Clock::new(crc32fast::hash(node_id.as_bytes()));
         let storage = Arc::new(datastore);
 
-        let group = KeyspaceGroup::new(storage.clone());
+        let group = KeyspaceGroup::new(storage.clone()).await;
         let network = RpcNetwork::default();
 
         // Load the keyspace states.
@@ -163,6 +167,7 @@ where
             network,
             group,
             clock,
+            node_selector: selector,
         })
     }
 
@@ -179,6 +184,7 @@ where
             network: self.network.clone(),
             group: self.group.clone(),
             clock: self.clock.clone(),
+            node_selector: self.node_selector.clone(),
         }
     }
 
@@ -202,6 +208,7 @@ where
     network: RpcNetwork,
     group: KeyspaceGroup<S>,
     clock: Clock,
+    node_selector: NodeSelectorHandle,
 }
 
 impl<S> Clone for DatacakeHandle<S>
@@ -213,6 +220,7 @@ where
             network: self.network.clone(),
             group: self.group.clone(),
             clock: self.clock.clone(),
+            node_selector: self.node_selector.clone(),
         }
     }
 }
@@ -255,43 +263,95 @@ where
     }
 
     /// Insert or update a single document into the datastore.
-    pub async fn put(
+    pub async fn put<D>(
         &self,
         keyspace: &str,
         doc_id: Key,
-        data: Vec<u8>,
-    ) -> Result<(), error::DatacakeError<S::Error>> {
+        data: D,
+        consistency: Consistency,
+    ) -> Result<(), error::DatacakeError<S::Error>>
+    where
+        D: Into<Bytes>
+    {
+        let nodes = self.node_selector
+            .get_nodes(consistency)
+            .await
+            .map_err(error::DatacakeError::ConsistencyError)?;
+
         let last_updated = self.clock.get_time().await;
-        let document = Document {
-            id: doc_id,
-            last_updated,
-            data
+        let document = Document::new(doc_id, last_updated, data);
+
+        core::put_data(keyspace, document.clone(), &self.group).await?;
+
+        let factory = |node| {
+            let keyspace = keyspace.to_string();
+            let document = document.clone();
+            async move {
+                let channel = self.network
+                    .get_or_connect(node)
+                    .await
+                    .map_err(|e| error::DatacakeError::TransportError(node, e))?;
+
+                let mut client = ConsistencyClient::from(channel);
+
+                client
+                    .put(keyspace, document)
+                    .await
+                    .map_err(|e|error::DatacakeError::RpcError(node, e))?;
+
+                Ok::<_, error::DatacakeError<S::Error>>(())
+            }
         };
 
-        core::put_data(keyspace, document, &self.group).await?;
-
-        Ok(())
+        handle_consistency_distribution::<S, _, _>(nodes, factory).await
     }
 
     /// Insert or update multiple documents into the datastore at once.
-    pub async fn put_many(
+    pub async fn put_many<I, T, D>(
         &self,
         keyspace: &str,
-        documents: Vec<(Key, Vec<u8>)>,
-    ) -> Result<(), error::DatacakeError<S::Error>> {
-        let mut docs = Vec::with_capacity(documents.len());
-        for (id, data) in documents {
-            let last_updated = self.clock.get_time().await;
-            docs.push(Document {
-                id,
-                last_updated,
-                data,
-            });
-        }
+        documents: I,
+        consistency: Consistency,
+    ) -> Result<(), error::DatacakeError<S::Error>>
+    where
+        D: Into<Bytes>,
+        T: Iterator<Item = (Key, D)> + Send,
+        I: IntoIterator<IntoIter = T> + Send
+    {
+        let nodes = self.node_selector
+            .get_nodes(consistency)
+            .await
+            .map_err(error::DatacakeError::ConsistencyError)?;
 
-        core::put_many_data(keyspace, docs.into_iter(), &self.group).await?;
+        let last_updated = self.clock.get_time().await;
+        let docs = documents
+            .into_iter()
+            .map(|(id, data)| Document::new(id, last_updated, data))
+            .collect::<Vec<_>>();
 
-        Ok(())
+        core::put_many_data(keyspace, docs.clone().into_iter(), &self.group).await?;
+
+        let factory = |node| {
+            let keyspace = keyspace.to_string();
+            let documents = docs.clone();
+            async move {
+                let channel = self.network
+                    .get_or_connect(node)
+                    .await
+                    .map_err(|e| error::DatacakeError::TransportError(node, e))?;
+
+                let mut client = ConsistencyClient::from(channel);
+
+                client
+                    .multi_put(keyspace, documents.into_iter())
+                    .await
+                    .map_err(|e|error::DatacakeError::RpcError(node, e))?;
+
+                Ok::<_, error::DatacakeError<S::Error>>(())
+            }
+        };
+
+        handle_consistency_distribution::<S, _, _>(nodes, factory).await
     }
 
     /// Delete a document from the datastore with a given doc ID.
@@ -299,30 +359,85 @@ where
         &self,
         keyspace: &str,
         doc_id: Key,
+        consistency: Consistency,
     ) -> Result<(), error::DatacakeError<S::Error>> {
+        let nodes = self.node_selector
+            .get_nodes(consistency)
+            .await
+            .map_err(error::DatacakeError::ConsistencyError)?;
+
         let last_updated = self.clock.get_time().await;
 
         core::del_data(keyspace, doc_id, last_updated, &self.group).await?;
 
-        Ok(())
+        let factory = |node| {
+            let keyspace = keyspace.to_string();
+            async move {
+                let channel = self.network
+                    .get_or_connect(node)
+                    .await
+                    .map_err(|e| error::DatacakeError::TransportError(node, e))?;
+
+                let mut client = ConsistencyClient::from(channel);
+
+                client
+                    .del(keyspace, doc_id, last_updated)
+                    .await
+                    .map_err(|e|error::DatacakeError::RpcError(node, e))?;
+
+                Ok::<_, error::DatacakeError<S::Error>>(())
+            }
+        };
+
+        handle_consistency_distribution::<S, _, _>(nodes, factory).await
     }
 
 
     /// Delete multiple documents from the datastore from the set of doc IDs.
-    pub async fn del_many(
+    pub async fn del_many<I, T>(
         &self,
         keyspace: &str,
-        doc_ids: Vec<Key>,
-    ) -> Result<(), error::DatacakeError<S::Error>> {
-        let mut docs = Vec::with_capacity(doc_ids.len());
-        for id in doc_ids {
-            let last_updated = self.clock.get_time().await;
-            docs.push((id, last_updated));
-        }
+        doc_ids: I,
+        consistency: Consistency,
+    ) -> Result<(), error::DatacakeError<S::Error>>
+    where
+        T: Iterator<Item = Key> + Send,
+        I: IntoIterator<IntoIter = T> + Send
+    {
+        let nodes = self.node_selector
+            .get_nodes(consistency)
+            .await
+            .map_err(error::DatacakeError::ConsistencyError)?;
 
-        core::del_many_data(keyspace, docs.into_iter(), &self.group).await?;
+        let last_updated = self.clock.get_time().await;
+        let docs = doc_ids
+            .into_iter()
+            .map(|id| (id, last_updated))
+            .collect::<Vec<_>>();
 
-        Ok(())
+        core::del_many_data(keyspace, docs.clone().into_iter(), &self.group).await?;
+
+        let factory = |node| {
+            let keyspace = keyspace.to_string();
+            let docs = docs.clone();
+            async move {
+                let channel = self.network
+                    .get_or_connect(node)
+                    .await
+                    .map_err(|e| error::DatacakeError::TransportError(node, e))?;
+
+                let mut client = ConsistencyClient::from(channel);
+
+                client
+                    .multi_del(keyspace,docs.into_iter())
+                    .await
+                    .map_err(|e|error::DatacakeError::RpcError(node, e))?;
+
+                Ok::<_, error::DatacakeError<S::Error>>(())
+            }
+        };
+
+        handle_consistency_distribution::<S, _, _>(nodes, factory).await
     }
 }
 
@@ -377,24 +492,27 @@ where
         &self,
         doc_id: Key,
         data: Vec<u8>,
+        consistency: Consistency,
     ) -> Result<(), error::DatacakeError<S::Error>> {
-        self.inner.put(self.keyspace.as_ref(), doc_id, data).await
+        self.inner.put(self.keyspace.as_ref(), doc_id, data, consistency).await
     }
 
     /// Insert or update multiple documents into the datastore at once.
     pub async fn put_many(
         &self,
         documents: Vec<(Key, Vec<u8>)>,
+        consistency: Consistency,
     ) -> Result<(), error::DatacakeError<S::Error>> {
-        self.inner.put_many(self.keyspace.as_ref(), documents).await
+        self.inner.put_many(self.keyspace.as_ref(), documents, consistency).await
     }
 
     /// Delete a document from the datastore with a given doc ID.
     pub async fn del(
         &self,
         doc_id: Key,
+        consistency: Consistency,
     ) -> Result<(), error::DatacakeError<S::Error>> {
-        self.inner.del(self.keyspace.as_ref(), doc_id).await
+        self.inner.del(self.keyspace.as_ref(), doc_id, consistency).await
     }
 
 
@@ -402,8 +520,9 @@ where
     pub async fn del_many(
         &self,
         doc_ids: Vec<Key>,
+        consistency: Consistency,
     ) -> Result<(), error::DatacakeError<S::Error>> {
-        self.inner.del_many(self.keyspace.as_ref(), doc_ids).await
+        self.inner.del_many(self.keyspace.as_ref(), doc_ids, consistency).await
     }
 }
 
@@ -562,5 +681,62 @@ async fn watch_membership_changes<S>(
         }
 
         last_network_set = new_network_set;
+    }
+}
+
+
+async fn handle_consistency_distribution<S, CB, F>(
+    nodes: Vec<SocketAddr>,
+    factory: CB,
+) -> Result<(), error::DatacakeError<S::Error>>
+where
+    S: Storage,
+    CB: FnMut(SocketAddr) -> F,
+    F: Future<Output = Result<(), error::DatacakeError<S::Error>>>,
+{
+    let mut num_success = 0;
+    let num_required = nodes.len();
+
+    let mut requests = nodes
+        .into_iter()
+        .map(factory)
+        .collect::<FuturesUnordered<_>>();
+
+    while let Some(res) = requests.next().await {
+        match res {
+            Ok(()) => {
+                num_success += 1;
+            },
+            Err(error::DatacakeError::RpcError(node, error)) => {
+                error!(
+                    error = ?error,
+                    target_node = %node,
+                    "Replica failed to acknowledge change to meet consistency level requirement."
+                );
+            },
+            Err(error::DatacakeError::TransportError(node, error)) => {
+                error!(
+                    error = ?error,
+                    target_node = %node,
+                    "Replica failed to acknowledge change to meet consistency level requirement."
+                );
+            },
+            Err(other) => {
+                error!(
+                    error = ?other,
+                    "Failed to send action to replica due to unknown error.",
+                );
+            }
+        }
+    }
+
+    if num_success != num_required {
+        Err(error::DatacakeError::ConsistencyError(ConsistencyError::ConsistencyFailure {
+            responses: num_success,
+            required: num_required,
+            timeout: TIMEOUT_LIMIT,
+        }))
+    } else {
+        Ok(())
     }
 }

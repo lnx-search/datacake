@@ -437,26 +437,10 @@ pub mod test_suite {
             .collect::<Vec<_>>();
         assert!(res.is_empty(), "Expected no document to be returned.");
 
-        let doc_1 = Document {
-            id: 1,
-            last_updated: clock.send().unwrap(),
-            data: b"Hello, world!".to_vec(),
-        };
-        let doc_2 = Document {
-            id: 2,
-            last_updated: clock.send().unwrap(),
-            data: Vec::new(),
-        };
-        let doc_3 = Document {
-            id: 3,
-            last_updated: clock.send().unwrap(),
-            data: b"Hello, from document 3!".to_vec(),
-        };
-        let doc_3_updated = Document {
-            id: 3,
-            last_updated: clock.send().unwrap(),
-            data: b"Hello, from document 3 With an update!".to_vec(),
-        };
+        let doc_1 = Document::new(1, clock.send().unwrap(), b"Hello, world!".to_vec());
+        let doc_2 = Document::new(2, clock.send().unwrap(), Vec::new());
+        let doc_3 = Document::new(3, clock.send().unwrap(), b"Hello, from document 3!".to_vec());
+        let doc_3_updated = Document::new(3, clock.send().unwrap(), b"Hello, from document 3 With an update!".to_vec());
 
         storage
             .put(KEYSPACE, doc_1.clone())

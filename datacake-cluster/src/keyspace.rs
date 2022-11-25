@@ -4,13 +4,14 @@ use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
 use bytecheck::CheckBytes;
 use datacake_crdt::{get_unix_timestamp_ms, HLCTimestamp, Key, OrSWotSet, StateChanges};
 use parking_lot::RwLock;
 use rkyv::{Archive, Deserialize, Serialize};
 use tokio::sync::oneshot;
-use tokio::time::Instant;
+use tokio::time::{Instant, interval};
 
 use crate::storage::Storage;
 
@@ -90,14 +91,21 @@ impl<S: Storage> Clone for KeyspaceGroup<S> {
     }
 }
 
-impl<S: Storage> KeyspaceGroup<S> {
+impl<S> KeyspaceGroup<S>
+where
+    S: Storage + Send + Sync + 'static
+{
     /// Creates a new, empty keyspace group with a given storage implementation.
-    pub fn new(storage: Arc<S>) -> Self {
-        Self {
+    pub async fn new(storage: Arc<S>) -> Self {
+        let slf = Self {
             storage,
             keyspace_timestamps: Default::default(),
             group: Default::default(),
-        }
+        };
+
+        tokio::spawn(purge_tombstones_task(slf.clone()));
+
+        slf
     }
 
     #[inline]
@@ -459,6 +467,28 @@ enum Op {
         set: OrSWotSet,
         tx: oneshot::Sender<(StateChanges, StateChanges)>,
     },
+}
+
+async fn purge_tombstones_task<S>(handle: KeyspaceGroup<S>)
+where
+    S: Storage + Send + Sync + 'static
+{
+    let mut interval = interval(Duration::from_secs(60 * 60)); // 1 hour.
+
+    loop {
+        interval.tick().await;
+
+        let keyspace_set = {
+            let lock = handle.group.read();
+            lock.deref().clone()
+        };
+
+        for (name, state) in keyspace_set {
+            if let Err(e) = state.purge_tombstones().await {
+                warn!(error = ?e, keyspace = %name, "Failed to purge tombstones from state.");
+            }
+        }
+    }
 }
 
 #[instrument("keyspace-state", skip_all)]

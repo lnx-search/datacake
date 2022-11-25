@@ -11,6 +11,7 @@ use tokio::sync::watch;
 use tokio_stream::wrappers::WatchStream;
 use tokio_stream::StreamExt;
 
+use crate::DEFAULT_DATA_CENTER;
 use crate::error::DatacakeError;
 
 static DATA_CENTER_KEY: &str = "data_center";

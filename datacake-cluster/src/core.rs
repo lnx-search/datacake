@@ -1,5 +1,6 @@
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
+use bytes::Bytes;
 
 use datacake_crdt::{HLCTimestamp, Key};
 
@@ -15,7 +16,18 @@ pub struct Document {
     pub last_updated: HLCTimestamp,
 
     /// The raw binary data of the document's value.
-    pub data: Vec<u8>,
+    pub data: Bytes,
+}
+
+impl Document {
+    /// A convenience method for passing data values which can be sent as bytes.
+    pub fn new(id: Key, last_updated: HLCTimestamp, data: impl Into<Bytes>) -> Self {
+        Self {
+            id,
+            last_updated,
+            data: data.into(),
+        }
+    }
 }
 
 impl Eq for Document {}
