@@ -7,6 +7,5 @@ mod server;
 
 pub use chitchat_transport::GrpcTransport;
 pub use client::{ConsistencyClient, ReplicationClient};
-pub use network::RpcNetwork;
+pub use network::{RpcNetwork, CONNECT_TIMEOUT_LIMIT, TIMEOUT_LIMIT};
 pub use server::Context;
-pub use network::{TIMEOUT_LIMIT, CONNECT_TIMEOUT_LIMIT};

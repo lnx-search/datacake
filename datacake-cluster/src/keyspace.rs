@@ -11,7 +11,7 @@ use datacake_crdt::{get_unix_timestamp_ms, HLCTimestamp, Key, OrSWotSet, StateCh
 use parking_lot::RwLock;
 use rkyv::{Archive, Deserialize, Serialize};
 use tokio::sync::oneshot;
-use tokio::time::{Instant, interval};
+use tokio::time::{interval, Instant};
 
 use crate::storage::Storage;
 
@@ -93,7 +93,7 @@ impl<S: Storage> Clone for KeyspaceGroup<S> {
 
 impl<S> KeyspaceGroup<S>
 where
-    S: Storage + Send + Sync + 'static
+    S: Storage + Send + Sync + 'static,
 {
     /// Creates a new, empty keyspace group with a given storage implementation.
     pub async fn new(storage: Arc<S>) -> Self {
@@ -471,7 +471,7 @@ enum Op {
 
 async fn purge_tombstones_task<S>(handle: KeyspaceGroup<S>)
 where
-    S: Storage + Send + Sync + 'static
+    S: Storage + Send + Sync + 'static,
 {
     let mut interval = interval(Duration::from_secs(60 * 60)); // 1 hour.
 

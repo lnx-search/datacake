@@ -439,8 +439,16 @@ pub mod test_suite {
 
         let doc_1 = Document::new(1, clock.send().unwrap(), b"Hello, world!".to_vec());
         let doc_2 = Document::new(2, clock.send().unwrap(), Vec::new());
-        let doc_3 = Document::new(3, clock.send().unwrap(), b"Hello, from document 3!".to_vec());
-        let doc_3_updated = Document::new(3, clock.send().unwrap(), b"Hello, from document 3 With an update!".to_vec());
+        let doc_3 = Document::new(
+            3,
+            clock.send().unwrap(),
+            b"Hello, from document 3!".to_vec(),
+        );
+        let doc_3_updated = Document::new(
+            3,
+            clock.send().unwrap(),
+            b"Hello, from document 3 With an update!".to_vec(),
+        );
 
         storage
             .put(KEYSPACE, doc_1.clone())

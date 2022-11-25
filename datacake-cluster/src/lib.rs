@@ -6,10 +6,10 @@ mod core;
 pub mod error;
 mod keyspace;
 mod node;
+mod nodes_selector;
 mod poller;
 mod rpc;
 mod storage;
-mod nodes_selector;
 
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -18,12 +18,12 @@ use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
-use bytes::Bytes;
 
+use bytes::Bytes;
 use chitchat::FailureDetectorConfig;
+use datacake_crdt::{get_unix_timestamp_ms, Key};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
-use datacake_crdt::{get_unix_timestamp_ms, Key};
 #[cfg(feature = "test-utils")]
 pub use storage::test_suite;
 pub use storage::Storage;
@@ -33,14 +33,18 @@ use crate::clock::Clock;
 use crate::core::Document;
 use crate::keyspace::KeyspaceGroup;
 use crate::node::{ClusterMember, DatacakeNode};
-use crate::nodes_selector::{Consistency, ConsistencyError, NodeSelector, NodeSelectorHandle};
+use crate::nodes_selector::{
+    Consistency,
+    ConsistencyError,
+    NodeSelector,
+    NodeSelectorHandle,
+};
 use crate::poller::ShutdownHandle;
 use crate::rpc::{ConsistencyClient, Context, GrpcTransport, RpcNetwork, TIMEOUT_LIMIT};
 
 pub static DEFAULT_DATA_CENTER: &str = "datacake-dc-unknown";
 pub static DEFAULT_CLUSTER_ID: &str = "datacake-cluster-unknown";
 const POLLING_INTERVAL_DURATION: Duration = Duration::from_secs(1);
-
 
 /// Non-required configurations for the datacake cluster node.
 pub struct ClusterOptions {
@@ -70,7 +74,6 @@ impl ClusterOptions {
         self
     }
 }
-
 
 /// A fully managed eventually consistent state controller.
 ///
@@ -116,7 +119,7 @@ where
         seed_nodes: Vec<String>,
         datastore: S,
         node_selector: DS,
-        options: ClusterOptions
+        options: ClusterOptions,
     ) -> Result<Self, error::DatacakeError<S::Error>>
     where
         DS: NodeSelector + Send + 'static,
@@ -136,7 +139,8 @@ where
             public_addr,
             options.data_center.clone(),
             node_selector,
-        ).await;
+        )
+        .await;
 
         let cluster_info = ClusterInfo {
             listen_addr,
@@ -191,14 +195,16 @@ where
     /// Creates a new handle to the underlying storage system with a preset keyspace.
     ///
     /// Changes applied to the handle are distributed across the cluster.
-    pub fn handle_with_keyspace(&self, keyspace: impl Into<String>) -> DatacakeKeyspaceHandle<S> {
+    pub fn handle_with_keyspace(
+        &self,
+        keyspace: impl Into<String>,
+    ) -> DatacakeKeyspaceHandle<S> {
         DatacakeKeyspaceHandle {
             inner: self.handle(),
             keyspace: Cow::Owned(keyspace.into()),
         }
     }
 }
-
 
 /// A cheaply cloneable handle to control the data store.
 pub struct DatacakeHandle<S>
@@ -232,7 +238,10 @@ where
     /// Creates a new handle to the underlying storage system with a preset keyspace.
     ///
     /// Changes applied to the handle are distributed across the cluster.
-    pub fn with_keyspace(&self, keyspace: impl Into<String>) -> DatacakeKeyspaceHandle<S> {
+    pub fn with_keyspace(
+        &self,
+        keyspace: impl Into<String>,
+    ) -> DatacakeKeyspaceHandle<S> {
         DatacakeKeyspaceHandle {
             inner: self.clone(),
             keyspace: Cow::Owned(keyspace.into()),
@@ -240,7 +249,11 @@ where
     }
 
     /// Retrieves a document from the underlying storage.
-    pub async fn get(&self, keyspace: &str, doc_id: Key) -> Result<Option<Document>, S::Error> {
+    pub async fn get(
+        &self,
+        keyspace: &str,
+        doc_id: Key,
+    ) -> Result<Option<Document>, S::Error> {
         let storage = self.group.storage();
         storage.get(keyspace, doc_id).await
     }
@@ -256,7 +269,7 @@ where
     ) -> Result<S::DocsIter, S::Error>
     where
         T: Iterator<Item = Key> + Send,
-        I: IntoIterator<IntoIter = T> + Send
+        I: IntoIterator<IntoIter = T> + Send,
     {
         let storage = self.group.storage();
         storage.multi_get(keyspace, doc_ids.into_iter()).await
@@ -271,9 +284,10 @@ where
         consistency: Consistency,
     ) -> Result<(), error::DatacakeError<S::Error>>
     where
-        D: Into<Bytes>
+        D: Into<Bytes>,
     {
-        let nodes = self.node_selector
+        let nodes = self
+            .node_selector
             .get_nodes(consistency)
             .await
             .map_err(error::DatacakeError::ConsistencyError)?;
@@ -287,7 +301,8 @@ where
             let keyspace = keyspace.to_string();
             let document = document.clone();
             async move {
-                let channel = self.network
+                let channel = self
+                    .network
                     .get_or_connect(node)
                     .await
                     .map_err(|e| error::DatacakeError::TransportError(node, e))?;
@@ -297,7 +312,7 @@ where
                 client
                     .put(keyspace, document)
                     .await
-                    .map_err(|e|error::DatacakeError::RpcError(node, e))?;
+                    .map_err(|e| error::DatacakeError::RpcError(node, e))?;
 
                 Ok::<_, error::DatacakeError<S::Error>>(())
             }
@@ -316,9 +331,10 @@ where
     where
         D: Into<Bytes>,
         T: Iterator<Item = (Key, D)> + Send,
-        I: IntoIterator<IntoIter = T> + Send
+        I: IntoIterator<IntoIter = T> + Send,
     {
-        let nodes = self.node_selector
+        let nodes = self
+            .node_selector
             .get_nodes(consistency)
             .await
             .map_err(error::DatacakeError::ConsistencyError)?;
@@ -335,7 +351,8 @@ where
             let keyspace = keyspace.to_string();
             let documents = docs.clone();
             async move {
-                let channel = self.network
+                let channel = self
+                    .network
                     .get_or_connect(node)
                     .await
                     .map_err(|e| error::DatacakeError::TransportError(node, e))?;
@@ -345,7 +362,7 @@ where
                 client
                     .multi_put(keyspace, documents.into_iter())
                     .await
-                    .map_err(|e|error::DatacakeError::RpcError(node, e))?;
+                    .map_err(|e| error::DatacakeError::RpcError(node, e))?;
 
                 Ok::<_, error::DatacakeError<S::Error>>(())
             }
@@ -361,7 +378,8 @@ where
         doc_id: Key,
         consistency: Consistency,
     ) -> Result<(), error::DatacakeError<S::Error>> {
-        let nodes = self.node_selector
+        let nodes = self
+            .node_selector
             .get_nodes(consistency)
             .await
             .map_err(error::DatacakeError::ConsistencyError)?;
@@ -373,7 +391,8 @@ where
         let factory = |node| {
             let keyspace = keyspace.to_string();
             async move {
-                let channel = self.network
+                let channel = self
+                    .network
                     .get_or_connect(node)
                     .await
                     .map_err(|e| error::DatacakeError::TransportError(node, e))?;
@@ -383,7 +402,7 @@ where
                 client
                     .del(keyspace, doc_id, last_updated)
                     .await
-                    .map_err(|e|error::DatacakeError::RpcError(node, e))?;
+                    .map_err(|e| error::DatacakeError::RpcError(node, e))?;
 
                 Ok::<_, error::DatacakeError<S::Error>>(())
             }
@@ -391,7 +410,6 @@ where
 
         handle_consistency_distribution::<S, _, _>(nodes, factory).await
     }
-
 
     /// Delete multiple documents from the datastore from the set of doc IDs.
     pub async fn del_many<I, T>(
@@ -402,9 +420,10 @@ where
     ) -> Result<(), error::DatacakeError<S::Error>>
     where
         T: Iterator<Item = Key> + Send,
-        I: IntoIterator<IntoIter = T> + Send
+        I: IntoIterator<IntoIter = T> + Send,
     {
-        let nodes = self.node_selector
+        let nodes = self
+            .node_selector
             .get_nodes(consistency)
             .await
             .map_err(error::DatacakeError::ConsistencyError)?;
@@ -421,7 +440,8 @@ where
             let keyspace = keyspace.to_string();
             let docs = docs.clone();
             async move {
-                let channel = self.network
+                let channel = self
+                    .network
                     .get_or_connect(node)
                     .await
                     .map_err(|e| error::DatacakeError::TransportError(node, e))?;
@@ -429,9 +449,9 @@ where
                 let mut client = ConsistencyClient::from(channel);
 
                 client
-                    .multi_del(keyspace,docs.into_iter())
+                    .multi_del(keyspace, docs.into_iter())
                     .await
-                    .map_err(|e|error::DatacakeError::RpcError(node, e))?;
+                    .map_err(|e| error::DatacakeError::RpcError(node, e))?;
 
                 Ok::<_, error::DatacakeError<S::Error>>(())
             }
@@ -440,7 +460,6 @@ where
         handle_consistency_distribution::<S, _, _>(nodes, factory).await
     }
 }
-
 
 /// A convenience wrapper which creates a new handle with a preset keyspace.
 pub struct DatacakeKeyspaceHandle<S>
@@ -476,13 +495,10 @@ where
     ///
     /// If a document does not exist with the given ID, it is simply not part
     /// of the returned iterator.
-    pub async fn get_many<I, T>(
-        &self,
-        doc_ids: I,
-    ) -> Result<S::DocsIter, S::Error>
+    pub async fn get_many<I, T>(&self, doc_ids: I) -> Result<S::DocsIter, S::Error>
     where
         T: Iterator<Item = Key> + Send,
-        I: IntoIterator<IntoIter = T> + Send
+        I: IntoIterator<IntoIter = T> + Send,
     {
         self.inner.get_many(self.keyspace.as_ref(), doc_ids).await
     }
@@ -494,7 +510,9 @@ where
         data: Vec<u8>,
         consistency: Consistency,
     ) -> Result<(), error::DatacakeError<S::Error>> {
-        self.inner.put(self.keyspace.as_ref(), doc_id, data, consistency).await
+        self.inner
+            .put(self.keyspace.as_ref(), doc_id, data, consistency)
+            .await
     }
 
     /// Insert or update multiple documents into the datastore at once.
@@ -503,7 +521,9 @@ where
         documents: Vec<(Key, Vec<u8>)>,
         consistency: Consistency,
     ) -> Result<(), error::DatacakeError<S::Error>> {
-        self.inner.put_many(self.keyspace.as_ref(), documents, consistency).await
+        self.inner
+            .put_many(self.keyspace.as_ref(), documents, consistency)
+            .await
     }
 
     /// Delete a document from the datastore with a given doc ID.
@@ -512,9 +532,10 @@ where
         doc_id: Key,
         consistency: Consistency,
     ) -> Result<(), error::DatacakeError<S::Error>> {
-        self.inner.del(self.keyspace.as_ref(), doc_id, consistency).await
+        self.inner
+            .del(self.keyspace.as_ref(), doc_id, consistency)
+            .await
     }
-
 
     /// Delete multiple documents from the datastore from the set of doc IDs.
     pub async fn del_many(
@@ -522,10 +543,11 @@ where
         doc_ids: Vec<Key>,
         consistency: Consistency,
     ) -> Result<(), error::DatacakeError<S::Error>> {
-        self.inner.del_many(self.keyspace.as_ref(), doc_ids, consistency).await
+        self.inner
+            .del_many(self.keyspace.as_ref(), doc_ids, consistency)
+            .await
     }
 }
-
 
 struct ClusterInfo<'a> {
     listen_addr: SocketAddr,
@@ -533,7 +555,6 @@ struct ClusterInfo<'a> {
     seed_nodes: Vec<String>,
     data_center: &'a str,
 }
-
 
 /// Connects to the chitchat cluster.
 ///
@@ -560,13 +581,13 @@ where
         node_id,
         get_unix_timestamp_ms(),
         cluster_info.public_addr,
-         cluster_info.data_center,
+        cluster_info.data_center,
     );
     let node = DatacakeNode::connect(
         me,
-         cluster_info.listen_addr,
+        cluster_info.listen_addr,
         cluster_id,
-         cluster_info.seed_nodes,
+        cluster_info.seed_nodes,
         FailureDetectorConfig::default(),
         &transport,
     )
@@ -587,7 +608,12 @@ where
     S: Storage + Send + Sync + 'static,
 {
     let changes = node.member_change_watcher();
-    tokio::spawn(watch_membership_changes(keyspace_group, network, node_selector, changes));
+    tokio::spawn(watch_membership_changes(
+        keyspace_group,
+        network,
+        node_selector,
+        changes,
+    ));
     Ok(())
 }
 
@@ -614,10 +640,7 @@ async fn watch_membership_changes<S>(
             let mut data_centers = BTreeMap::<Cow<'static, str>, Vec<SocketAddr>>::new();
             for member in members.iter() {
                 let dc = Cow::Owned(member.data_center.clone());
-                data_centers
-                    .entry(dc)
-                    .or_default()
-                    .push(member.public_addr);
+                data_centers.entry(dc).or_default().push(member.public_addr);
             }
 
             node_selector.set_nodes(data_centers).await;
@@ -684,7 +707,6 @@ async fn watch_membership_changes<S>(
     }
 }
 
-
 async fn handle_consistency_distribution<S, CB, F>(
     nodes: Vec<SocketAddr>,
     factory: CB,
@@ -726,16 +748,18 @@ where
                     error = ?other,
                     "Failed to send action to replica due to unknown error.",
                 );
-            }
+            },
         }
     }
 
     if num_success != num_required {
-        Err(error::DatacakeError::ConsistencyError(ConsistencyError::ConsistencyFailure {
-            responses: num_success,
-            required: num_required,
-            timeout: TIMEOUT_LIMIT,
-        }))
+        Err(error::DatacakeError::ConsistencyError(
+            ConsistencyError::ConsistencyFailure {
+                responses: num_success,
+                required: num_required,
+                timeout: TIMEOUT_LIMIT,
+            },
+        ))
     } else {
         Ok(())
     }

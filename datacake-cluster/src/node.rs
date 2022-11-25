@@ -6,13 +6,20 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chitchat::transport::Transport;
-use chitchat::{spawn_chitchat, ChitchatConfig, ChitchatHandle, FailureDetectorConfig, NodeId, ClusterStateSnapshot};
+use chitchat::{
+    spawn_chitchat,
+    ChitchatConfig,
+    ChitchatHandle,
+    ClusterStateSnapshot,
+    FailureDetectorConfig,
+    NodeId,
+};
 use tokio::sync::watch;
 use tokio_stream::wrappers::WatchStream;
 use tokio_stream::StreamExt;
 
-use crate::DEFAULT_DATA_CENTER;
 use crate::error::DatacakeError;
+use crate::DEFAULT_DATA_CENTER;
 
 static DATA_CENTER_KEY: &str = "data_center";
 const GOSSIP_INTERVAL: Duration = if cfg!(test) {
@@ -36,7 +43,12 @@ pub struct ClusterMember {
 }
 
 impl ClusterMember {
-    pub fn new(node_id: String, generation: u64, public_addr: SocketAddr, data_center: impl Into<String>) -> Self {
+    pub fn new(
+        node_id: String,
+        generation: u64,
+        public_addr: SocketAddr,
+        data_center: impl Into<String>,
+    ) -> Self {
         Self {
             node_id,
             generation,
@@ -208,7 +220,10 @@ impl DatacakeNode {
     }
 }
 
-fn build_cluster_member<'a>(node_id: &'a NodeId, state: &'a ClusterStateSnapshot) -> Result<ClusterMember, String> {
+fn build_cluster_member<'a>(
+    node_id: &'a NodeId,
+    state: &'a ClusterStateSnapshot,
+) -> Result<ClusterMember, String> {
     let (node_unique_id, generation_str) =
         node_id.id.split_once('/').ok_or_else(|| {
             format!(
@@ -217,12 +232,9 @@ fn build_cluster_member<'a>(node_id: &'a NodeId, state: &'a ClusterStateSnapshot
             )
         })?;
 
-    let node_state = state
-        .node_states
-        .get(&node_id.id)
-        .ok_or_else(|| {
-            format!("Could not find node ID `{}` in ChitChat state.", node_id.id,)
-        })?;
+    let node_state = state.node_states.get(&node_id.id).ok_or_else(|| {
+        format!("Could not find node ID `{}` in ChitChat state.", node_id.id,)
+    })?;
 
     let data_center = node_state
         .get(DATA_CENTER_KEY)

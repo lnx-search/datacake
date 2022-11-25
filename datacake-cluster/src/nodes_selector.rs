@@ -3,6 +3,7 @@ use std::cmp;
 use std::collections::{BTreeMap, HashMap};
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
+
 use tokio::sync::oneshot;
 
 const NODE_CACHE_TIMEOUT: Duration = Duration::from_secs(2);
@@ -16,7 +17,7 @@ pub async fn start_node_selector<S>(
     mut selector: S,
 ) -> NodeSelectorHandle
 where
-    S: NodeSelector + Send + 'static
+    S: NodeSelector + Send + 'static,
 {
     let (tx, rx) = flume::bounded(100);
 
@@ -27,7 +28,9 @@ where
 
         while let Ok(op) = rx.recv_async().await {
             match op {
-                Op::SetNodes { data_centers: new_data_centers } => {
+                Op::SetNodes {
+                    data_centers: new_data_centers,
+                } => {
                     let mut new_total = 0;
                     for (name, nodes) in new_data_centers {
                         new_total += nodes.len();
@@ -43,7 +46,8 @@ where
                     cached_nodes.clear();
                 },
                 Op::GetNodes { consistency, tx } => {
-                    if let Some((last_refreshed, nodes)) = cached_nodes.get(&consistency) {
+                    if let Some((last_refreshed, nodes)) = cached_nodes.get(&consistency)
+                    {
                         if last_refreshed.elapsed() < NODE_CACHE_TIMEOUT {
                             let _ = tx.send(Ok(nodes.clone()));
                             continue;
@@ -55,11 +59,12 @@ where
                         &local_dc,
                         total_nodes,
                         &mut data_centers,
-                        consistency
+                        consistency,
                     );
 
                     if let Ok(ref nodes) = nodes {
-                        cached_nodes.insert(consistency, (Instant::now(), nodes.clone()));
+                        cached_nodes
+                            .insert(consistency, (Instant::now(), nodes.clone()));
                     }
 
                     let _ = tx.send(nodes);
@@ -78,12 +83,15 @@ where
 /// what replicas should be prioritized when sending events based on
 /// a given consistency level.
 pub struct NodeSelectorHandle {
-    tx: flume::Sender<Op>
+    tx: flume::Sender<Op>,
 }
 
 impl NodeSelectorHandle {
     /// Set the nodes which can be used by the selector.
-    pub async fn set_nodes(&self, data_centers: BTreeMap<Cow<'static, str>, Vec<SocketAddr>>) {
+    pub async fn set_nodes(
+        &self,
+        data_centers: BTreeMap<Cow<'static, str>, Vec<SocketAddr>>,
+    ) {
         self.tx
             .send_async(Op::SetNodes { data_centers })
             .await
@@ -94,7 +102,10 @@ impl NodeSelectorHandle {
     ///
     /// If the consistency level cannot be met with the given data centers
     /// a [ConsistencyError] is returned.
-    pub async fn get_nodes(&self, consistency: Consistency) -> Result<Vec<SocketAddr>, ConsistencyError> {
+    pub async fn get_nodes(
+        &self,
+        consistency: Consistency,
+    ) -> Result<Vec<SocketAddr>, ConsistencyError> {
         let (tx, rx) = oneshot::channel();
 
         self.tx
@@ -107,17 +118,21 @@ impl NodeSelectorHandle {
 }
 
 enum Op {
-    SetNodes { data_centers: BTreeMap<Cow<'static, str>, Vec<SocketAddr>> },
-    GetNodes { consistency: Consistency, tx: oneshot::Sender<Result<Vec<SocketAddr>, ConsistencyError>> },
+    SetNodes {
+        data_centers: BTreeMap<Cow<'static, str>, Vec<SocketAddr>>,
+    },
+    GetNodes {
+        consistency: Consistency,
+        tx: oneshot::Sender<Result<Vec<SocketAddr>, ConsistencyError>>,
+    },
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConsistencyError {
-    #[error("Not enough nodes are present in the cluster to achieve this consistency level.")]
-    NotEnoughNodes {
-        live: usize,
-        required: usize,
-    },
+    #[error(
+        "Not enough nodes are present in the cluster to achieve this consistency level."
+    )]
+    NotEnoughNodes { live: usize, required: usize },
 
     #[error(
         "Failed to achieve the desired consistency level before the timeout \
@@ -127,7 +142,7 @@ pub enum ConsistencyError {
         responses: usize,
         required: usize,
         timeout: Duration,
-    }
+    },
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
@@ -187,7 +202,7 @@ pub trait NodeSelector {
         total_nodes: usize,
         data_centers: &mut BTreeMap<Cow<'static, str>, NodeCycler>,
         consistency: Consistency,
-    ) -> Result<Vec<SocketAddr>, ConsistencyError> ;
+    ) -> Result<Vec<SocketAddr>, ConsistencyError>;
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -205,33 +220,59 @@ impl NodeSelector for DCAwareSelector {
         let mut selected_nodes = Vec::new();
 
         match consistency {
-            Consistency::One => return select_n_nodes(local_node, local_dc, 1, total_nodes, data_centers),
-            Consistency::Two => return select_n_nodes(local_node, local_dc, 2, total_nodes, data_centers),
-            Consistency::Three => return select_n_nodes(local_node, local_dc, 3, total_nodes, data_centers),
+            Consistency::One => {
+                return select_n_nodes(
+                    local_node,
+                    local_dc,
+                    1,
+                    total_nodes,
+                    data_centers,
+                )
+            },
+            Consistency::Two => {
+                return select_n_nodes(
+                    local_node,
+                    local_dc,
+                    2,
+                    total_nodes,
+                    data_centers,
+                )
+            },
+            Consistency::Three => {
+                return select_n_nodes(
+                    local_node,
+                    local_dc,
+                    3,
+                    total_nodes,
+                    data_centers,
+                )
+            },
             Consistency::Quorum => {
                 // The majority is not `(len / 2) + 1` here as the local node will also
                 // be setting the value, giving us out `n + 1` majority.
                 let majority = total_nodes / 2;
 
-                let mut dcs_iterators = data_centers.iter()
-                    .map(|(_, nodes)|
+                let mut dcs_iterators = data_centers
+                    .iter()
+                    .map(|(_, nodes)| {
                         nodes
                             .get_nodes()
                             .iter()
                             .copied()
                             .filter(|addr| addr != &local_node)
-                    )
+                    })
                     .collect::<Vec<_>>();
                 let mut previous_total = selected_nodes.len();
-                while selected_nodes.len() < majority  {
-                    let nodes = dcs_iterators
-                        .iter_mut()
-                        .filter_map(|iter| iter.next());
+                while selected_nodes.len() < majority {
+                    let nodes = dcs_iterators.iter_mut().filter_map(|iter| iter.next());
                     selected_nodes.extend(nodes);
 
                     // We have no more nodes to add.
                     if previous_total == selected_nodes.len() {
-                        return Err(ConsistencyError::NotEnoughNodes { live: selected_nodes.len(), required: majority });
+                        return Err(ConsistencyError::NotEnoughNodes {
+                            live: selected_nodes.len(),
+                            required: majority,
+                        });
                     }
 
                     previous_total = selected_nodes.len();
@@ -248,7 +289,7 @@ impl NodeSelector for DCAwareSelector {
                             .iter()
                             .copied()
                             .filter(|addr| addr != &local_node)
-                            .take(majority)
+                            .take(majority),
                     );
                 }
             },
@@ -256,7 +297,7 @@ impl NodeSelector for DCAwareSelector {
                 data_centers
                     .values()
                     .flat_map(|cycler| cycler.nodes.clone())
-                    .filter(|addr| addr != &local_node)
+                    .filter(|addr| addr != &local_node),
             ),
             Consistency::EachQuorum => {
                 for (name, nodes) in data_centers {
@@ -274,11 +315,11 @@ impl NodeSelector for DCAwareSelector {
                             .iter()
                             .copied()
                             .filter(|addr| addr != &local_node)
-                            .take(majority)
+                            .take(majority),
                     );
                 }
             },
-            Consistency::None => {}
+            Consistency::None => {},
         }
 
         Ok(selected_nodes)
@@ -332,9 +373,11 @@ fn select_n_nodes(
     use rand::seq::IteratorRandom;
     let mut rng = rand::thread_rng();
 
-    let num_nodes_outside_dc = total_nodes - data_centers.get(local_dc)
-        .map(|nodes| nodes.len())
-        .unwrap_or_default();
+    let num_nodes_outside_dc = total_nodes
+        - data_centers
+            .get(local_dc)
+            .map(|nodes| nodes.len())
+            .unwrap_or_default();
     let can_skip_local_dc = num_nodes_outside_dc >= n;
 
     let num_data_centers = if can_skip_local_dc {
@@ -366,7 +409,7 @@ fn select_n_nodes(
                     if dc_nodes.len() <= 1 {
                         num_extra_nodes += 1;
                         dc_count -= 1;
-                        continue
+                        continue;
                     }
 
                     dc_nodes.next().unwrap()
@@ -378,14 +421,14 @@ fn select_n_nodes(
             None => {
                 num_extra_nodes += 1;
                 dc_count -= 1;
-                continue
-            }
+                continue;
+            },
         };
 
         selected_nodes.push(node);
 
         if num_extra_nodes == 0 {
-            continue
+            continue;
         }
 
         let num_extra_nodes_per_dc = num_extra_nodes / cmp::max(dc_count - 1, 1);
@@ -407,11 +450,17 @@ fn select_n_nodes(
         debug!(selected_node = ?selected_nodes, "Nodes have been selected for the given parameters.");
         Ok(selected_nodes)
     } else {
-        warn!(live_nodes = total_nodes - 1, required_node = n, "Failed to meet consistency level due to shortage of live nodes");
-        Err(ConsistencyError::NotEnoughNodes { live: selected_nodes.len(), required: n })
+        warn!(
+            live_nodes = total_nodes - 1,
+            required_node = n,
+            "Failed to meet consistency level due to shortage of live nodes"
+        );
+        Err(ConsistencyError::NotEnoughNodes {
+            live: selected_nodes.len(),
+            required: n,
+        })
     }
 }
-
 
 #[derive(Debug)]
 pub struct NodeCycler {
@@ -444,10 +493,7 @@ impl NodeCycler {
 
 impl From<Vec<SocketAddr>> for NodeCycler {
     fn from(nodes: Vec<SocketAddr>) -> Self {
-        Self {
-            cursor: 0,
-            nodes,
-        }
+        Self { cursor: 0, nodes }
     }
 }
 
@@ -467,7 +513,6 @@ impl Iterator for NodeCycler {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use std::borrow::Cow;
@@ -475,7 +520,13 @@ mod tests {
     use std::fmt::Display;
     use std::net::{IpAddr, SocketAddr};
 
-    use crate::nodes_selector::{Consistency, DCAwareSelector, NodeCycler, NodeSelector, select_n_nodes};
+    use crate::nodes_selector::{
+        select_n_nodes,
+        Consistency,
+        DCAwareSelector,
+        NodeCycler,
+        NodeSelector,
+    };
 
     #[test]
     fn test_dc_aware_selector() {
@@ -487,7 +538,11 @@ mod tests {
         let nodes = selector
             .select_nodes(addr, "dc-0", total_nodes, &mut dc, Consistency::All)
             .expect("Get nodes");
-        assert_eq!(nodes.len(), total_nodes - 1, "Expected all nodes to be selected except for local node.");
+        assert_eq!(
+            nodes.len(),
+            total_nodes - 1,
+            "Expected all nodes to be selected except for local node."
+        );
 
         let nodes = selector
             .select_nodes(addr, "dc-0", total_nodes, &mut dc, Consistency::None)
@@ -517,11 +572,7 @@ mod tests {
             .expect("Get nodes");
         assert_eq!(
             nodes,
-            vec![
-                make_addr(0, 1),
-                make_addr(1, 0),
-                make_addr(2, 0),
-            ]
+            vec![make_addr(0, 1), make_addr(1, 0), make_addr(2, 0),]
         );
 
         let mut dc = make_dc(vec![1]);
@@ -553,72 +604,51 @@ mod tests {
         let mut dc = make_dc(vec![3, 2, 1]);
 
         // DC-0
-        let nodes = select_n_nodes(addr, "dc-0", 3, total_nodes, &mut dc).expect("get nodes");
+        let nodes =
+            select_n_nodes(addr, "dc-0", 3, total_nodes, &mut dc).expect("get nodes");
         assert_eq!(
             nodes,
-            vec![
-                make_addr(1, 0),
-                make_addr(1, 1),
-                make_addr(2, 0),
-            ],
+            vec![make_addr(1, 0), make_addr(1, 1), make_addr(2, 0),],
         );
 
-        let nodes = select_n_nodes(addr, "dc-0", 2, total_nodes, &mut dc).expect("get nodes");
-        assert_eq!(
-            nodes,
-            vec![
-                make_addr(1, 0),
-                make_addr(2, 0),
-            ],
-        );
+        let nodes =
+            select_n_nodes(addr, "dc-0", 2, total_nodes, &mut dc).expect("get nodes");
+        assert_eq!(nodes, vec![make_addr(1, 0), make_addr(2, 0),],);
 
-        let nodes = select_n_nodes(addr, "dc-0", 0, total_nodes, &mut dc).expect("get nodes");
+        let nodes =
+            select_n_nodes(addr, "dc-0", 0, total_nodes, &mut dc).expect("get nodes");
         assert_eq!(nodes, Vec::<SocketAddr>::new());
 
         // DC-1
-        let nodes = select_n_nodes(addr, "dc-1", 3, total_nodes, &mut dc).expect("get nodes");
+        let nodes =
+            select_n_nodes(addr, "dc-1", 3, total_nodes, &mut dc).expect("get nodes");
         assert_eq!(
             nodes,
-            vec![
-                make_addr(0, 1),
-                make_addr(0, 2),
-                make_addr(2, 0),
-            ],
+            vec![make_addr(0, 1), make_addr(0, 2), make_addr(2, 0),],
         );
 
-        let nodes = select_n_nodes(addr, "dc-1", 2, total_nodes, &mut dc).expect("get nodes");
-        assert_eq!(
-            nodes,
-            vec![
-                make_addr(0, 1),
-                make_addr(2, 0),
-            ],
-        );
+        let nodes =
+            select_n_nodes(addr, "dc-1", 2, total_nodes, &mut dc).expect("get nodes");
+        assert_eq!(nodes, vec![make_addr(0, 1), make_addr(2, 0),],);
 
-        let nodes = select_n_nodes(addr, "dc-1", 0, total_nodes, &mut dc).expect("get nodes");
+        let nodes =
+            select_n_nodes(addr, "dc-1", 0, total_nodes, &mut dc).expect("get nodes");
         assert_eq!(nodes, Vec::<SocketAddr>::new());
 
         // DC-2
-        let nodes = select_n_nodes(addr, "dc-2", 3, total_nodes, &mut dc).expect("get nodes");
+        let nodes =
+            select_n_nodes(addr, "dc-2", 3, total_nodes, &mut dc).expect("get nodes");
         assert_eq!(
             nodes,
-            vec![
-                make_addr(0, 2),
-                make_addr(0, 0),
-                make_addr(1, 1),
-            ],
+            vec![make_addr(0, 2), make_addr(0, 0), make_addr(1, 1),],
         );
 
-        let nodes = select_n_nodes(addr, "dc-2", 2, total_nodes, &mut dc).expect("get nodes");
-        assert_eq!(
-            nodes,
-            vec![
-                make_addr(0, 1),
-                make_addr(1, 0),
-            ],
-        );
+        let nodes =
+            select_n_nodes(addr, "dc-2", 2, total_nodes, &mut dc).expect("get nodes");
+        assert_eq!(nodes, vec![make_addr(0, 1), make_addr(1, 0),],);
 
-        let nodes = select_n_nodes(addr, "dc-2", 0, total_nodes, &mut dc).expect("get nodes");
+        let nodes =
+            select_n_nodes(addr, "dc-2", 0, total_nodes, &mut dc).expect("get nodes");
         assert_eq!(nodes, Vec::<SocketAddr>::new());
     }
 
@@ -629,26 +659,19 @@ mod tests {
         let mut dc = make_dc(vec![3, 2]);
 
         // DC-0
-        let nodes = select_n_nodes(addr, "dc-0", 3, total_nodes, &mut dc).expect("get nodes");
+        let nodes =
+            select_n_nodes(addr, "dc-0", 3, total_nodes, &mut dc).expect("get nodes");
         assert_eq!(
             nodes,
-            vec![
-                make_addr(0, 1),
-                make_addr(0, 2),
-                make_addr(1, 0),
-            ],
+            vec![make_addr(0, 1), make_addr(0, 2), make_addr(1, 0),],
         );
 
-        let nodes = select_n_nodes(addr, "dc-0", 2, total_nodes, &mut dc).expect("get nodes");
-        assert_eq!(
-            nodes,
-            vec![
-                make_addr(1, 1),
-                make_addr(1, 0),
-            ],
-        );
+        let nodes =
+            select_n_nodes(addr, "dc-0", 2, total_nodes, &mut dc).expect("get nodes");
+        assert_eq!(nodes, vec![make_addr(1, 1), make_addr(1, 0),],);
 
-        let nodes = select_n_nodes(addr, "dc-0", 0, total_nodes, &mut dc).expect("get nodes");
+        let nodes =
+            select_n_nodes(addr, "dc-0", 0, total_nodes, &mut dc).expect("get nodes");
         assert_eq!(nodes, Vec::<SocketAddr>::new());
     }
 

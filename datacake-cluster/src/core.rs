@@ -1,7 +1,7 @@
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
-use bytes::Bytes;
 
+use bytes::Bytes;
 use datacake_crdt::{HLCTimestamp, Key};
 
 use crate::rpc::datacake_api;
@@ -101,7 +101,6 @@ impl From<HLCTimestamp> for datacake_api::Timestamp {
     }
 }
 
-
 /// Inserts or updates the given keyspace locally and updates the given keyspace state.
 pub(crate) async fn put_data<S>(
     keyspace: &str,
@@ -114,16 +113,11 @@ where
     let doc_id = document.id;
     let last_updated = document.last_updated;
 
-    group
-        .storage()
-        .put(keyspace, document)
-        .await?;
+    group.storage().put(keyspace, document).await?;
 
     let keyspace = group.get_or_create_keyspace(keyspace).await;
 
-    keyspace
-        .put(doc_id, last_updated)
-        .await?;
+    keyspace.put(doc_id, last_updated).await?;
 
     Ok(())
 }
@@ -144,16 +138,11 @@ where
         doc
     });
 
-    group
-        .storage()
-        .multi_put(keyspace, documents)
-        .await?;
+    group.storage().multi_put(keyspace, documents).await?;
 
     let keyspace = group.get_or_create_keyspace(keyspace).await;
 
-    keyspace
-        .multi_put(entries)
-        .await?;
+    keyspace.multi_put(entries).await?;
 
     Ok(())
 }
@@ -168,16 +157,11 @@ pub(crate) async fn del_data<S>(
 where
     S: Storage + Send + Sync + 'static,
 {
-    group
-        .storage()
-        .del(keyspace, doc_id)
-        .await?;
+    group.storage().del(keyspace, doc_id).await?;
 
     let keyspace = group.get_or_create_keyspace(keyspace).await;
 
-    keyspace
-        .del(doc_id, last_updated)
-        .await?;
+    keyspace.del(doc_id, last_updated).await?;
 
     Ok(())
 }
@@ -197,16 +181,11 @@ where
         doc.0
     });
 
-    group
-        .storage()
-        .multi_del(keyspace, documents)
-        .await?;
+    group.storage().multi_del(keyspace, documents).await?;
 
     let keyspace = group.get_or_create_keyspace(keyspace).await;
 
-    keyspace
-        .multi_del(entries)
-        .await?;
+    keyspace.multi_del(entries).await?;
 
     Ok(())
 }

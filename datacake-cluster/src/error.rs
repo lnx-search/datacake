@@ -3,6 +3,7 @@ use std::fmt::Debug;
 use std::net::SocketAddr;
 
 use thiserror::Error;
+
 use crate::nodes_selector::ConsistencyError;
 
 #[derive(Debug, Error)]

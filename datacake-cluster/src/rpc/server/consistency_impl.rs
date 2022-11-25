@@ -45,9 +45,7 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
         request: Request<MultiPutPayload>,
     ) -> Result<Response<Empty>, Status> {
         let inner = request.into_inner();
-        let documents = inner.documents
-            .into_iter()
-            .map(Document::from);
+        let documents = inner.documents.into_iter().map(Document::from);
 
         crate::core::put_many_data(&inner.keyspace, documents, &self.group)
             .await
@@ -78,12 +76,10 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
     ) -> Result<Response<Empty>, Status> {
         let inner = request.into_inner();
 
-        let documents = inner.documents
-            .into_iter()
-            .map(|doc| {
-                let ts = HLCTimestamp::from(doc.last_updated.unwrap());
-                (doc.id, ts)
-            });
+        let documents = inner.documents.into_iter().map(|doc| {
+            let ts = HLCTimestamp::from(doc.last_updated.unwrap());
+            (doc.id, ts)
+        });
 
         crate::core::del_many_data(&inner.keyspace, documents, &self.group)
             .await
