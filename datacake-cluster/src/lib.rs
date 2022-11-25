@@ -129,7 +129,7 @@ where
         let clock = Clock::new(crc32fast::hash(node_id.as_bytes()));
         let storage = Arc::new(datastore);
 
-        let group = KeyspaceGroup::new(storage.clone()).await;
+        let group = KeyspaceGroup::new(storage.clone(), clock.clone()).await;
         let network = RpcNetwork::default();
 
         // Load the keyspace states.

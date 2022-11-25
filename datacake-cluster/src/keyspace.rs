@@ -12,6 +12,7 @@ use parking_lot::RwLock;
 use rkyv::{Archive, Deserialize, Serialize};
 use tokio::sync::oneshot;
 use tokio::time::{interval, Instant};
+use crate::Clock;
 
 use crate::storage::Storage;
 
@@ -76,6 +77,7 @@ impl DerefMut for KeyspaceTimestamps {
 /// The group keeps track of what keyspace was updated and when it was last updated,
 /// along with creation of new states for a new keyspace.
 pub struct KeyspaceGroup<S: Storage> {
+    clock: Clock,
     storage: Arc<S>,
     keyspace_timestamps: Arc<RwLock<KeyspaceTimestamps>>,
     group: Arc<RwLock<HashMap<Cow<'static, str>, KeyspaceState<S>>>>,
@@ -84,6 +86,7 @@ pub struct KeyspaceGroup<S: Storage> {
 impl<S: Storage> Clone for KeyspaceGroup<S> {
     fn clone(&self) -> Self {
         Self {
+            clock: self.clock.clone(),
             storage: self.storage.clone(),
             keyspace_timestamps: self.keyspace_timestamps.clone(),
             group: self.group.clone(),
@@ -96,8 +99,9 @@ where
     S: Storage + Send + Sync + 'static,
 {
     /// Creates a new, empty keyspace group with a given storage implementation.
-    pub async fn new(storage: Arc<S>) -> Self {
+    pub async fn new(storage: Arc<S>, clock: Clock) -> Self {
         let slf = Self {
+            clock,
             storage,
             keyspace_timestamps: Default::default(),
             group: Default::default(),
@@ -114,6 +118,12 @@ where
         &self.storage
     }
 
+    #[inline]
+    /// The clock used by the given keyspace group.
+    pub fn clock(&self) -> &Clock {
+        &self.clock
+    }
+
     /// Serializes the set of keyspace and their applicable timestamps of when they were last updated.
     ///
     /// These timestamps should only be compared against timestamps created by the same node, comparing
@@ -123,12 +133,6 @@ where
         rkyv::to_bytes::<_, 4096>(guard.deref())
             .map_err(|_| CorruptedState)
             .map(|buf| buf.into_vec())
-    }
-
-    /// Get a handle to a given keyspace.
-    pub fn get_keyspace(&self, name: &str) -> Option<KeyspaceState<S>> {
-        let guard = self.group.read();
-        guard.get(name).cloned()
     }
 
     /// Get a handle to a given keyspace.

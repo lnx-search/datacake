@@ -60,9 +60,8 @@ async fn run_clock(mut clock: HLCTimestamp, reqs: flume::Receiver<Event>) {
                 let _ = tx.send(ts);
             },
             Event::Register(remote_ts) => {
-                clock
-                    .recv(&remote_ts)
-                    .expect("Clock counter should not overflow");
+                let _ = clock.recv(&remote_ts);
+
 
                 if clock.counter() >= u16::MAX - 10 {
                     tokio::time::sleep(Duration::from_millis(1)).await;

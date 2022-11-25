@@ -33,6 +33,11 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
         let inner = request.into_inner();
         let document = Document::from(inner.document.unwrap());
 
+        self.group
+            .clock()
+            .register_ts(document.last_updated)
+            .await;
+
         crate::core::put_data(&inner.keyspace, document, &self.group)
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
@@ -45,11 +50,25 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
         request: Request<MultiPutPayload>,
     ) -> Result<Response<Empty>, Status> {
         let inner = request.into_inner();
-        let documents = inner.documents.into_iter().map(Document::from);
+        let mut newest_ts = HLCTimestamp::new(0, 0, 0);
+        let documents = inner.documents
+            .into_iter()
+            .map(Document::from)
+            .map(|doc| {
+                if doc.last_updated > newest_ts {
+                    newest_ts = doc.last_updated;
+                }
+                doc
+            });
 
         crate::core::put_many_data(&inner.keyspace, documents, &self.group)
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
+
+        self.group
+            .clock()
+            .register_ts(newest_ts)
+            .await;
 
         Ok(Response::new(Empty {}))
     }
@@ -62,6 +81,11 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
         let document = inner.document.unwrap();
         let doc_id = document.id;
         let last_updated = HLCTimestamp::from(document.last_updated.unwrap());
+
+        self.group
+            .clock()
+            .register_ts(last_updated)
+            .await;
 
         crate::core::del_data(&inner.keyspace, doc_id, last_updated, &self.group)
             .await
@@ -76,14 +100,28 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
     ) -> Result<Response<Empty>, Status> {
         let inner = request.into_inner();
 
-        let documents = inner.documents.into_iter().map(|doc| {
-            let ts = HLCTimestamp::from(doc.last_updated.unwrap());
-            (doc.id, ts)
-        });
+        let mut newest_ts = HLCTimestamp::new(0, 0, 0);
+        let documents = inner.documents
+            .into_iter()
+            .map(|doc| {
+                let ts = HLCTimestamp::from(doc.last_updated.unwrap());
+                (doc.id, ts)
+            })
+            .map(|(id, ts)| {
+                if ts > newest_ts {
+                    newest_ts = ts;
+                }
+                (id, ts)
+            });
 
         crate::core::del_many_data(&inner.keyspace, documents, &self.group)
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
+
+        self.group
+            .clock()
+            .register_ts(newest_ts)
+            .await;
 
         Ok(Response::new(Empty {}))
     }
