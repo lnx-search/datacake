@@ -12,7 +12,8 @@ mod storage;
 mod nodes_selector;
 
 use std::borrow::Cow;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::fmt::Display;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -28,11 +29,45 @@ use tokio_stream::StreamExt;
 use crate::clock::Clock;
 use crate::core::Document;
 use crate::keyspace::KeyspaceGroup;
-use crate::node::{ClusterMember, DatacakeNode, DEFAULT_DATA_CENTER};
+use crate::node::{ClusterMember, DatacakeNode};
+use crate::nodes_selector::{DCAwareSelector, NodeSelector, NodeSelectorHandle};
 use crate::poller::ShutdownHandle;
 use crate::rpc::{Context, GrpcTransport, RpcNetwork};
 
+pub static DEFAULT_DATA_CENTER: &str = "datacake-dc-unknown";
+pub static DEFAULT_CLUSTER_ID: &str = "datacake-cluster-unknown";
 const POLLING_INTERVAL_DURATION: Duration = Duration::from_secs(1);
+
+
+/// Non-required configurations for the datacake cluster node.
+pub struct ClusterOptions {
+    cluster_id: String,
+    data_center: Cow<'static, str>,
+}
+
+impl Default for ClusterOptions {
+    fn default() -> Self {
+        Self {
+            cluster_id: DEFAULT_CLUSTER_ID.to_string(),
+            data_center: Cow::Borrowed(DEFAULT_DATA_CENTER),
+        }
+    }
+}
+
+impl ClusterOptions {
+    /// Set the cluster id for the given node.
+    pub fn with_cluster_id(mut self, cluster_id: impl Display) -> Self {
+        self.cluster_id = cluster_id.to_string();
+        self
+    }
+
+    /// Set the data center the node belongs to.
+    pub fn with_data_center(mut self, dc: impl Display) -> Self {
+        self.data_center = Cow::Owned(dc.to_string());
+        self
+    }
+}
+
 
 /// A fully managed eventually consistent state controller.
 ///
@@ -70,17 +105,19 @@ where
     /// No seed nodes need to be live at the time of connecting for the cluster to start correctly,
     /// but they are required in order for nodes to discover one-another and share
     /// their basic state.
-    pub async fn connect(
+    pub async fn connect<DS>(
         node_id: impl Into<String>,
-        cluster_id: impl Into<String>,
         listen_addr: SocketAddr,
         public_addr: SocketAddr,
         seed_nodes: Vec<String>,
-        data_center: Option<impl AsRef<str>>,
         datastore: S,
-    ) -> Result<Self, error::DatacakeError<S::Error>> {
+        node_selector: DS,
+        options: ClusterOptions
+    ) -> Result<Self, error::DatacakeError<S::Error>>
+    where
+        DS: NodeSelector + Send + 'static,
+    {
         let node_id = node_id.into();
-        let cluster_id = cluster_id.into();
 
         let clock = Clock::new(crc32fast::hash(node_id.as_bytes()));
         let storage = Arc::new(datastore);
@@ -91,28 +128,32 @@ where
         // Load the keyspace states.
         group.load_states_from_storage().await?;
 
+        let selector = nodes_selector::start_node_selector(
+            public_addr,
+            options.data_center.clone(),
+            node_selector,
+        ).await;
+
         let cluster_info = ClusterInfo {
             listen_addr,
             public_addr,
             seed_nodes,
-            data_center: data_center
-                .as_ref()
-                .map(|v| v.as_ref()),
+            data_center: options.data_center.as_ref(),
         };
         let node = connect_node(
             node_id.clone(),
-            cluster_id.clone(),
+            options.cluster_id.clone(),
             group.clone(),
             network.clone(),
             cluster_info,
         )
         .await?;
 
-        setup_poller(group.clone(), network.clone(), &node).await?;
+        setup_poller(group.clone(), network.clone(), &node, selector.clone()).await?;
 
         info!(
             node_id = %node_id,
-            cluster_id = %cluster_id,
+            cluster_id = %options.cluster_id,
             listen_addr = %listen_addr,
             "Datacake cluster connected."
         );
@@ -371,7 +412,7 @@ struct ClusterInfo<'a> {
     listen_addr: SocketAddr,
     public_addr: SocketAddr,
     seed_nodes: Vec<String>,
-    data_center: Option<&'a str>,
+    data_center: &'a str,
 }
 
 
@@ -400,7 +441,7 @@ where
         node_id,
         get_unix_timestamp_ms(),
         cluster_info.public_addr,
-         cluster_info.data_center.unwrap_or(DEFAULT_DATA_CENTER),
+         cluster_info.data_center,
     );
     let node = DatacakeNode::connect(
         me,
@@ -421,12 +462,13 @@ async fn setup_poller<S>(
     keyspace_group: KeyspaceGroup<S>,
     network: RpcNetwork,
     node: &DatacakeNode,
+    node_selector: NodeSelectorHandle,
 ) -> Result<(), error::DatacakeError<S::Error>>
 where
     S: Storage + Send + Sync + 'static,
 {
     let changes = node.member_change_watcher();
-    tokio::spawn(watch_membership_changes(keyspace_group, network, changes));
+    tokio::spawn(watch_membership_changes(keyspace_group, network, node_selector, changes));
     Ok(())
 }
 
@@ -436,6 +478,7 @@ where
 async fn watch_membership_changes<S>(
     keyspace_group: KeyspaceGroup<S>,
     network: RpcNetwork,
+    node_selector: NodeSelectorHandle,
     mut changes: WatchStream<Vec<ClusterMember>>,
 ) where
     S: Storage + Send + Sync + 'static,
@@ -447,6 +490,19 @@ async fn watch_membership_changes<S>(
             .iter()
             .map(|member| (member.node_id.clone(), member.public_addr))
             .collect::<HashSet<_>>();
+
+        {
+            let mut data_centers = BTreeMap::<Cow<'static, str>, Vec<SocketAddr>>::new();
+            for member in members.iter() {
+                let dc = Cow::Owned(member.data_center.clone());
+                data_centers
+                    .entry(dc)
+                    .or_default()
+                    .push(member.public_addr);
+            }
+
+            node_selector.set_nodes(data_centers).await;
+        }
 
         // Remove client no longer apart of the network.
         for (node_id, addr) in last_network_set.difference(&new_network_set) {

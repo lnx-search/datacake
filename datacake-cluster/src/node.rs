@@ -14,7 +14,6 @@ use tokio_stream::StreamExt;
 use crate::error::DatacakeError;
 
 static DATA_CENTER_KEY: &str = "data_center";
-pub static DEFAULT_DATA_CENTER: &str = "lnx-dc-unknown";
 const GOSSIP_INTERVAL: Duration = if cfg!(test) {
     Duration::from_millis(200)
 } else {

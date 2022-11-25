@@ -1,8 +1,115 @@
 use std::borrow::Cow;
 use std::cmp;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::net::SocketAddr;
-use std::time::Duration;
+use std::time::{Duration, Instant};
+use tokio::sync::oneshot;
+
+const NODE_CACHE_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// Starts the node selector actor with a given node selector implementation.
+///
+/// This system will cache selected nodes for a given consistency level for upto 2 seconds.
+pub async fn start_node_selector<S>(
+    local_node: SocketAddr,
+    local_dc: Cow<'static, str>,
+    mut selector: S,
+) -> NodeSelectorHandle
+where
+    S: NodeSelector + Send + 'static
+{
+    let (tx, rx) = flume::bounded(100);
+
+    tokio::spawn(async move {
+        let mut total_nodes = 0;
+        let mut data_centers = BTreeMap::new();
+        let mut cached_nodes = HashMap::<Consistency, (Instant, Vec<SocketAddr>)>::new();
+
+        while let Ok(op) = rx.recv_async().await {
+            match op {
+                Op::SetNodes { data_centers: new_data_centers } => {
+                    let mut new_total = 0;
+                    for (name, nodes) in new_data_centers {
+                        new_total += nodes.len();
+                        data_centers.insert(name, NodeCycler::from(nodes));
+                    }
+                    total_nodes = new_total;
+                    info!(
+                        total_nodes = total_nodes,
+                        num_data_centers = data_centers.len(),
+                        "Node selector has updated eligible nodes.",
+                    );
+
+                    cached_nodes.clear();
+                },
+                Op::GetNodes { consistency, tx } => {
+                    if let Some((last_refreshed, nodes)) = cached_nodes.get(&consistency) {
+                        if last_refreshed.elapsed() < NODE_CACHE_TIMEOUT {
+                            let _ = tx.send(Ok(nodes.clone()));
+                            continue;
+                        }
+                    }
+
+                    let nodes = selector.select_nodes(
+                        local_node,
+                        &local_dc,
+                        total_nodes,
+                        &mut data_centers,
+                        consistency
+                    );
+
+                    if let Ok(ref nodes) = nodes {
+                        cached_nodes.insert(consistency, (Instant::now(), nodes.clone()));
+                    }
+
+                    let _ = tx.send(nodes);
+                },
+            }
+        }
+
+        info!("Node selector service has shutdown.");
+    });
+
+    NodeSelectorHandle { tx }
+}
+
+#[derive(Clone)]
+/// A handle to the node selector actor responsible for working out
+/// what replicas should be prioritized when sending events based on
+/// a given consistency level.
+pub struct NodeSelectorHandle {
+    tx: flume::Sender<Op>
+}
+
+impl NodeSelectorHandle {
+    /// Set the nodes which can be used by the selector.
+    pub async fn set_nodes(&self, data_centers: BTreeMap<Cow<'static, str>, Vec<SocketAddr>>) {
+        self.tx
+            .send_async(Op::SetNodes { data_centers })
+            .await
+            .expect("contact actor");
+    }
+
+    /// Gets a set of nodes based on a given consistency level.
+    ///
+    /// If the consistency level cannot be met with the given data centers
+    /// a [ConsistencyError] is returned.
+    pub async fn get_nodes(&self, consistency: Consistency) -> Result<Vec<SocketAddr>, ConsistencyError> {
+        let (tx, rx) = oneshot::channel();
+
+        self.tx
+            .send_async(Op::GetNodes { consistency, tx })
+            .await
+            .expect("contact actor");
+
+        rx.await.expect("get actor response")
+    }
+}
+
+enum Op {
+    SetNodes { data_centers: BTreeMap<Cow<'static, str>, Vec<SocketAddr>> },
+    GetNodes { consistency: Consistency, tx: oneshot::Sender<Result<Vec<SocketAddr>, ConsistencyError>> },
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConsistencyError {
@@ -23,6 +130,7 @@ pub enum ConsistencyError {
     }
 }
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 /// The consistency level which should be reached before a write can be
 /// returned as successful.
 ///
@@ -77,7 +185,7 @@ pub trait NodeSelector {
         local_node: SocketAddr,
         local_dc: &str,
         total_nodes: usize,
-        nodes: &mut BTreeMap<Cow<'static, str>, NodeCycler>,
+        data_centers: &mut BTreeMap<Cow<'static, str>, NodeCycler>,
         consistency: Consistency,
     ) -> Result<Vec<SocketAddr>, ConsistencyError> ;
 }
@@ -413,7 +521,29 @@ mod tests {
                 make_addr(0, 1),
                 make_addr(1, 0),
                 make_addr(2, 0),
-            ]);
+            ]
+        );
+
+        let mut dc = make_dc(vec![1]);
+        selector
+            .select_nodes(addr, "dc-0", total_nodes, &mut dc, Consistency::One)
+            .expect_err("Node selector should reject consistency level.");
+        let mut dc = make_dc(vec![2]);
+        selector
+            .select_nodes(addr, "dc-0", total_nodes, &mut dc, Consistency::Two)
+            .expect_err("Node selector should reject consistency level.");
+        let mut dc = make_dc(vec![1, 1]);
+        selector
+            .select_nodes(addr, "dc-0", total_nodes, &mut dc, Consistency::Two)
+            .expect_err("Node selector should reject consistency level.");
+        let mut dc = make_dc(vec![1, 1, 1]);
+        selector
+            .select_nodes(addr, "dc-0", total_nodes, &mut dc, Consistency::Three)
+            .expect_err("Node selector should reject consistency level.");
+        let mut dc = make_dc(vec![2, 1]);
+        selector
+            .select_nodes(addr, "dc-0", total_nodes, &mut dc, Consistency::Three)
+            .expect_err("Node selector should reject consistency level.");
     }
 
     #[test]
