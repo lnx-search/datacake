@@ -10,8 +10,8 @@ pub struct ChitchatRpcMessage {
 /// Generated client implementations.
 pub mod chitchat_transport_client {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
-    use tonic::codegen::*;
     use tonic::codegen::http::Uri;
+    use tonic::codegen::*;
     #[derive(Debug, Clone)]
     pub struct ChitchatTransportClient<T> {
         inner: tonic::client::Grpc<T>,
@@ -80,15 +80,12 @@ pub mod chitchat_transport_client {
             &mut self,
             request: impl tonic::IntoRequest<super::ChitchatRpcMessage>,
         ) -> Result<tonic::Response<super::Empty>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/chitchat_transport_api.ChitchatTransport/send_msg",
@@ -171,15 +168,13 @@ pub mod chitchat_transport_server {
                 "/chitchat_transport_api.ChitchatTransport/send_msg" => {
                     #[allow(non_camel_case_types)]
                     struct send_msgSvc<T: ChitchatTransport>(pub Arc<T>);
-                    impl<
-                        T: ChitchatTransport,
-                    > tonic::server::UnaryService<super::ChitchatRpcMessage>
-                    for send_msgSvc<T> {
+                    impl<T: ChitchatTransport>
+                        tonic::server::UnaryService<super::ChitchatRpcMessage>
+                        for send_msgSvc<T>
+                    {
                         type Response = super::Empty;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
+                        type Future =
+                            BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::ChitchatRpcMessage>,
@@ -205,19 +200,15 @@ pub mod chitchat_transport_server {
                         Ok(res)
                     };
                     Box::pin(fut)
-                }
-                _ => {
-                    Box::pin(async move {
-                        Ok(
-                            http::Response::builder()
-                                .status(200)
-                                .header("grpc-status", "12")
-                                .header("content-type", "application/grpc")
-                                .body(empty_body())
-                                .unwrap(),
-                        )
-                    })
-                }
+                },
+                _ => Box::pin(async move {
+                    Ok(http::Response::builder()
+                        .status(200)
+                        .header("grpc-status", "12")
+                        .header("content-type", "application/grpc")
+                        .body(empty_body())
+                        .unwrap())
+                }),
             }
         }
     }
@@ -241,8 +232,7 @@ pub mod chitchat_transport_server {
             write!(f, "{:?}", self.0)
         }
     }
-    impl<T: ChitchatTransport> tonic::server::NamedService
-    for ChitchatTransportServer<T> {
+    impl<T: ChitchatTransport> tonic::server::NamedService for ChitchatTransportServer<T> {
         const NAME: &'static str = "chitchat_transport_api.ChitchatTransport";
     }
 }

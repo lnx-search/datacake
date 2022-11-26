@@ -201,7 +201,7 @@ impl OrSWotSet {
 
         for (key, ts, is_delete) in entries_log {
             // We've already observed the operation.
-            if is_delete && self.versions.is_ts_before_last_observed_event(ts)  {
+            if is_delete && self.versions.is_ts_before_last_observed_event(ts) {
                 continue;
             }
             self.versions.try_update_max_stamp(ts);
