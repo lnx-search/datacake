@@ -130,6 +130,9 @@ impl OrSWotSet {
     ///
     /// This follows the same logic as `set.merge(&other)` but does not modify
     /// the state of the main set.
+    ///
+    /// NOTE:
+    ///     The difference is *not* the symmetric difference between the two sets.
     pub fn diff(&self, other: &OrSWotSet) -> (StateChanges, StateChanges) {
         let mut changed_keys = vec![];
         let mut removed_keys = vec![];
@@ -735,6 +738,17 @@ mod tests {
 
         let insert_ts_1 = node_a.send().unwrap();
         node_a_set.insert(1, insert_ts_1);
+
+        let (changed, removed) = OrSWotSet::default().diff(&node_a_set);
+        assert_eq!(
+            changed,
+            vec![(1, insert_ts_1)],
+            "Expected set diff to contain key `1`."
+        );
+        assert!(
+            removed.is_empty(),
+            "Expected there to be no difference between sets."
+        );
 
         std::thread::sleep(Duration::from_millis(500));
 
