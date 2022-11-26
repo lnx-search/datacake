@@ -69,3 +69,35 @@ async fn run_clock(mut clock: HLCTimestamp, reqs: flume::Receiver<Event>) {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_clock() {
+        let clock = Clock::new(0);
+
+        let ts1 = clock.get_time().await;
+        clock.register_ts(ts1).await;
+        let ts2 = clock.get_time().await;
+        assert!(ts1 < ts2);
+
+        let ts1 = clock.get_time().await;
+        let ts2 = clock.get_time().await;
+        let ts3 = clock.get_time().await;
+        assert!(ts1 < ts2);
+        assert!(ts2 < ts3);
+
+        let drift_ts = HLCTimestamp::new(get_unix_timestamp_ms() + 5_000, 0, 1);
+        clock.register_ts(drift_ts).await;
+        let ts = clock.get_time().await;
+        assert!(
+            drift_ts < ts,
+            "New timestamp should be monotonic relative to drifted ts."
+        );
+
+        let old_ts = HLCTimestamp::new(get_unix_timestamp_ms() + 500_000, 0, 1);
+        clock.register_ts(old_ts).await;
+    }
+}

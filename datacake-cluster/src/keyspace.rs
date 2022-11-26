@@ -96,6 +96,19 @@ impl<S: Storage> Clone for KeyspaceGroup<S> {
 
 impl<S> KeyspaceGroup<S>
 where
+    S: Storage + Send + Sync + Default + 'static,
+{
+    #[cfg(any(test, feature = "test-utils"))]
+    pub async fn new_for_test() -> Self {
+        let clock = Clock::new(0);
+        let storage = Arc::new(S::default());
+
+        Self::new(storage, clock).await
+    }
+}
+
+impl<S> KeyspaceGroup<S>
+where
     S: Storage + Send + Sync + 'static,
 {
     /// Creates a new, empty keyspace group with a given storage implementation.
@@ -111,7 +124,6 @@ where
 
         slf
     }
-
     #[inline]
     /// Gets a reference to the keyspace storage implementation.
     pub fn storage(&self) -> &S {
@@ -376,6 +388,38 @@ impl<S: Storage> KeyspaceState<S> {
         Ok(())
     }
 
+    /// Get a given key's timestamp.
+    ///
+    /// If the key does not exist, `None` is returned.
+    ///
+    /// Note: A key is counted as not existing if it's marked as a tombstone.
+    pub async fn get(&self, key: Key) -> Option<HLCTimestamp> {
+        let (tx, rx) = oneshot::channel();
+
+        self.tx
+            .send_async(Op::GetKey { key, tx })
+            .await
+            .expect("Contact keyspace actor");
+
+        rx.await.expect("Get actor response.")
+    }
+
+    /// Get set of key's timestamps.
+    ///
+    /// If the key does not exist, it is not apart of the map.
+    ///
+    /// Note: A key is counted as not existing if it's marked as a tombstone.
+    pub async fn get_many(&self, keys: Vec<Key>) -> HashMap<Key, HLCTimestamp> {
+        let (tx, rx) = oneshot::channel();
+
+        self.tx
+            .send_async(Op::GetKeys { keys, tx })
+            .await
+            .expect("Contact keyspace actor");
+
+        rx.await.expect("Get actor response.")
+    }
+
     /// Removes multiple keys in the set.
     pub async fn multi_del(&self, key_ts_pairs: StateChanges) -> Result<(), S::Error> {
         self.update_counter
@@ -456,6 +500,14 @@ enum Op {
         key: Key,
         ts: HLCTimestamp,
         tx: oneshot::Sender<()>,
+    },
+    GetKey {
+        key: Key,
+        tx: oneshot::Sender<Option<HLCTimestamp>>,
+    },
+    GetKeys {
+        keys: Vec<Key>,
+        tx: oneshot::Sender<HashMap<Key, HLCTimestamp>>,
     },
     MultiDel {
         key_ts_pairs: StateChanges,
@@ -538,6 +590,19 @@ async fn run_state_actor(
             Op::Diff { set, tx } => {
                 let diff = state.diff(&set);
                 let _ = tx.send(diff);
+            },
+            Op::GetKey { key, tx } => {
+                let ts = state.get(&key).copied();
+                let _ = tx.send(ts);
+            },
+            Op::GetKeys { keys, tx } => {
+                let mut timestamps = HashMap::with_capacity(keys.len());
+                for key in keys {
+                    if let Some(ts) = state.get(&key) {
+                        timestamps.insert(key, *ts);
+                    }
+                }
+                let _ = tx.send(timestamps);
             },
         }
     }
