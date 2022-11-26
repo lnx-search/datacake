@@ -1029,5 +1029,12 @@ mod tests {
         // to remove the entry.
         let purged = node_set.purge_old_deletes();
         assert!(purged.is_empty());
+
+        // Our other source has also now observed a new timestamp.
+        node_set.insert_with_source(1, 3, clock.send().unwrap());
+
+        // We should now have successfully removed the key.
+        let purged = node_set.purge_old_deletes();
+        assert_eq!(purged, vec![1]);
     }
 }
