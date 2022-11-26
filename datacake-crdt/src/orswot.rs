@@ -46,7 +46,7 @@ impl NodeVersions {
         true
     }
 
-    fn is_ts_beyond_last_observed_event(&self, ts: HLCTimestamp) -> bool {
+    fn is_ts_before_last_observed_event(&self, ts: HLCTimestamp) -> bool {
         self.nodes_max_stamps
             .get(&ts.node())
             .map(|v| &ts < v)
@@ -149,59 +149,37 @@ impl OrSWotSet {
     /// NOTE:
     ///     The difference is *not* the symmetric difference between the two sets.
     pub fn diff(&self, other: &OrSWotSet) -> (StateChanges, StateChanges) {
-        let mut changed_keys = vec![];
-        let mut removed_keys = vec![];
+        let mut changes = Vec::new();
+        let mut removals = Vec::new();
 
-        let mut versions = self.versions.clone();
-
-        let base_entries = other.entries.iter().map(|(k, ts)| (*k, *ts, false));
-
-        let mut entries_log = Vec::from_iter(base_entries);
-        entries_log.extend(other.dead.iter().map(|(k, ts)| (*k, *ts, true)));
-
-        // It's important we go in time/event order. Otherwise we may incorrect merge the set.
-        entries_log.sort_by_key(|v| v.1);
-
-        for (key, ts, is_delete) in entries_log {
-            // We've already observed the operation.
-            if versions.is_ts_beyond_last_observed_event(ts) && is_delete {
-                continue;
-            }
-            versions.try_update_max_stamp(ts);
-
-            if is_delete {
-                if let Some(entry) = self.entries.get(&key) {
-                    if &ts >= entry {
-                        removed_keys.push((key, ts));
-                        continue;
-                    }
-                }
-
-                if !self.dead.contains_key(&key) {
-                    removed_keys.push((key, ts));
-                }
-
-                continue;
-            }
-
-            // If our own entry is newer, we use that.
-            if let Some(existing_ts) = self.entries.get(&key) {
-                if &ts < existing_ts {
-                    continue;
-                }
-            }
-
-            // Have we already marked the document as dead. And if so, is it newer than this op?
-            if let Some(deleted) = self.dead.get(&key) {
-                if &ts < deleted {
-                    continue;
-                }
-            }
-
-            changed_keys.push((key, ts));
+        for (key, ts) in other.entries.iter() {
+            self.check_self_then_insert_to(*key, *ts, &mut changes);
         }
 
-        (changed_keys, removed_keys)
+        for (key, ts) in other.dead.iter() {
+            self.check_self_then_insert_to(*key, *ts, &mut removals);
+        }
+
+        (changes, removals)
+    }
+
+    fn check_self_then_insert_to(
+        &self,
+        key: Key,
+        ts: HLCTimestamp,
+        values: &mut Vec<(Key, HLCTimestamp)>,
+    ) {
+        if let Some(existing_insert) = self.entries.get(&key) {
+            if existing_insert < &ts {
+                values.push((key, ts));
+            }
+        } else if let Some(existing_delete) = self.dead.get(&key) {
+            if existing_delete < &ts {
+                values.push((key, ts));
+            }
+        } else if !self.versions.is_ts_before_last_observed_event(ts) {
+            values.push((key, ts))
+        }
     }
 
     /// Merges another set with the current set.
@@ -223,7 +201,7 @@ impl OrSWotSet {
 
         for (key, ts, is_delete) in entries_log {
             // We've already observed the operation.
-            if self.versions.is_ts_beyond_last_observed_event(ts) && is_delete {
+            if is_delete && self.versions.is_ts_before_last_observed_event(ts)  {
                 continue;
             }
             self.versions.try_update_max_stamp(ts);
@@ -276,7 +254,7 @@ impl OrSWotSet {
             // as this is a `<` bounds check rather than `<=`. Which means
             // if the entry happens to have been the most recent event observed, it won't
             // be `true` and therefore be kept.
-            if remote_versions.is_ts_beyond_last_observed_event(ts) {
+            if remote_versions.is_ts_before_last_observed_event(ts) {
                 continue;
             }
 
@@ -305,7 +283,7 @@ impl OrSWotSet {
     pub fn purge_old_deletes(&mut self) -> Vec<Key> {
         let mut deleted_keys = vec![];
         for (k, stamp) in mem::take(&mut self.dead) {
-            if !self.versions.is_ts_beyond_last_observed_event(stamp) {
+            if !self.versions.is_ts_before_last_observed_event(stamp) {
                 self.dead.insert(k, stamp);
             } else {
                 deleted_keys.push(k);
@@ -826,7 +804,7 @@ mod tests {
 
         assert_eq!(
             changed,
-            vec![(2, insert_ts_2), (1, insert_ts_1)],
+            vec![(1, insert_ts_1), (2, insert_ts_2)],
             "Expected set a to be marked as updating keys `1, 2`"
         );
         assert!(

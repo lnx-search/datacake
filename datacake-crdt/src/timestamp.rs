@@ -59,7 +59,11 @@ impl PartialOrd<Self> for HLCTimestamp {
 impl Ord for HLCTimestamp {
     fn cmp(&self, other: &Self) -> Ordering {
         // The node id is used as a tie breaker.
-        (self.millis, self.counter, self.node).cmp(&(other.millis, other.counter, other.node))
+        (self.millis, self.counter, self.node).cmp(&(
+            other.millis,
+            other.counter,
+            other.node,
+        ))
     }
 }
 
