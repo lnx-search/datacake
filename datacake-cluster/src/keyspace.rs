@@ -643,7 +643,10 @@ async fn run_state_actor(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use super::*;
+    use crate::storage::mem_store::MemStore;
 
     #[test]
     fn test_timestamp_diff() {
@@ -666,10 +669,10 @@ mod tests {
             CounterKey(Cow::Borrowed("key-2")),
             Arc::new(AtomicU64::new(1)),
         );
-        let diff = set1.diff(&set2).collect::<Vec<_>>();
+        let diff = set1.diff(&set2).collect::<HashSet<_>>();
         assert_eq!(
             diff,
-            vec![Cow::Borrowed("key-1"), Cow::Borrowed("key-2"),],
+            HashSet::from_iter(vec![Cow::Borrowed("key-2"), Cow::Borrowed("key-1")]),
             "Set difference should be the same as expected.",
         );
 
@@ -708,10 +711,10 @@ mod tests {
             CounterKey(Cow::Borrowed("key-2")),
             Arc::new(AtomicU64::new(1)),
         );
-        let diff = set1.diff(&set2).collect::<Vec<_>>();
+        let diff = set1.diff(&set2).collect::<HashSet<_>>();
         assert_eq!(
             diff,
-            vec![Cow::Borrowed("key-1"), Cow::Borrowed("key-2"),],
+            HashSet::from_iter(vec![Cow::Borrowed("key-1"), Cow::Borrowed("key-2")]),
             "Set difference should be the same as expected.",
         );
 
@@ -729,18 +732,167 @@ mod tests {
             CounterKey(Cow::Borrowed("key-1")),
             Arc::new(AtomicU64::new(3)),
         );
-        let diff = set1.diff(&set2).collect::<Vec<_>>();
+        let diff = set1.diff(&set2).collect::<HashSet<_>>();
         assert_eq!(
             diff,
-            vec![Cow::Borrowed("key-1"), Cow::Borrowed("key-2"),],
+            HashSet::from_iter(vec![Cow::Borrowed("key-2"), Cow::Borrowed("key-1")]),
             "Set difference should be the same as expected.",
         );
     }
 
-    #[tokio::main]
-    async fn test_keyspace_state_actor() {
+    #[tokio::test]
+    async fn test_keyspace_single_action() {
+        let storage = Arc::new(MemStore::default());
+        let clock = Clock::new(0);
+        let keyspace = KeyspaceState::spawn(
+            storage,
+            Cow::Borrowed("test-keyspace"),
+            OrSWotSet::default(),
+            Arc::new(AtomicU64::new(0)),
+        )
+        .await;
 
+        assert!(
+            keyspace.get(123).await.is_none(),
+            "Non-existent key should return None."
+        );
+
+        // Insert key into state.
+        let ts = clock.get_time().await;
+        keyspace.put(123, ts).await.expect("Set key timestamp.");
+        let val = keyspace.get(123).await;
+        assert_eq!(val, Some(ts));
+
+        // Update key in state.
+        let ts = clock.get_time().await;
+        keyspace.put(123, ts).await.expect("Set key timestamp.");
+        let val = keyspace.get(123).await;
+        assert_eq!(val, Some(ts));
+
+        // Delete key with timestamp that's observed.
+        keyspace.del(123, ts).await.expect("Del key with same ts.");
+        let val = keyspace.get(123).await;
+        assert_eq!(val, Some(ts), "Values should be untouched by delete.");
+
+        // Delete key
+        let ts = clock.get_time().await;
+        keyspace.del(123, ts).await.expect("Del key with same ts.");
+        let val = keyspace.get(123).await;
+        assert_eq!(val, None, "Values not exist.");
+
+        // Check symmetric diff
+        let (changes, removals) = keyspace.symetrical_diff(OrSWotSet::default()).await;
+        assert_eq!(changes, vec![]);
+        assert_eq!(removals, vec![(123, ts)]);
     }
 
+    #[tokio::test]
+    async fn test_keyspace_bulk_actions() {
+        let storage = Arc::new(MemStore::default());
+        let clock = Clock::new(0);
+        let keyspace = KeyspaceState::spawn(
+            storage,
+            Cow::Borrowed("test-keyspace"),
+            OrSWotSet::default(),
+            Arc::new(AtomicU64::new(0)),
+        )
+        .await;
 
+        assert!(
+            keyspace.get_many(vec![123]).await.is_empty(),
+            "Non-existent key should return None."
+        );
+
+        // Multi-Insert key into state.
+        let ts = clock.get_time().await;
+        keyspace
+            .multi_put(vec![(123, ts)])
+            .await
+            .expect("Set key timestamp.");
+        let val = keyspace.get(123).await;
+        assert_eq!(val, Some(ts));
+
+        // Multi-Update key in state.
+        let ts = clock.get_time().await;
+        keyspace
+            .multi_put(vec![(123, ts)])
+            .await
+            .expect("Set key timestamp.");
+        let val = keyspace.get(123).await;
+        assert_eq!(val, Some(ts));
+
+        // Multi-Delete key with timestamp that's observed.
+        keyspace
+            .multi_del(vec![(123, ts)])
+            .await
+            .expect("Del key with same ts.");
+        let val = keyspace.get(123).await;
+        assert_eq!(val, Some(ts), "Values should be untouched by delete.");
+
+        // Multi-Delete key
+        let ts = clock.get_time().await;
+        keyspace
+            .multi_del(vec![(123, ts)])
+            .await
+            .expect("Del key with same ts.");
+        let val = keyspace.get(123).await;
+        assert_eq!(val, None, "Values not exist.");
+
+        // Check symmetric diff
+        let (changes, removals) = keyspace.symetrical_diff(OrSWotSet::default()).await;
+        assert_eq!(changes, vec![]);
+        assert_eq!(removals, vec![(123, ts)]);
+    }
+
+    #[tokio::test]
+    async fn test_keyspace_unordered_events() {
+        let storage = Arc::new(MemStore::default());
+        let keyspace = KeyspaceState::spawn(
+            storage,
+            Cow::Borrowed("test-keyspace"),
+            OrSWotSet::default(),
+            Arc::new(AtomicU64::new(0)),
+        )
+        .await;
+
+        let initial_ts = HLCTimestamp::new(101, 0, 0);
+        keyspace
+            .put(123, initial_ts)
+            .await
+            .expect("Set initial value.");
+        assert_eq!(keyspace.get(123).await, Some(initial_ts));
+
+        let old_ts = HLCTimestamp::new(100, 0, 0);
+        keyspace.put(123, old_ts).await.expect("Set old value.");
+        assert_eq!(keyspace.get(123).await, Some(initial_ts));
+
+        let newer_ts = HLCTimestamp::new(102, 0, 0);
+        keyspace.put(123, newer_ts).await.expect("Set old value.");
+        assert_eq!(keyspace.get(123).await, Some(newer_ts));
+
+        keyspace
+            .put(321, old_ts)
+            .await
+            .expect("Set old value on different key.");
+        assert_eq!(keyspace.get(321).await, Some(old_ts));
+
+        let newer_ts = HLCTimestamp::new(103, 0, 0);
+        keyspace.del(123, newer_ts).await.expect("Delete key.");
+        assert!(keyspace.get(123).await.is_none());
+
+        keyspace.put(123, old_ts).await.expect("Delete key.");
+        assert!(keyspace.get(123).await.is_none());
+
+        // Ensure that calling `del` again with an older timestamp does not overwrite our newer timestamp.
+        keyspace.del(123, old_ts).await.expect("Delete key.");
+        assert!(keyspace.get(123).await.is_none());
+        keyspace.put(123, old_ts).await.expect("Delete key.");
+        assert!(keyspace.get(123).await.is_none());
+
+        // Deleting another key which has an older timestamp should not be affected,
+        keyspace.del(321, old_ts).await.expect("Delete key.");
+
+        // TODO: This is incorrect behaviour and should be fixed.
+        assert!(keyspace.get(321).await.is_some());
+    }
 }
