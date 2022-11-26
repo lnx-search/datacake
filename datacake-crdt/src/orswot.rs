@@ -71,6 +71,21 @@ impl NodeVersions {
 /// newer operations from the original node which the entry is tied to.
 /// (This is tracked by checking the `node` field of the timestamp.)
 ///
+///
+/// ## Last write wins conditions
+/// If two operations occur at the same effective time, i.e. the `millis` and `counter` are the
+/// same on two timestamps. The timestamp with the largest `node_id` wins.
+///
+/// Consistency is not guaranteed in the event that two operations with the same timestamp from the
+/// *same node* occur on the same key. This means that the node is not generating it's [HLCTimestamp]
+/// monotonically which is incorrect.
+///
+/// The set may converge in it's current state with the above situation, but this is not guaranteed
+/// or tested against. It is your responsibility to ensure that timestamps from the same node are
+/// monotonic (as ensured by [HLCTimestamp]'s `send` method.)
+///
+///
+/// ## Example
 /// ```
 /// use datacake_crdt::{OrSWotSet, HLCTimestamp, get_unix_timestamp_ms};
 ///
@@ -314,7 +329,7 @@ impl OrSWotSet {
 
         if let Some(deleted_ts) = self.dead.remove(&k) {
             // Our deleted timestamp is newer, so we don't want to adjust our markings.
-            if deleted_ts >= ts {
+            if ts < deleted_ts {
                 self.dead.insert(k, deleted_ts);
                 return has_set;
             }
@@ -352,7 +367,8 @@ impl OrSWotSet {
 
         if let Some(existing_ts) = self.entries.remove(&k) {
             // Our deleted timestamp is newer, so we don't want to adjust our markings.
-            if existing_ts >= ts {
+            // Inserts *always* win on conflicting timestamps.
+            if ts <= existing_ts {
                 self.entries.insert(k, existing_ts);
                 return has_set;
             }
@@ -829,5 +845,84 @@ mod tests {
             vec![(3, delete_ts_3)],
             "Expected set b to have key `3` marked as deleted."
         );
+    }
+
+    #[test]
+    fn test_tie_breakers() {
+        let node_a = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 0);
+        let node_b = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 1);
+
+        let mut node_a_set = OrSWotSet::default();
+        let mut node_b_set = OrSWotSet::default();
+
+        // This delete conflicts with the insert timestamp.
+        // We expect node with the biggest ID to win.
+        node_a_set.insert(1, node_a);
+        node_b_set.delete(1, node_b);
+
+        let (changed, removed) = node_a_set.diff(&node_b_set);
+        assert_eq!(changed, vec![]);
+        assert_eq!(removed, vec![(1, node_b)]);
+
+        let (changed, removed) = node_b_set.diff(&node_a_set);
+        assert_eq!(changed, vec![]);
+        assert_eq!(removed, vec![]);
+
+        node_a_set.merge(node_b_set.clone());
+        node_b_set.merge(node_a_set.clone());
+
+        assert!(
+            node_a_set.get(&1).is_none(),
+            "Set a should no longer have key 1."
+        );
+        assert!(node_b_set.get(&1).is_none(), "Set b should not have key 1.");
+
+        let (changed, removed) = node_b_set.diff(&node_a_set);
+        assert_eq!(changed, vec![]);
+        assert_eq!(removed, vec![]);
+
+        let (changed, removed) = node_a_set.diff(&node_b_set);
+        assert_eq!(changed, vec![]);
+        assert_eq!(removed, vec![]);
+
+        let has_changed = node_a_set.insert(1, node_a);
+        assert!(!has_changed, "Set a should not insert the value.");
+        let has_changed = node_b_set.insert(1, node_a);
+        assert!(
+            !has_changed,
+            "Set b should not insert the value with node a's timestamp."
+        );
+        let has_changed = node_a_set.insert(1, node_b);
+        assert!(
+            has_changed,
+            "Set a should insert the value with node b's timestamp."
+        );
+        let has_changed = node_b_set.insert(1, node_b);
+        assert!(has_changed, "Set b should insert the value.");
+
+        let mut node_a_set = OrSWotSet::default();
+        let mut node_b_set = OrSWotSet::default();
+
+        // This delete conflicts with the insert timestamp.
+        // We expect node with the biggest ID to win.
+        node_a_set.delete(1, node_a);
+        node_b_set.insert(1, node_b);
+
+        let (changed, removed) = node_a_set.diff(&node_b_set);
+        assert_eq!(changed, vec![(1, node_b)]);
+        assert_eq!(removed, vec![]);
+
+        let (changed, removed) = node_b_set.diff(&node_a_set);
+        assert_eq!(changed, vec![]);
+        assert_eq!(removed, vec![]);
+
+        node_a_set.merge(node_b_set.clone());
+        node_b_set.merge(node_a_set.clone());
+
+        assert!(
+            node_a_set.get(&1).is_some(),
+            "Set a should no longer have key 1."
+        );
+        assert!(node_b_set.get(&1).is_some(), "Set b should not have key 1.");
     }
 }
