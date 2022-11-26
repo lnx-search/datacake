@@ -19,6 +19,7 @@ pub type StateChanges = Vec<(Key, HLCTimestamp)>;
 pub struct BadState;
 
 #[derive(Debug, Default, Clone)]
+#[repr(C)]
 #[cfg_attr(feature = "rkyv-support", derive(Serialize, Deserialize, Archive))]
 #[cfg_attr(feature = "rkyv-support", archive(compare(PartialEq)))]
 #[cfg_attr(feature = "rkyv-support", archive_attr(derive(CheckBytes, Debug)))]
@@ -95,7 +96,7 @@ impl NodeVersions {
             .iter()
             .filter_map(|stamps| stamps.get(&node))
             .copied()
-            .max();
+            .min();
 
         if let Some(min) = min {
             self.safe_last_stamps.insert(node, min);
@@ -112,6 +113,7 @@ impl NodeVersions {
 }
 
 #[derive(Debug, Default, Clone)]
+#[repr(C)]
 #[cfg_attr(feature = "rkyv", derive(Serialize, Deserialize, Archive))]
 #[cfg_attr(feature = "rkyv", archive(compare(PartialEq)))]
 #[cfg_attr(feature = "rkyv", archive_attr(derive(CheckBytes, Debug)))]
@@ -992,5 +994,40 @@ mod tests {
             "Set a should no longer have key 1."
         );
         assert!(node_b_set.get(&1).is_some(), "Set b should not have key 1.");
+    }
+
+    #[test]
+    fn test_multi_source_handling() {
+        let mut clock = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 0);
+        let mut node_set = OrSWotSet::default();
+
+        // A basic example of the purging system.
+        node_set.insert_with_source(0, 1, clock.send().unwrap());
+
+        node_set.delete_with_source(0, 1, clock.send().unwrap());
+
+        node_set.insert_with_source(0, 3, clock.send().unwrap());
+        node_set.insert_with_source(0, 4, clock.send().unwrap());
+
+        // Since we're only using one source here, we should be able to safely purge key `1`.
+        let purged = node_set.purge_old_deletes();
+        assert_eq!(purged, vec![1]);
+
+        // Insert a new entry from source `1` and `0`.
+        node_set.insert_with_source(0, 1, clock.send().unwrap());
+        node_set.insert_with_source(1, 2, clock.send().unwrap());
+
+        // Delete an entry from the set. (Mark it as a tombstone.)
+        node_set.delete_with_source(0, 1, clock.send().unwrap());
+
+        // Effectively 'observe' a new set of changes.
+        node_set.insert_with_source(0, 3, clock.send().unwrap());
+        node_set.insert_with_source(0, 4, clock.send().unwrap());
+
+        // No keys should be purged, because source `1` has not changed it's last
+        // observed timestamp, which means the system cannot guarantee that it is safe
+        // to remove the entry.
+        let purged = node_set.purge_old_deletes();
+        assert!(purged.is_empty());
     }
 }

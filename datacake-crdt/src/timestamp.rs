@@ -13,6 +13,7 @@ use rkyv::{Archive, Deserialize, Serialize};
 const MAX_DRIFT_MS: u64 = 60_000;
 
 #[derive(Debug, Hash, Copy, Clone, Eq, PartialEq)]
+#[repr(C)]
 #[cfg_attr(feature = "rkyv-support", derive(Serialize, Deserialize, Archive))]
 #[cfg_attr(feature = "rkyv-support", archive(compare(PartialEq)))]
 #[cfg_attr(feature = "rkyv-support", archive_attr(derive(CheckBytes, Debug)))]
