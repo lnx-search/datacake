@@ -1,5 +1,5 @@
 use std::collections::hash_map::Entry;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::Debug;
 use std::mem;
 
@@ -23,16 +23,56 @@ pub struct BadState;
 #[cfg_attr(feature = "rkyv-support", archive(compare(PartialEq)))]
 #[cfg_attr(feature = "rkyv-support", archive_attr(derive(CheckBytes, Debug)))]
 pub struct NodeVersions {
-    nodes_max_stamps: HashMap<u32, HLCTimestamp>,
+    nodes_max_stamps: Vec<HashMap<u32, HLCTimestamp>>,
+    safe_last_stamps: HashMap<u32, HLCTimestamp>,
 }
 
 impl NodeVersions {
-    fn try_update_max_stamp(&mut self, ts: HLCTimestamp) -> bool {
-        match self.nodes_max_stamps.entry(ts.node()) {
+    /// merges the current node versions with another node versions set.
+    fn merge(&mut self, other: NodeVersions) {
+        let mut nodes = HashSet::new();
+        for (source, other_nodes) in other.nodes_max_stamps.into_iter().enumerate() {
+            if source >= self.nodes_max_stamps.len() {
+                self.nodes_max_stamps.resize_with(source + 1, HashMap::new);
+            }
+
+            let existing_nodes = &mut self.nodes_max_stamps[source];
+            for (node, ts) in other_nodes {
+                nodes.insert(node);
+                match existing_nodes.entry(node) {
+                    Entry::Occupied(mut entry) => {
+                        // We have already observed these events at some point from this node.
+                        // This means we can no longer trust that this key is in fact still valid.
+                        if &ts < entry.get() {
+                            continue
+                        }
+
+                        entry.insert(ts);
+                    },
+                    Entry::Vacant(v) => {
+                        v.insert(ts);
+                    },
+                }
+            }
+        }
+
+        for node in nodes {
+            self.compute_safe_last_stamp(node);
+        }
+    }
+
+    /// Attempts to update the latest observed timestamp for a given source.
+    fn try_update_max_stamp(&mut self, source: usize, ts: HLCTimestamp) -> bool {
+        if source >= self.nodes_max_stamps.len() {
+            self.nodes_max_stamps.resize_with(source + 1, HashMap::new);
+        }
+
+        match self.nodes_max_stamps[source].entry(ts.node()) {
             Entry::Occupied(mut entry) => {
                 // We have already observed these events at some point from this node.
                 // This means we can no longer trust that this key is in fact still valid.
                 if &ts < entry.get() {
+                    self.compute_safe_last_stamp(ts.node());
                     return false;
                 }
 
@@ -43,11 +83,27 @@ impl NodeVersions {
             },
         }
 
+        self.compute_safe_last_stamp(ts.node());
+
         true
     }
 
+    /// Computes the safe observed timestamp based off all known sources.
+    fn compute_safe_last_stamp(&mut self, node: u32) {
+        let min = self.nodes_max_stamps
+            .iter()
+            .filter_map(|stamps| stamps.get(&node))
+            .copied()
+            .max();
+
+        if let Some(min) = min {
+            self.safe_last_stamps.insert(node, min);
+        }
+    }
+
+    /// Checks if a given timestamp happened before the last observed timestamp.
     fn is_ts_before_last_observed_event(&self, ts: HLCTimestamp) -> bool {
-        self.nodes_max_stamps
+        self.safe_last_stamps
             .get(&ts.node())
             .map(|v| &ts < v)
             .unwrap_or_default()
@@ -204,7 +260,6 @@ impl OrSWotSet {
             if is_delete && self.versions.is_ts_before_last_observed_event(ts) {
                 continue;
             }
-            self.versions.try_update_max_stamp(ts);
 
             if is_delete {
                 if let Some(entry) = self.entries.remove(&key) {
@@ -267,6 +322,8 @@ impl OrSWotSet {
 
             self.entries.insert(key, ts);
         }
+
+        self.versions.merge(remote_versions);
     }
 
     /// Get an entry from the set.
@@ -301,9 +358,20 @@ impl OrSWotSet {
     /// Returns if the value has actually been inserted/updated
     /// in the set. If `false`, the set's state has not changed.
     pub fn insert(&mut self, k: Key, ts: HLCTimestamp) -> bool {
+        self.insert_with_source(0, k, ts)
+    }
+
+    /// Insert a key into the set with a given timestamp with a source.
+    ///
+    /// If the set has already observed events from the timestamp's
+    /// node, this operation is ignored. It is otherwise inserted.
+    ///
+    /// Returns if the value has actually been inserted/updated
+    /// in the set. If `false`, the set's state has not changed.
+    pub fn insert_with_source(&mut self, source: usize, k: Key, ts: HLCTimestamp) -> bool {
         let mut has_set = false;
 
-        self.versions.try_update_max_stamp(ts);
+        self.versions.try_update_max_stamp(source, ts);
 
         if let Some(deleted_ts) = self.dead.remove(&k) {
             // Our deleted timestamp is newer, so we don't want to adjust our markings.
@@ -337,9 +405,20 @@ impl OrSWotSet {
     /// Returns if the value has actually been inserted/updated
     /// in the set. If `false`, the set's state has not changed.
     pub fn delete(&mut self, k: Key, ts: HLCTimestamp) -> bool {
+        self.delete_with_source(0, k, ts)
+    }
+
+    /// Attempts to remove a key from the set with a given timestamp.
+    ///
+    /// If the set has already observed events from the timestamp's
+    /// node, this operation is ignored. It is otherwise inserted.
+    ///
+    /// Returns if the value has actually been inserted/updated
+    /// in the set. If `false`, the set's state has not changed.
+    pub fn delete_with_source(&mut self, source: usize, k: Key, ts: HLCTimestamp) -> bool {
         let mut has_set = false;
 
-        if !self.versions.try_update_max_stamp(ts) {
+        if !self.versions.try_update_max_stamp(source, ts) {
             return has_set;
         }
 
