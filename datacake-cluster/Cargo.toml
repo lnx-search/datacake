@@ -33,7 +33,7 @@ tokio = { version = "1", default-features = false, features = ["sync", "time"] }
 rkyv = { version = "0.7.9", features = ["validation"] }
 bytecheck = "0.6.9"
 
-datacake-crdt = { path = "../datacake-crdt", version = "0.2", features = ["rkyv-support"] }
+datacake-crdt = { path = "../datacake-crdt", version = "0.3", features = ["rkyv-support"] }
 
 [features]
 test-utils = []

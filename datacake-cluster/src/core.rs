@@ -235,7 +235,7 @@ mod tests {
             .expect("Put new data should be successful.");
 
         let keyspace = group.get_or_create_keyspace(KEYSPACE).await;
-        let (additions, removals) = keyspace.diff(OrSWotSet::default()).await;
+        let (additions, removals) = keyspace.symetrical_diff(OrSWotSet::default()).await;
         assert_eq!(
             additions,
             vec![(1, doc_ts)],
@@ -245,7 +245,7 @@ mod tests {
 
         let mut new_state = OrSWotSet::default();
         new_state.insert(1, doc_ts);
-        let (additions, removals) = keyspace.diff(new_state.clone()).await;
+        let (additions, removals) = keyspace.symetrical_diff(new_state.clone()).await;
         assert!(additions.is_empty(), "State should be inline.");
         assert!(removals.is_empty(), "State should be inline.");
 
@@ -265,7 +265,7 @@ mod tests {
             .expect("Put new data should be successful.");
 
         let keyspace = group.get_or_create_keyspace(KEYSPACE).await;
-        let (additions, removals) = keyspace.diff(OrSWotSet::default()).await;
+        let (additions, removals) = keyspace.symetrical_diff(OrSWotSet::default()).await;
         assert_eq!(
             additions,
             vec![(1, updated_doc_ts)],
@@ -273,7 +273,7 @@ mod tests {
         );
         assert_eq!(removals, Vec::new(), "State removals should match.");
 
-        let (additions, removals) = keyspace.diff(new_state).await;
+        let (additions, removals) = keyspace.symetrical_diff(new_state).await;
         assert_eq!(
             additions,
             vec![(1, updated_doc_ts)],
@@ -316,7 +316,7 @@ mod tests {
             .expect("Put new data should be successful.");
 
         let keyspace = group.get_or_create_keyspace(KEYSPACE).await;
-        let (additions, removals) = keyspace.diff(OrSWotSet::default()).await;
+        let (additions, removals) = keyspace.symetrical_diff(OrSWotSet::default()).await;
         assert_eq!(
             additions,
             vec![
@@ -343,7 +343,7 @@ mod tests {
             .expect("Put new data should be successful.");
 
         let keyspace = group.get_or_create_keyspace(KEYSPACE).await;
-        let (additions, removals) = keyspace.diff(OrSWotSet::default()).await;
+        let (additions, removals) = keyspace.symetrical_diff(OrSWotSet::default()).await;
         assert_eq!(
             additions,
             vec![(1, doc_ts)],
@@ -353,7 +353,7 @@ mod tests {
 
         let mut new_state = OrSWotSet::default();
         new_state.insert(1, doc_ts);
-        let (additions, removals) = keyspace.diff(new_state.clone()).await;
+        let (additions, removals) = keyspace.symetrical_diff(new_state.clone()).await;
         assert!(additions.is_empty(), "State should be inline.");
         assert!(removals.is_empty(), "State should be inline.");
 
@@ -373,7 +373,7 @@ mod tests {
             .expect("Put new data should be successful.");
 
         let keyspace = group.get_or_create_keyspace(KEYSPACE).await;
-        let (additions, removals) = keyspace.diff(OrSWotSet::default()).await;
+        let (additions, removals) = keyspace.symetrical_diff(OrSWotSet::default()).await;
         assert_eq!(
             additions,
             vec![(1, updated_doc_ts)],
@@ -381,7 +381,7 @@ mod tests {
         );
         assert_eq!(removals, Vec::new(), "State removals should match.");
 
-        let (additions, removals) = keyspace.diff(new_state).await;
+        let (additions, removals) = keyspace.symetrical_diff(new_state).await;
         assert_eq!(
             additions,
             vec![(1, updated_doc_ts)],
@@ -422,7 +422,7 @@ mod tests {
         .expect("Put new data should be successful.");
 
         let keyspace = group.get_or_create_keyspace(KEYSPACE).await;
-        let (additions, removals) = keyspace.diff(OrSWotSet::default()).await;
+        let (additions, removals) = keyspace.symetrical_diff(OrSWotSet::default()).await;
         assert_eq!(
             additions,
             vec![
@@ -465,13 +465,13 @@ mod tests {
         .expect("Put new data should be successful.");
 
         // The new timestamp is newer than the insert so this should be successful.
-        let new_timestamp = clock.get_time().await;
-        del_data(KEYSPACE, doc_1.id, new_timestamp, &group)
+        let delete_timestamp = clock.get_time().await;
+        del_data(KEYSPACE, doc_1.id, delete_timestamp, &group)
             .await
             .expect("Delete doc.");
 
         let keyspace = group.get_or_create_keyspace(KEYSPACE).await;
-        let (additions, removals) = keyspace.diff(OrSWotSet::default()).await;
+        let (additions, removals) = keyspace.symetrical_diff(OrSWotSet::default()).await;
         assert_eq!(
             additions,
             vec![
@@ -482,7 +482,7 @@ mod tests {
         );
         assert_eq!(
             removals,
-            vec![(doc_1.id, new_timestamp)],
+            vec![(doc_1.id, delete_timestamp)],
             "State removals should match."
         );
 
@@ -492,7 +492,7 @@ mod tests {
             .expect("Delete doc.");
 
         let keyspace = group.get_or_create_keyspace(KEYSPACE).await;
-        let (additions, removals) = keyspace.diff(OrSWotSet::default()).await;
+        let (additions, removals) = keyspace.symetrical_diff(OrSWotSet::default()).await;
         assert_eq!(
             additions,
             vec![
@@ -503,7 +503,7 @@ mod tests {
         );
         assert_eq!(
             removals,
-            vec![(doc_1.id, new_timestamp)],
+            vec![(doc_1.id, delete_timestamp)],
             "State removals should match."
         );
 
@@ -514,7 +514,7 @@ mod tests {
             .expect("Delete doc.");
 
         let keyspace = group.get_or_create_keyspace(KEYSPACE).await;
-        let (additions, removals) = keyspace.diff(OrSWotSet::default()).await;
+        let (additions, removals) = keyspace.symetrical_diff(OrSWotSet::default()).await;
         assert_eq!(
             additions,
             vec![
@@ -525,7 +525,7 @@ mod tests {
         );
         assert_eq!(
             removals,
-            vec![(doc_1.id, new_timestamp)],
+            vec![(doc_1.id, delete_timestamp)],
             "State removals should match."
         );
     }
@@ -560,17 +560,17 @@ mod tests {
         .expect("Put new data should be successful.");
 
         // The new timestamp is newer than the insert so this should be successful.
-        let new_timestamp = clock.get_time().await;
+        let delete_timestamp = clock.get_time().await;
         del_many_data(
             KEYSPACE,
-            vec![(doc_1.id, new_timestamp)].into_iter(),
+            vec![(doc_1.id, delete_timestamp)].into_iter(),
             &group,
         )
         .await
         .expect("Delete doc.");
 
         let keyspace = group.get_or_create_keyspace(KEYSPACE).await;
-        let (additions, removals) = keyspace.diff(OrSWotSet::default()).await;
+        let (additions, removals) = keyspace.symetrical_diff(OrSWotSet::default()).await;
         assert_eq!(
             additions,
             vec![
@@ -581,7 +581,7 @@ mod tests {
         );
         assert_eq!(
             removals,
-            vec![(doc_1.id, new_timestamp)],
+            vec![(doc_1.id, delete_timestamp)],
             "State removals should match."
         );
 
@@ -595,7 +595,7 @@ mod tests {
         .expect("Delete doc.");
 
         let keyspace = group.get_or_create_keyspace(KEYSPACE).await;
-        let (additions, removals) = keyspace.diff(OrSWotSet::default()).await;
+        let (additions, removals) = keyspace.symetrical_diff(OrSWotSet::default()).await;
         assert_eq!(
             additions,
             vec![
@@ -606,7 +606,7 @@ mod tests {
         );
         assert_eq!(
             removals,
-            vec![(doc_1.id, new_timestamp)],
+            vec![(doc_1.id, delete_timestamp)],
             "State removals should match."
         );
 
@@ -621,7 +621,7 @@ mod tests {
         .expect("Delete doc.");
 
         let keyspace = group.get_or_create_keyspace(KEYSPACE).await;
-        let (additions, removals) = keyspace.diff(OrSWotSet::default()).await;
+        let (additions, removals) = keyspace.symetrical_diff(OrSWotSet::default()).await;
         assert_eq!(
             additions,
             vec![
@@ -632,7 +632,7 @@ mod tests {
         );
         assert_eq!(
             removals,
-            vec![(doc_1.id, new_timestamp)],
+            vec![(doc_1.id, delete_timestamp)],
             "State removals should match."
         );
     }

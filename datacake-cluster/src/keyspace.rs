@@ -480,6 +480,22 @@ impl<S: Storage> KeyspaceState<S> {
 
         rx.await.expect("Get actor response")
     }
+
+    #[cfg(any(test, feature = "test-utils"))]
+    /// Calculates the symmetrical difference between the two sets.
+    ///
+    /// This is only exposed as a test utility as it should not be used as part of
+    /// the synchronisation process.
+    pub async fn symetrical_diff(&self, set: OrSWotSet) -> (StateChanges, StateChanges) {
+        let (tx, rx) = oneshot::channel();
+
+        self.tx
+            .send_async(Op::SymDiff { set, tx })
+            .await
+            .expect("Contact keyspace actor");
+
+        rx.await.expect("Get actor response")
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -520,6 +536,11 @@ enum Op {
         tx: oneshot::Sender<Vec<Key>>,
     },
     Diff {
+        set: OrSWotSet,
+        tx: oneshot::Sender<(StateChanges, StateChanges)>,
+    },
+    #[cfg(any(test, feature = "test-utils"))]
+    SymDiff {
         set: OrSWotSet,
         tx: oneshot::Sender<(StateChanges, StateChanges)>,
     },
@@ -590,6 +611,16 @@ async fn run_state_actor(
             Op::Diff { set, tx } => {
                 let diff = state.diff(&set);
                 let _ = tx.send(diff);
+            },
+            #[cfg(any(test, feature = "test-utils"))]
+            Op::SymDiff { set, tx } => {
+                let (change_left, removal_left) = state.diff(&set);
+                let (change_right, removal_right) = set.diff(&state);
+
+                let changes = change_left.into_iter().chain(change_right).collect();
+                let removals = removal_left.into_iter().chain(removal_right).collect();
+
+                let _ = tx.send((changes, removals));
             },
             Op::GetKey { key, tx } => {
                 let ts = state.get(&key).copied();
@@ -705,4 +736,11 @@ mod tests {
             "Set difference should be the same as expected.",
         );
     }
+
+    #[tokio::main]
+    async fn test_keyspace_state_actor() {
+
+    }
+
+
 }
