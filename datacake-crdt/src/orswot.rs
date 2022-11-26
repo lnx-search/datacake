@@ -44,7 +44,7 @@ impl NodeVersions {
                         // We have already observed these events at some point from this node.
                         // This means we can no longer trust that this key is in fact still valid.
                         if &ts < entry.get() {
-                            continue
+                            continue;
                         }
 
                         entry.insert(ts);
@@ -90,7 +90,8 @@ impl NodeVersions {
 
     /// Computes the safe observed timestamp based off all known sources.
     fn compute_safe_last_stamp(&mut self, node: u32) {
-        let min = self.nodes_max_stamps
+        let min = self
+            .nodes_max_stamps
             .iter()
             .filter_map(|stamps| stamps.get(&node))
             .copied()
@@ -368,7 +369,12 @@ impl OrSWotSet {
     ///
     /// Returns if the value has actually been inserted/updated
     /// in the set. If `false`, the set's state has not changed.
-    pub fn insert_with_source(&mut self, source: usize, k: Key, ts: HLCTimestamp) -> bool {
+    pub fn insert_with_source(
+        &mut self,
+        source: usize,
+        k: Key,
+        ts: HLCTimestamp,
+    ) -> bool {
         let mut has_set = false;
 
         self.versions.try_update_max_stamp(source, ts);
@@ -415,7 +421,12 @@ impl OrSWotSet {
     ///
     /// Returns if the value has actually been inserted/updated
     /// in the set. If `false`, the set's state has not changed.
-    pub fn delete_with_source(&mut self, source: usize, k: Key, ts: HLCTimestamp) -> bool {
+    pub fn delete_with_source(
+        &mut self,
+        source: usize,
+        k: Key,
+        ts: HLCTimestamp,
+    ) -> bool {
         let mut has_set = false;
 
         if !self.versions.try_update_max_stamp(source, ts) {
