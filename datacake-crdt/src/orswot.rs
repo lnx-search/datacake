@@ -19,11 +19,7 @@ pub type StateChanges = Vec<(Key, HLCTimestamp)>;
 /// This allows the system to essentially forgive some latency between events.
 ///
 /// This is 1 hour by default.
-pub const FORGIVENESS_PERIOD: u64 = if cfg!(test) {
-    0
-} else {
-    3_600_000
-};
+pub const FORGIVENESS_PERIOD: u64 = if cfg!(test) { 0 } else { 3_600_000 };
 
 #[cfg(feature = "rkyv-support")]
 #[derive(Debug, thiserror::Error)]
@@ -118,7 +114,11 @@ impl<const N: usize> NodeVersions<N> {
             .min();
 
         if let Some(min) = min {
-            let ts = HLCTimestamp::new(min.millis().saturating_sub(FORGIVENESS_PERIOD), min.counter(), min.node());
+            let ts = HLCTimestamp::new(
+                min.millis().saturating_sub(FORGIVENESS_PERIOD),
+                min.counter(),
+                min.node(),
+            );
             self.safe_last_stamps.insert(node, ts);
         }
     }
