@@ -329,11 +329,7 @@ impl<S: Storage> KeyspaceState<S> {
     }
 
     /// Sets a entry in the set.
-    pub async fn put<SS: StateSource>(
-        &self,
-        key: Key,
-        ts: HLCTimestamp,
-    ) -> Result<(), S::Error> {
+    pub async fn put<SS: StateSource>(&self, key: Key, ts: HLCTimestamp) {
         self.update_counter
             .store(get_unix_timestamp_ms(), Ordering::Relaxed);
 
@@ -350,15 +346,10 @@ impl<S: Storage> KeyspaceState<S> {
             .expect("Contact keyspace actor");
 
         let _ = rx.await;
-
-        Ok(())
     }
 
     /// Sets multiple keys in the set.
-    pub async fn multi_put<SS: StateSource>(
-        &self,
-        key_ts_pairs: StateChanges,
-    ) -> Result<(), S::Error> {
+    pub async fn multi_put<SS: StateSource>(&self, key_ts_pairs: StateChanges) {
         self.update_counter
             .store(get_unix_timestamp_ms(), Ordering::Relaxed);
 
@@ -374,16 +365,10 @@ impl<S: Storage> KeyspaceState<S> {
             .expect("Contact keyspace actor");
 
         let _ = rx.await;
-
-        Ok(())
     }
 
     /// Removes a entry in the set.
-    pub async fn del<SS: StateSource>(
-        &self,
-        key: Key,
-        ts: HLCTimestamp,
-    ) -> Result<(), S::Error> {
+    pub async fn del<SS: StateSource>(&self, key: Key, ts: HLCTimestamp) {
         self.update_counter
             .store(get_unix_timestamp_ms(), Ordering::Relaxed);
 
@@ -400,14 +385,10 @@ impl<S: Storage> KeyspaceState<S> {
             .expect("Contact keyspace actor");
 
         let _ = rx.await;
-        Ok(())
     }
 
     /// Removes multiple keys in the set.
-    pub async fn multi_del<SS: StateSource>(
-        &self,
-        key_ts_pairs: StateChanges,
-    ) -> Result<(), S::Error> {
+    pub async fn multi_del<SS: StateSource>(&self, key_ts_pairs: StateChanges) {
         self.update_counter
             .store(get_unix_timestamp_ms(), Ordering::Relaxed);
 
@@ -423,7 +404,6 @@ impl<S: Storage> KeyspaceState<S> {
             .expect("Contact keyspace actor");
 
         let _ = rx.await;
-        Ok(())
     }
 
     /// Get a given key's timestamp.
@@ -481,10 +461,30 @@ impl<S: Storage> KeyspaceState<S> {
             .await
             .expect("Contact keyspace actor");
 
-        let keys = rx.await.expect("Get actor response");
-        self.storage
-            .remove_tombstones(&self.keyspace, keys.into_iter())
-            .await
+        let changes = rx.await.expect("Get actor response");
+
+        let res = self
+            .storage
+            .remove_tombstones(&self.keyspace, changes.iter().map(|(key, _)| *key))
+            .await;
+
+        // The operation may have been partially successful. We should re-mark
+        // any tombstones which weren't successful.
+        if let Err(error) = res {
+            let tombstones = changes
+                .into_iter()
+                .filter(|(key, _)| !error.successful_doc_ids.contains(key))
+                .collect();
+
+            self.tx
+                .send_async(Op::AddTombstones { tombstones })
+                .await
+                .expect("Contact keyspace actor");
+
+            return Err(error.inner);
+        }
+
+        Ok(())
     }
 
     /// Calculates the difference between the current state and another provided state.
@@ -561,7 +561,10 @@ enum Op {
         tx: oneshot::Sender<Result<Vec<u8>, CorruptedState>>,
     },
     PurgeDeletes {
-        tx: oneshot::Sender<Vec<Key>>,
+        tx: oneshot::Sender<StateChanges>,
+    },
+    AddTombstones {
+        tombstones: StateChanges,
     },
     Diff {
         set: OrSWotSet<NUM_SOURCES>,
@@ -653,6 +656,9 @@ async fn run_state_actor(
             Op::PurgeDeletes { tx } => {
                 let keys = state.purge_old_deletes();
                 let _ = tx.send(keys);
+            },
+            Op::AddTombstones { tombstones } => {
+                state.add_raw_tombstones(tombstones);
             },
             Op::Diff { set, tx } => {
                 let diff = state.diff(&set);
@@ -845,36 +851,24 @@ mod tests {
 
         // Insert key into state.
         let ts = clock.get_time().await;
-        keyspace
-            .put::<TestSource>(123, ts)
-            .await
-            .expect("Set key timestamp.");
+        keyspace.put::<TestSource>(123, ts).await;
         let val = keyspace.get(123).await;
         assert_eq!(val, Some(ts));
 
         // Update key in state.
         let ts = clock.get_time().await;
-        keyspace
-            .put::<TestSource>(123, ts)
-            .await
-            .expect("Set key timestamp.");
+        keyspace.put::<TestSource>(123, ts).await;
         let val = keyspace.get(123).await;
         assert_eq!(val, Some(ts));
 
         // Delete key with timestamp that's observed.
-        keyspace
-            .del::<TestSource>(123, ts)
-            .await
-            .expect("Del key with same ts.");
+        keyspace.del::<TestSource>(123, ts).await;
         let val = keyspace.get(123).await;
         assert_eq!(val, Some(ts), "Values should be untouched by delete.");
 
         // Delete key
         let ts = clock.get_time().await;
-        keyspace
-            .del::<TestSource>(123, ts)
-            .await
-            .expect("Del key with same ts.");
+        keyspace.del::<TestSource>(123, ts).await;
         let val = keyspace.get(123).await;
         assert_eq!(val, None, "Values not exist.");
 
@@ -903,36 +897,24 @@ mod tests {
 
         // Multi-Insert key into state.
         let ts = clock.get_time().await;
-        keyspace
-            .multi_put::<TestSource>(vec![(123, ts)])
-            .await
-            .expect("Set key timestamp.");
+        keyspace.multi_put::<TestSource>(vec![(123, ts)]).await;
         let val = keyspace.get(123).await;
         assert_eq!(val, Some(ts));
 
         // Multi-Update key in state.
         let ts = clock.get_time().await;
-        keyspace
-            .multi_put::<TestSource>(vec![(123, ts)])
-            .await
-            .expect("Set key timestamp.");
+        keyspace.multi_put::<TestSource>(vec![(123, ts)]).await;
         let val = keyspace.get(123).await;
         assert_eq!(val, Some(ts));
 
         // Multi-Delete key with timestamp that's observed.
-        keyspace
-            .multi_del::<TestSource>(vec![(123, ts)])
-            .await
-            .expect("Del key with same ts.");
+        keyspace.multi_del::<TestSource>(vec![(123, ts)]).await;
         let val = keyspace.get(123).await;
         assert_eq!(val, Some(ts), "Values should be untouched by delete.");
 
         // Multi-Delete key
         let ts = clock.get_time().await;
-        keyspace
-            .multi_del::<TestSource>(vec![(123, ts)])
-            .await
-            .expect("Del key with same ts.");
+        keyspace.multi_del::<TestSource>(vec![(123, ts)]).await;
         let val = keyspace.get(123).await;
         assert_eq!(val, None, "Values not exist.");
 
@@ -954,78 +936,45 @@ mod tests {
         .await;
 
         let initial_ts = HLCTimestamp::new(101, 0, 0);
-        keyspace
-            .put::<TestSource>(123, initial_ts)
-            .await
-            .expect("Set initial value.");
+        keyspace.put::<TestSource>(123, initial_ts).await;
         assert_eq!(keyspace.get(123).await, Some(initial_ts));
 
         let old_ts = HLCTimestamp::new(100, 0, 0);
-        keyspace
-            .put::<TestSource>(123, old_ts)
-            .await
-            .expect("Set old value.");
+        keyspace.put::<TestSource>(123, old_ts).await;
         assert_eq!(keyspace.get(123).await, Some(initial_ts));
 
         let newer_ts = HLCTimestamp::new(102, 0, 0);
-        keyspace
-            .put::<TestSource>(123, newer_ts)
-            .await
-            .expect("Set old value.");
+        keyspace.put::<TestSource>(123, newer_ts).await;
         assert_eq!(keyspace.get(123).await, Some(newer_ts));
 
         // This should be ignored as we've observed newer events from this source.
-        keyspace
-            .put::<TestSource>(321, old_ts)
-            .await
-            .expect("Set old value on different key.");
+        keyspace.put::<TestSource>(321, old_ts).await;
         assert_eq!(keyspace.get(321).await, None);
 
         let put_ts = HLCTimestamp::new(103, 0, 0);
-        keyspace
-            .put::<TestSource>(321, put_ts)
-            .await
-            .expect("Set old value on different key.");
+        keyspace.put::<TestSource>(321, put_ts).await;
         assert_eq!(keyspace.get(321).await, Some(put_ts));
 
         let newer_ts = HLCTimestamp::new(104, 0, 0);
-        keyspace
-            .del::<TestSource>(123, newer_ts)
-            .await
-            .expect("Delete key.");
+        keyspace.del::<TestSource>(123, newer_ts).await;
         assert!(keyspace.get(123).await.is_none());
 
-        keyspace
-            .put::<TestSource>(123, old_ts)
-            .await
-            .expect("Delete key.");
+        keyspace.put::<TestSource>(123, old_ts).await;
         assert!(keyspace.get(123).await.is_none());
 
         // Ensure that calling `del` again with an older timestamp does not overwrite our newer timestamp.
-        keyspace
-            .del::<TestSource>(123, old_ts)
-            .await
-            .expect("Delete key.");
+        keyspace.del::<TestSource>(123, old_ts).await;
         assert!(keyspace.get(123).await.is_none());
-        keyspace
-            .put::<TestSource>(123, old_ts)
-            .await
-            .expect("Delete key.");
+        keyspace.put::<TestSource>(123, old_ts).await;
         assert!(keyspace.get(123).await.is_none());
 
         // Deleting another key which has an older timestamp should be affected as they're from the same source.f
-        keyspace
-            .del::<TestSource>(321, old_ts)
-            .await
-            .expect("Delete key.");
+        keyspace.del::<TestSource>(321, old_ts).await;
         assert!(keyspace.get(321).await.is_some());
 
         // Deleting another key which has an older timestamp should not be affected as they're from different sources.
         // NOTE: The rules of last write wins still apply here.
-        keyspace
-            .del::<TestSource2>(321, newer_ts)
-            .await
-            .expect("Delete key.");
+        keyspace.del::<TestSource2>(321, newer_ts).await;
         assert!(keyspace.get(321).await.is_none());
     }
 }

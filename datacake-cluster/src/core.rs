@@ -119,7 +119,7 @@ where
 
     let keyspace = group.get_or_create_keyspace(keyspace).await;
 
-    keyspace.put::<SS>(doc_id, last_updated).await?;
+    keyspace.put::<SS>(doc_id, last_updated).await;
 
     Ok(())
 }
@@ -141,12 +141,22 @@ where
         doc
     });
 
-    group.storage().multi_put(keyspace, documents).await?;
+    let res = group.storage().multi_put(keyspace, documents).await;
 
     let keyspace = group.get_or_create_keyspace(keyspace).await;
-
     entries.sort_by_key(|entry| entry.1);
-    keyspace.multi_put::<SS>(entries).await?;
+
+    if let Err(error) = res {
+        let entries = entries
+            .into_iter()
+            .filter(|(key, _)| error.successful_doc_ids.contains(key))
+            .collect();
+
+        keyspace.multi_put::<SS>(entries).await;
+        return Err(error::DatacakeError::StorageError(error.inner));
+    }
+
+    keyspace.multi_put::<SS>(entries).await;
 
     Ok(())
 }
@@ -174,7 +184,7 @@ where
         .mark_as_tombstone(keyspace.name(), doc_id, last_updated)
         .await?;
 
-    keyspace.del::<SS>(doc_id, last_updated).await?;
+    keyspace.del::<SS>(doc_id, last_updated).await;
 
     Ok(())
 }
@@ -214,12 +224,22 @@ where
         })
         .copied();
 
-    group
+    let res = group
         .storage()
         .mark_many_as_tombstone(keyspace.name(), valid_updates)
-        .await?;
+        .await;
 
-    keyspace.multi_del::<SS>(entries).await?;
+    if let Err(error) = res {
+        let entries = entries
+            .into_iter()
+            .filter(|(key, _)| error.successful_doc_ids.contains(key))
+            .collect();
+
+        keyspace.multi_del::<SS>(entries).await;
+        return Err(error::DatacakeError::StorageError(error.inner));
+    }
+
+    keyspace.multi_del::<SS>(entries).await;
 
     Ok(())
 }

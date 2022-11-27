@@ -5,6 +5,64 @@ use datacake_crdt::{HLCTimestamp, Key};
 
 use crate::core::Document;
 
+#[derive(Debug, thiserror::Error)]
+#[error("The operation was not completely successful due to error {inner}")]
+/// An error which occurred while mutating the state not allowing the operation
+/// to proceed any further but also having some part of the operation complete.
+pub struct BulkMutationError<E>
+where
+    E: Error + Send + Sync + 'static,
+{
+    pub(crate) inner: E,
+    pub(crate) successful_doc_ids: Vec<Key>,
+}
+
+impl<E> BulkMutationError<E>
+where
+    E: Error + Send + Sync + 'static,
+{
+    /// Creates a new mutation error from the provided inner error.
+    ///
+    /// This essentially means that what ever change that was going to happen
+    /// was atomic and has therefore been revered.
+    ///
+    /// WARNING:
+    /// *You should under no circumstances return an empty mutation error if **any**
+    /// part of the state has been mutated and will not be reversed. Doing so will lead
+    /// to state divergence within the cluster*
+    pub fn empty_with_error(error: E) -> Self {
+        Self::new(error, Vec::new())
+    }
+
+    /// Creates a new mutation error from the provided inner error.
+    ///
+    /// This essentially means that although we ran into an error, we were able to
+    /// complete some part of the operation on some documents.
+    ///
+    /// WARNING:
+    /// *You should under no circumstances return an empty mutation error if **any**
+    /// part of the state has been mutated and will not be reversed. Doing so will lead
+    /// to state divergence within the cluster*
+    pub fn new(error: E, successful_doc_ids: Vec<Key>) -> Self {
+        Self {
+            inner: error,
+            successful_doc_ids,
+        }
+    }
+
+    #[inline]
+    /// The cause of the error.
+    pub fn cause(&self) -> &E {
+        &self.inner
+    }
+
+    #[inline]
+    /// The document ids which the operation was successful on.
+    pub fn successful_doc_ids(&self) -> &[Key] {
+        &self.successful_doc_ids
+    }
+}
+
 #[async_trait]
 pub trait Storage {
     type Error: Error + Send + Sync + 'static;
@@ -30,7 +88,7 @@ pub trait Storage {
         &self,
         keyspace: &str,
         keys: impl Iterator<Item = Key> + Send,
-    ) -> Result<(), Self::Error>;
+    ) -> Result<(), BulkMutationError<Self::Error>>;
 
     /// Inserts or updates a document in the persistent store.
     ///
@@ -52,7 +110,7 @@ pub trait Storage {
         &self,
         keyspace: &str,
         documents: impl Iterator<Item = Document> + Send,
-    ) -> Result<(), Self::Error>;
+    ) -> Result<(), BulkMutationError<Self::Error>>;
 
     /// Marks a document in the store as a tombstone.
     ///
@@ -87,7 +145,7 @@ pub trait Storage {
         &self,
         keyspace: &str,
         documents: impl Iterator<Item = (Key, HLCTimestamp)> + Send,
-    ) -> Result<(), Self::Error>;
+    ) -> Result<(), BulkMutationError<Self::Error>>;
 
     /// Retrieves a single document belonging to a given keyspace from the store.
     async fn get(
@@ -116,6 +174,7 @@ pub mod test_suite {
     use async_trait::async_trait;
     use datacake_crdt::{get_unix_timestamp_ms, HLCTimestamp, Key};
 
+    use super::BulkMutationError;
     use crate::core::Document;
     use crate::storage::Storage;
 
@@ -144,7 +203,7 @@ pub mod test_suite {
             &self,
             keyspace: &str,
             keys: impl Iterator<Item = Key> + Send,
-        ) -> Result<(), Self::Error> {
+        ) -> Result<(), BulkMutationError<Self::Error>> {
             let keys = keys.collect::<Vec<_>>();
             info!(keyspace = keyspace, keys = ?keys, "remove_many_metadata");
             self.0.remove_tombstones(keyspace, keys.into_iter()).await
@@ -163,7 +222,7 @@ pub mod test_suite {
             &self,
             keyspace: &str,
             documents: impl Iterator<Item = Document> + Send,
-        ) -> Result<(), Self::Error> {
+        ) -> Result<(), BulkMutationError<Self::Error>> {
             let documents = documents.collect::<Vec<_>>();
             info!(keyspace = keyspace, documents = ?documents, "multi_put");
             self.0.multi_put(keyspace, documents.into_iter()).await
@@ -183,7 +242,7 @@ pub mod test_suite {
             &self,
             keyspace: &str,
             documents: impl Iterator<Item = (Key, HLCTimestamp)> + Send,
-        ) -> Result<(), Self::Error> {
+        ) -> Result<(), BulkMutationError<Self::Error>> {
             let documents = documents.collect::<Vec<_>>();
             info!(keyspace = keyspace, documents = ?documents, "mark_many_as_tombstone");
             self.0
@@ -672,7 +731,7 @@ pub mod mem_store {
             &self,
             keyspace: &str,
             keys: impl Iterator<Item = Key> + Send,
-        ) -> Result<(), Self::Error> {
+        ) -> Result<(), BulkMutationError<Self::Error>> {
             if let Some(ks) = self.metadata.write().get_mut(keyspace) {
                 for key in keys {
                     ks.remove(&key);
@@ -687,14 +746,16 @@ pub mod mem_store {
             keyspace: &str,
             document: Document,
         ) -> Result<(), Self::Error> {
-            self.multi_put(keyspace, [document].into_iter()).await
+            self.multi_put(keyspace, [document].into_iter())
+                .await
+                .map_err(|e| e.inner)
         }
 
         async fn multi_put(
             &self,
             keyspace: &str,
             documents: impl Iterator<Item = Document> + Send,
-        ) -> Result<(), Self::Error> {
+        ) -> Result<(), BulkMutationError<Self::Error>> {
             let documents = documents.collect::<Vec<_>>();
             self.data
                 .write()
@@ -736,13 +797,14 @@ pub mod mem_store {
         ) -> Result<(), Self::Error> {
             self.mark_many_as_tombstone(keyspace, [(doc_id, timestamp)].into_iter())
                 .await
+                .map_err(|e| e.inner)
         }
 
         async fn mark_many_as_tombstone(
             &self,
             keyspace: &str,
             documents: impl Iterator<Item = (Key, HLCTimestamp)> + Send,
-        ) -> Result<(), Self::Error> {
+        ) -> Result<(), BulkMutationError<Self::Error>> {
             let docs = documents.collect::<Vec<_>>();
             self.data
                 .write()

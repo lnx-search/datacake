@@ -343,7 +343,7 @@ where
         // but in reality it's not.
         keyspace
             .multi_put::<ReplicationSource>(doc_timestamps)
-            .await?;
+            .await;
     }
 
     Ok(())
@@ -368,15 +368,28 @@ where
         let (key, ts) = removed.pop().expect("get element");
 
         storage.mark_as_tombstone(keyspace.name(), key, ts).await?;
-        keyspace.del::<SS>(key, ts).await?;
+        keyspace.del::<SS>(key, ts).await;
         return Ok::<_, S::Error>(());
     }
 
-    storage
+    let res = storage
         .mark_many_as_tombstone(keyspace.name(), removed.iter().copied())
-        .await?;
+        .await;
 
-    keyspace.multi_del::<SS>(removed).await
+    if let Err(error) = res {
+        let removed = removed
+            .into_iter()
+            .filter(|(key, _)| error.successful_doc_ids.contains(key))
+            .collect();
+
+        keyspace.multi_del::<SS>(removed).await;
+
+        return Err(error.inner);
+    }
+
+    keyspace.multi_del::<SS>(removed).await;
+
+    Ok(())
 }
 
 pub struct KeyspacePollHandle {

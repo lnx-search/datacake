@@ -374,7 +374,7 @@ impl<const N: usize> OrSWotSet<N> {
     ///
     /// This is useful for conserving memory and preventing an infinitely
     /// growing tombstone state.
-    pub fn purge_old_deletes(&mut self) -> Vec<(Key, HLCTimestamp)> {
+    pub fn purge_old_deletes(&mut self) -> StateChanges {
         let mut deleted_keys = vec![];
         for (k, stamp) in mem::take(&mut self.dead) {
             if !self.versions.is_ts_before_last_observed_event(stamp) {
@@ -394,7 +394,7 @@ impl<const N: usize> OrSWotSet<N> {
     ///
     /// WARNING:
     /// If you do not know where to use this, you do not wan't to use this.
-    pub fn add_raw_tombstones(&mut self, tombstones: Vec<(Key, HLCTimestamp)>) {
+    pub fn add_raw_tombstones(&mut self, tombstones: StateChanges) {
         for (key, stamp) in tombstones {
             self.dead.insert(key, stamp);
         }
@@ -1063,7 +1063,11 @@ mod tests {
         node_set.insert_with_source(0, 4, clock.send().unwrap());
 
         // Since we're only using one source here, we should be able to safely purge key `1`.
-        let purged = node_set.purge_old_deletes();
+        let purged = node_set
+            .purge_old_deletes()
+            .into_iter()
+            .map(|(key, _)| key)
+            .collect::<Vec<_>>();
         assert_eq!(purged, vec![1]);
 
         let mut node_set = OrSWotSet::<2>::default();
@@ -1089,7 +1093,11 @@ mod tests {
         node_set.insert_with_source(1, 3, clock.send().unwrap());
 
         // We should now have successfully removed the key.
-        let purged = node_set.purge_old_deletes();
+        let purged = node_set
+            .purge_old_deletes()
+            .into_iter()
+            .map(|(key, _)| key)
+            .collect::<Vec<_>>();
         assert_eq!(purged, vec![1]);
 
         let old_ts = clock.send().unwrap();

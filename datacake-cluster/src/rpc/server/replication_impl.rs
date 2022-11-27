@@ -123,8 +123,7 @@ mod tests {
         let keyspace = group.get_or_create_keyspace(KEYSPACE).await;
         keyspace
             .put::<ReplicationSource>(1, clock.get_time().await)
-            .await
-            .expect("Put key.");
+            .await;
 
         let poll_req = Request::new(Empty {});
         let resp = service
@@ -154,8 +153,7 @@ mod tests {
         let keyspace = group.get_or_create_keyspace(KEYSPACE).await;
         keyspace
             .put::<ReplicationSource>(1, clock.get_time().await)
-            .await
-            .expect("Put key.");
+            .await;
         let last_updated = keyspace.last_updated();
         let state = keyspace
             .serialize()
@@ -196,8 +194,7 @@ mod tests {
             .expect("Store entry");
         keyspace
             .put::<ReplicationSource>(doc.id, doc.last_updated)
-            .await
-            .expect("Set state value.");
+            .await;
 
         let fetch_docs_req = Request::new(FetchDocs {
             keyspace: KEYSPACE.to_string(),
