@@ -150,6 +150,19 @@ impl<const N: usize> NodeVersions<N> {
 /// newer operations from the original node which the entry is tied to.
 /// (This is tracked by checking the `node` field of the timestamp.)
 ///
+/// ## Sources
+/// Sources are a way of separating two asynchronous operations which both guarantee the order
+/// of the operations is correct, but may not be ordered relative to each other.
+///
+/// I.e. if we have the following sources:
+///
+/// Source 1: [1, 2, 4, 5]
+/// Source 2: [2, 3, 8]
+///
+/// If we observe the operations from source `2` before source `1` or vice versa, we may miss
+/// operations if we assume one source, this is because of our observer pattern.
+///
+/// Sources allow us to negate this issue while still keeping the observer pattern.
 ///
 /// ## Last write wins conditions
 /// If two operations occur at the same effective time, i.e. the `millis` and `counter` are the
@@ -173,8 +186,9 @@ impl<const N: usize> NodeVersions<N> {
 /// // Simulating a node begin slightly ahead.
 /// let mut node_b = HLCTimestamp::new(get_unix_timestamp_ms() + 5000, 0, 1);
 ///
-/// let mut node_a_set = OrSWotSet::default();
-/// let mut node_b_set = OrSWotSet::default();
+/// // We have only 1 source.
+/// let mut node_a_set = OrSWotSet::<1>::default();
+/// let mut node_b_set = OrSWotSet::<1>::default();
 ///
 /// // Insert a new key with a new timestamp in set A.
 /// node_a_set.insert(1, node_a.send().unwrap());
@@ -508,7 +522,7 @@ mod tests {
         node_a_set.insert(3, node_a.send().unwrap());
 
         // We create our new state on node b's side.
-        let mut node_b_set = OrSWotSet::default();
+        let mut node_b_set = OrSWotSet::<1>::default();
 
         // We add a new set of entries into our set.
         node_b_set.insert(1, node_b.send().unwrap());
@@ -555,7 +569,7 @@ mod tests {
         node_a_set.insert(2, node_a.send().unwrap());
 
         // We create our new state on node b's side.
-        let mut node_b_set = OrSWotSet::default();
+        let mut node_b_set = OrSWotSet::<1>::default();
 
         // We add a new set of entries into our set.
         // These entries effectively happen at the same time as node A in our test, just because
@@ -623,7 +637,7 @@ mod tests {
         std::thread::sleep(Duration::from_millis(1));
 
         // We create our new state on node b's side.
-        let mut node_b_set = OrSWotSet::default();
+        let mut node_b_set = OrSWotSet::<1>::default();
 
         // We add a new set of entries into our set.
         node_b_set.insert(1, node_b.send().unwrap());
@@ -666,7 +680,7 @@ mod tests {
         std::thread::sleep(Duration::from_millis(1));
 
         // We create our new state on node b's side.
-        let mut node_b_set = OrSWotSet::default();
+        let mut node_b_set = OrSWotSet::<1>::default();
 
         // We add a new set of entries into our set.
         node_b_set.insert(1, node_b.send().unwrap());
@@ -721,7 +735,7 @@ mod tests {
         std::thread::sleep(Duration::from_millis(1));
 
         // We create our new state on node b's side.
-        let mut node_b_set = OrSWotSet::default();
+        let mut node_b_set = OrSWotSet::<1>::default();
 
         // We add a new set of entries into our set.
         node_b_set.insert(1, node_b.send().unwrap());
@@ -851,7 +865,7 @@ mod tests {
         let insert_ts_1 = node_a.send().unwrap();
         node_a_set.insert(1, insert_ts_1);
 
-        let (changed, removed) = OrSWotSet::default().diff(&node_a_set);
+        let (changed, removed) = OrSWotSet::<1>::default().diff(&node_a_set);
         assert_eq!(
             changed,
             vec![(1, insert_ts_1)],

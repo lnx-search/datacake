@@ -337,10 +337,6 @@ impl<S: Storage> KeyspaceState<S> {
         self.update_counter
             .store(get_unix_timestamp_ms(), Ordering::Relaxed);
 
-        self.storage
-            .set_metadata(&self.keyspace, key, ts, false)
-            .await?;
-
         let (tx, rx) = oneshot::channel();
 
         self.tx
@@ -365,10 +361,6 @@ impl<S: Storage> KeyspaceState<S> {
     ) -> Result<(), S::Error> {
         self.update_counter
             .store(get_unix_timestamp_ms(), Ordering::Relaxed);
-
-        self.storage
-            .set_many_metadata(&self.keyspace, key_ts_pairs.iter().cloned(), false)
-            .await?;
 
         let (tx, rx) = oneshot::channel();
 
@@ -395,10 +387,6 @@ impl<S: Storage> KeyspaceState<S> {
         self.update_counter
             .store(get_unix_timestamp_ms(), Ordering::Relaxed);
 
-        self.storage
-            .set_metadata(&self.keyspace, key, ts, true)
-            .await?;
-
         let (tx, rx) = oneshot::channel();
 
         self.tx
@@ -422,10 +410,6 @@ impl<S: Storage> KeyspaceState<S> {
     ) -> Result<(), S::Error> {
         self.update_counter
             .store(get_unix_timestamp_ms(), Ordering::Relaxed);
-
-        self.storage
-            .set_many_metadata(&self.keyspace, key_ts_pairs.iter().cloned(), true)
-            .await?;
 
         let (tx, rx) = oneshot::channel();
 
@@ -499,7 +483,7 @@ impl<S: Storage> KeyspaceState<S> {
 
         let keys = rx.await.expect("Get actor response");
         self.storage
-            .remove_many_metadata(&self.keyspace, keys.into_iter())
+            .remove_tombstones(&self.keyspace, keys.into_iter())
             .await
     }
 

@@ -145,6 +145,7 @@ where
 
     let keyspace = group.get_or_create_keyspace(keyspace).await;
 
+    entries.sort_by_key(|entry| entry.1);
     keyspace.multi_put::<SS>(entries).await?;
 
     Ok(())
@@ -168,7 +169,10 @@ where
         }
     }
 
-    group.storage().del(keyspace.name(), doc_id).await?;
+    group
+        .storage()
+        .mark_as_tombstone(keyspace.name(), doc_id, last_updated)
+        .await?;
 
     keyspace.del::<SS>(doc_id, last_updated).await?;
 
@@ -192,6 +196,7 @@ where
             doc.0
         })
         .collect::<Vec<_>>();
+    entries.sort_by_key(|entry| entry.1);
 
     let keyspace = group.get_or_create_keyspace(keyspace).await;
     let timestamps = keyspace.get_many(documents.clone()).await;
@@ -207,11 +212,11 @@ where
 
             true
         })
-        .map(|(key, _)| *key);
+        .copied();
 
     group
         .storage()
-        .multi_del(keyspace.name(), valid_updates)
+        .mark_many_as_tombstone(keyspace.name(), valid_updates)
         .await?;
 
     keyspace.multi_del::<SS>(entries).await?;

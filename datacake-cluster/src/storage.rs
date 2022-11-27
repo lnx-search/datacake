@@ -11,49 +11,22 @@ pub trait Storage {
     type DocsIter: Iterator<Item = Document>;
     type MetadataIter: Iterator<Item = (Key, HLCTimestamp, bool)>;
 
-    /// Persists the state of a given key-timestamp pair.
-    ///
-    /// If the given `keyspace` does not exist, it should be created. A new keyspace name should
-    /// not result in an error being returned by the storage trait.
-    ///
-    /// `is_tombstone` is passed when the key is being marked as a tombstone which can later
-    /// be removed by a purge operation managed by datacake.
-    async fn set_metadata(
-        &self,
-        keyspace: &str,
-        key: Key,
-        ts: HLCTimestamp,
-        is_tombstone: bool,
-    ) -> Result<(), Self::Error>;
-
-    /// Persists several sets of key-timestamp pairs.
-    ///
-    /// If the given `keyspace` does not exist, it should be created. A new keyspace name should
-    /// not result in an error being returned by the storage trait.
-    ///
-    /// `is_tombstone` is passed when the key is being marked as a tombstone which can later
-    /// be removed by a purge operation managed by datacake.
-    async fn set_many_metadata(
-        &self,
-        keyspace: &str,
-        pairs: impl Iterator<Item = (Key, HLCTimestamp)> + Send,
-        is_tombstone: bool,
-    ) -> Result<(), Self::Error>;
-
     /// Retrieves all keyspace currently persisted.
     async fn get_keyspace_list(&self) -> Result<Vec<String>, Self::Error>;
 
-    /// Retrieves an iterator producing all values contained within the metadata store.
+    /// Retrieves an iterator producing all values contained within the store.
+    ///
+    /// This should contain the document ID, when it was last updated and if it's a tombstone or not.
     async fn iter_metadata(
         &self,
         keyspace: &str,
     ) -> Result<Self::MetadataIter, Self::Error>;
 
-    /// Remove a set of keys from the metadata store.
+    /// Remove a set of keys which are marked as tombstones store.
     ///
     /// If the given `keyspace` does not exist, it should be created. A new keyspace name should
     /// not result in an error being returned by the storage trait.
-    async fn remove_many_metadata(
+    async fn remove_tombstones(
         &self,
         keyspace: &str,
         keys: impl Iterator<Item = Key> + Send,
@@ -63,6 +36,12 @@ pub trait Storage {
     ///
     /// If the given `keyspace` does not exist, it should be created. A new keyspace name should
     /// not result in an error being returned by the storage trait.
+    ///
+    /// NOTE:
+    ///     It is the implementors responsibility to ensure that this operation is atomic and durable.
+    ///     Partially setting the document metadata and failing to also set the data can lead to
+    ///     split sate and the system will fail to converge unless a new operation comes in to modify
+    ///     the document again.
     async fn put(&self, keyspace: &str, document: Document) -> Result<(), Self::Error>;
 
     /// Inserts or updates a set of documents in the persistent store.
@@ -75,24 +54,34 @@ pub trait Storage {
         documents: impl Iterator<Item = Document> + Send,
     ) -> Result<(), Self::Error>;
 
-    /// Removes a document with the given ID from the persistent store.
+    /// Marks a document in the store as a tombstone.
     ///
     /// If the document does not exist this should be a no-op.
     ///
     /// If the given `keyspace` does not exist, it should be created. A new keyspace name should
     /// not result in an error being returned by the storage trait.
-    async fn del(&self, keyspace: &str, doc_id: Key) -> Result<(), Self::Error>;
+    ///
+    /// NOTE:
+    ///     This operation is permitted to delete the actual value of the document, but there
+    ///     must be a marker indicating that the given document has been marked as deleted at
+    ///     the provided timestamp.
+    async fn mark_as_tombstone(&self, keyspace: &str, doc_id: Key, timestamp: HLCTimestamp) -> Result<(), Self::Error>;
 
-    /// Removes a set of documents from the persistent store.
+    /// Marks a set of documents in the store as a tombstone.
     ///
     /// If the document does not exist this should be a no-op.
     ///
     /// If the given `keyspace` does not exist, it should be created. A new keyspace name should
     /// not result in an error being returned by the storage trait.
-    async fn multi_del(
+    ///
+    /// NOTE:
+    ///     This operation is permitted to delete the actual value of the document, but there
+    ///     must be a marker indicating that the given document has been marked as deleted at
+    ///     the provided timestamp.
+    async fn mark_many_as_tombstone(
         &self,
         keyspace: &str,
-        doc_ids: impl Iterator<Item = Key> + Send,
+        documents: impl Iterator<Item = (Key, HLCTimestamp)> + Send,
     ) -> Result<(), Self::Error>;
 
     /// Retrieves a single document belonging to a given keyspace from the store.
@@ -133,30 +122,6 @@ pub mod test_suite {
         type DocsIter = S::DocsIter;
         type MetadataIter = S::MetadataIter;
 
-        async fn set_metadata(
-            &self,
-            keyspace: &str,
-            key: Key,
-            ts: HLCTimestamp,
-            is_tombstone: bool,
-        ) -> Result<(), Self::Error> {
-            info!(keyspace = keyspace, key = key, ts = %ts, is_tombstone = is_tombstone, "set_metadata");
-            self.0.set_metadata(keyspace, key, ts, is_tombstone).await
-        }
-
-        async fn set_many_metadata(
-            &self,
-            keyspace: &str,
-            pairs: impl Iterator<Item = (Key, HLCTimestamp)> + Send,
-            is_tombstone: bool,
-        ) -> Result<(), Self::Error> {
-            let pairs = pairs.collect::<Vec<_>>();
-            info!(keyspace = keyspace, pairs = ?pairs, is_tombstone = is_tombstone, "set_many_metadata");
-            self.0
-                .set_many_metadata(keyspace, pairs.into_iter(), is_tombstone)
-                .await
-        }
-
         async fn get_keyspace_list(&self) -> Result<Vec<String>, Self::Error> {
             info!("get_keyspace_list");
             self.0.get_keyspace_list().await
@@ -170,7 +135,7 @@ pub mod test_suite {
             self.0.iter_metadata(keyspace).await
         }
 
-        async fn remove_many_metadata(
+        async fn remove_tombstones(
             &self,
             keyspace: &str,
             keys: impl Iterator<Item = Key> + Send,
@@ -178,7 +143,7 @@ pub mod test_suite {
             let keys = keys.collect::<Vec<_>>();
             info!(keyspace = keyspace, keys = ?keys, "remove_many_metadata");
             self.0
-                .remove_many_metadata(keyspace, keys.into_iter())
+                .remove_tombstones(keyspace, keys.into_iter())
                 .await
         }
 
@@ -201,19 +166,19 @@ pub mod test_suite {
             self.0.multi_put(keyspace, documents.into_iter()).await
         }
 
-        async fn del(&self, keyspace: &str, doc_id: Key) -> Result<(), Self::Error> {
-            info!(keyspace = keyspace, doc_id = doc_id, "del");
-            self.0.del(keyspace, doc_id).await
+        async fn mark_as_tombstone(&self, keyspace: &str, doc_id: Key, timestamp: HLCTimestamp) -> Result<(), Self::Error> {
+            info!(keyspace = keyspace, doc_id = doc_id, timestamp = %timestamp, "mark_as_tombstone");
+            self.0.mark_as_tombstone(keyspace, doc_id, timestamp).await
         }
 
-        async fn multi_del(
+        async fn mark_many_as_tombstone(
             &self,
             keyspace: &str,
-            doc_ids: impl Iterator<Item = Key> + Send,
+            documents: impl Iterator<Item = (Key, HLCTimestamp)> + Send,
         ) -> Result<(), Self::Error> {
-            let doc_ids = doc_ids.collect::<Vec<_>>();
-            info!(keyspace = keyspace, doc_ids = ?doc_ids, "multi_del");
-            self.0.multi_del(keyspace, doc_ids.into_iter()).await
+            let documents = documents.collect::<Vec<_>>();
+            info!(keyspace = keyspace, documents = ?documents, "mark_many_as_tombstone");
+            self.0.mark_many_as_tombstone(keyspace, documents.into_iter()).await
         }
 
         async fn get(
@@ -253,11 +218,11 @@ pub mod test_suite {
         test_keyspace_semantics(&storage, &mut clock).await;
         info!("test_keyspace_semantics OK");
 
-        test_basic_metadata_test(&storage, &mut clock).await;
-        info!("test_basic_metadata_test OK");
-
         test_basic_persistence_test(&storage, &mut clock).await;
         info!("test_basic_persistence_test OK");
+
+        test_basic_metadata_test(&storage, &mut clock).await;
+        info!("test_basic_metadata_test OK");
     }
 
     #[instrument(name = "test_keyspace_semantics", skip(storage))]
@@ -281,8 +246,9 @@ pub mod test_suite {
             .collect::<HashSet<(Key, HLCTimestamp, bool)>>();
         assert_eq!(metadata, to_hashset([]), "New keyspace should be empty.");
 
+        let doc = Document::new(1, clock.send().unwrap(), Vec::new());
         let res = storage
-            .set_metadata(KEYSPACE, 1, clock.send().unwrap(), false)
+            .put(KEYSPACE, doc)
             .await;
         assert!(
             res.is_ok(),
@@ -290,8 +256,9 @@ pub mod test_suite {
             res
         );
 
+        let doc = Document::new(2, clock.send().unwrap(), Vec::new());
         let res = storage
-            .set_metadata(KEYSPACE, 2, clock.send().unwrap(), false)
+            .put(KEYSPACE, doc)
             .await;
         assert!(
             res.is_ok(),
@@ -337,21 +304,26 @@ pub mod test_suite {
 
         static KEYSPACE: &str = "metadata-test-keyspace";
 
-        let key_1_ts = clock.send().unwrap();
+        let mut doc_1 = Document::new(1, clock.send().unwrap(), Vec::new());
+        let mut doc_2 = Document::new(2, clock.send().unwrap(), Vec::new());
+        let mut doc_3 = Document::new(3, clock.send().unwrap(), Vec::new());
         storage
-            .set_metadata(KEYSPACE, 1, key_1_ts, false)
+            .multi_put(
+                KEYSPACE,
+                [
+                    doc_1.clone(),
+                    doc_2.clone(),
+                    doc_3.clone(),
+                ].into_iter(),
+            )
             .await
-            .expect("Set metadata entry 1.");
-        let key_2_ts = clock.send().unwrap();
+            .expect("Put documents");
+
+        doc_3.last_updated = clock.send().unwrap();
         storage
-            .set_metadata(KEYSPACE, 2, key_2_ts, false)
+            .mark_as_tombstone(KEYSPACE, doc_3.id, doc_3.last_updated)
             .await
-            .expect("Set metadata entry 2.");
-        let key_3_ts = clock.send().unwrap();
-        storage
-            .set_metadata(KEYSPACE, 3, key_3_ts, true)
-            .await
-            .expect("Set metadata entry 3.");
+            .expect("Mark document as tombstone.");
 
         let metadata = storage
             .iter_metadata(KEYSPACE)
@@ -361,17 +333,25 @@ pub mod test_suite {
         assert_eq!(
             metadata,
             to_hashset([
-                (1, key_1_ts, false),
-                (2, key_2_ts, false),
-                (3, key_3_ts, true),
+                (doc_1.id, doc_1.last_updated, false),
+                (doc_2.id, doc_2.last_updated, false),
+                (doc_3.id, doc_3.last_updated, true),
             ]),
             "Persisted metadata entries should match expected values."
         );
 
+        doc_1.last_updated = clock.send().unwrap();
+        doc_2.last_updated = clock.send().unwrap();
         storage
-            .remove_many_metadata(KEYSPACE, [1, 2].into_iter())
+            .mark_many_as_tombstone(
+                KEYSPACE,
+                [
+                    (doc_1.id, doc_1.last_updated),
+                    (doc_2.id, doc_2.last_updated),
+                ].into_iter(),
+            )
             .await
-            .expect("Remove metadata entries.");
+            .expect("Mark documents as tombstones.");
         let metadata = storage
             .iter_metadata(KEYSPACE)
             .await
@@ -379,13 +359,34 @@ pub mod test_suite {
             .collect::<HashSet<(Key, HLCTimestamp, bool)>>();
         assert_eq!(
             metadata,
-            to_hashset([(3, key_3_ts, true),]),
+            to_hashset([
+                (doc_1.id, doc_1.last_updated, true),
+                (doc_2.id, doc_2.last_updated, true),
+                (doc_3.id, doc_3.last_updated, true),
+            ]),
+            "Persisted metadata entries should match expected values."
+        );
+
+        storage
+            .remove_tombstones(KEYSPACE, [1, 2].into_iter())
+            .await
+            .expect("Remove tombstone entries.");
+        let metadata = storage
+            .iter_metadata(KEYSPACE)
+            .await
+            .expect("Produce metadata iterator.")
+            .collect::<HashSet<(Key, HLCTimestamp, bool)>>();
+        assert_eq!(
+            metadata,
+            to_hashset([(doc_3.id, doc_3.last_updated, true)]),
             "Persisted metadata entries should match expected values after removal."
         );
 
-        let key_3_ts = clock.send().unwrap();
+        doc_1.last_updated = clock.send().unwrap();
+        doc_2.last_updated = clock.send().unwrap();
+        doc_3.last_updated = clock.send().unwrap();
         storage
-            .set_many_metadata(KEYSPACE, [(3, key_3_ts)].into_iter(), false)
+            .multi_put(KEYSPACE, [doc_1.clone(), doc_2.clone(), doc_3.clone()].into_iter())
             .await
             .expect("Set metadata entry 3.");
         let metadata = storage
@@ -395,17 +396,45 @@ pub mod test_suite {
             .collect::<HashSet<(Key, HLCTimestamp, bool)>>();
         assert_eq!(
             metadata,
-            to_hashset([(3, key_3_ts, false),]),
+            to_hashset([
+                (doc_1.id, doc_1.last_updated, false),
+                (doc_2.id, doc_2.last_updated, false),
+                (doc_3.id, doc_3.last_updated, false),
+            ]),
             "Persisted metadata entries should match expected values after update."
         );
 
+        doc_1.last_updated = clock.send().unwrap();
+        doc_2.last_updated = clock.send().unwrap();
+        doc_3.last_updated = clock.send().unwrap();
+        storage
+            .mark_many_as_tombstone(
+                KEYSPACE,
+                [
+                    (doc_1.id, doc_1.last_updated),
+                    (doc_2.id, doc_2.last_updated),
+                    (doc_3.id, doc_3.last_updated),
+                ].into_iter(),
+            )
+            .await
+            .expect("Mark documents as tombstones.");
         let res = storage
-            .remove_many_metadata(KEYSPACE, [1, 2, 3].into_iter())
+            .remove_tombstones(KEYSPACE, [1, 2, 3].into_iter())
             .await;
         assert!(
             res.is_ok(),
             "Expected successful removal of given metadata keys. Got: {:?}",
             res
+        );
+
+        let metadata = storage
+            .iter_metadata(KEYSPACE)
+            .await
+            .expect("Produce metadata iterator.")
+            .collect::<Vec<(Key, HLCTimestamp, bool)>>();
+        assert!(
+            metadata.is_empty(),
+            "Persisted metadata entries should be empty after tombstone purge."
         );
     }
 
@@ -437,9 +466,9 @@ pub mod test_suite {
             .collect::<Vec<_>>();
         assert!(res.is_empty(), "Expected no document to be returned.");
 
-        let doc_1 = Document::new(1, clock.send().unwrap(), b"Hello, world!".to_vec());
-        let doc_2 = Document::new(2, clock.send().unwrap(), Vec::new());
-        let doc_3 = Document::new(
+        let mut doc_1 = Document::new(1, clock.send().unwrap(), b"Hello, world!".to_vec());
+        let mut doc_2 = Document::new(2, clock.send().unwrap(), Vec::new());
+        let mut doc_3 = Document::new(
             3,
             clock.send().unwrap(),
             b"Hello, from document 3!".to_vec(),
@@ -491,11 +520,12 @@ pub mod test_suite {
         let doc = res.expect("Expected document to be returned after updating doc.");
         assert_eq!(doc, doc_3_updated, "Returned document should match.");
 
+        doc_2.last_updated = clock.send().unwrap();
         storage
-            .del(KEYSPACE, 2)
+            .mark_as_tombstone(KEYSPACE, doc_2.id, doc_2.last_updated)
             .await
-            .expect("Delete document from store.");
-        let res = storage.get("persistence-test-keyspace", 2).await;
+            .expect("Mark document as tombstone.");
+        let res = storage.get(KEYSPACE, 2).await;
         assert!(
             res.is_ok(),
             "Expected successful get request. Got: {:?}",
@@ -506,10 +536,19 @@ pub mod test_suite {
             "Expected no document to be returned."
         );
 
+        doc_1.last_updated = clock.send().unwrap();
+        doc_2.last_updated = clock.send().unwrap();
         storage
-            .multi_del(KEYSPACE, [1, 2, 4].into_iter())
+            .mark_many_as_tombstone(
+                KEYSPACE,
+                [
+                    (doc_1.id, doc_1.last_updated),
+                    (doc_2.id, doc_2.last_updated),
+                    (4, clock.send().unwrap()),
+                ].into_iter(),
+            )
             .await
-            .expect("Delete documents from store.");
+            .expect("Merk documents as tombstones");
         let res = storage
             .multi_get(KEYSPACE, [1, 2, 3].into_iter())
             .await
@@ -521,13 +560,14 @@ pub mod test_suite {
             "Expected returned documents to match.",
         );
 
+        doc_3.last_updated = clock.send().unwrap();
         storage
-            .multi_del(KEYSPACE, [3].into_iter())
+            .mark_as_tombstone(KEYSPACE, doc_3.id, doc_3.last_updated)
             .await
             .expect("Delete documents from store.");
         #[allow(clippy::needless_collect)]
         let res = storage
-            .multi_get("persistence-test-keyspace", [1, 2, 3].into_iter())
+            .multi_get(KEYSPACE, [1, 2, 3].into_iter())
             .await
             .expect("Expected successful get request.")
             .collect::<Vec<_>>();
@@ -567,40 +607,6 @@ pub mod mem_store {
         type DocsIter = std::vec::IntoIter<Document>;
         type MetadataIter = std::vec::IntoIter<(Key, HLCTimestamp, bool)>;
 
-        async fn set_metadata(
-            &self,
-            keyspace: &str,
-            key: Key,
-            ts: HLCTimestamp,
-            is_tombstone: bool,
-        ) -> Result<(), Self::Error> {
-            self.set_many_metadata(keyspace, [(key, ts)].into_iter(), is_tombstone)
-                .await
-        }
-
-        async fn set_many_metadata(
-            &self,
-            keyspace: &str,
-            pairs: impl Iterator<Item = (Key, HLCTimestamp)> + Send,
-            is_tombstone: bool,
-        ) -> Result<(), Self::Error> {
-            let pairs = pairs.collect::<Vec<_>>();
-            self.metadata
-                .write()
-                .entry(keyspace.to_string())
-                .and_modify(|entries| {
-                    for (key, ts) in pairs.clone() {
-                        entries.insert(key, (ts, is_tombstone));
-                    }
-                })
-                .or_insert_with(|| {
-                    HashMap::from_iter(
-                        pairs.into_iter().map(|(key, ts)| (key, (ts, is_tombstone))),
-                    )
-                });
-            Ok(())
-        }
-
         async fn get_keyspace_list(&self) -> Result<Vec<String>, Self::Error> {
             Ok(self.metadata.read().keys().cloned().collect())
         }
@@ -620,7 +626,7 @@ pub mod mem_store {
             Ok(Vec::new().into_iter())
         }
 
-        async fn remove_many_metadata(
+        async fn remove_tombstones(
             &self,
             keyspace: &str,
             keys: impl Iterator<Item = Key> + Send,
@@ -657,28 +663,50 @@ pub mod mem_store {
                     }
                 })
                 .or_insert_with(|| {
-                    HashMap::from_iter(documents.into_iter().map(|doc| (doc.id, doc)))
+                    HashMap::from_iter(documents.clone().into_iter().map(|doc| (doc.id, doc)))
                 });
+            self.metadata
+                .write()
+                .entry(keyspace.to_string())
+                .and_modify(|entries| {
+                    for doc in documents.clone() {
+                        entries.insert(doc.id, (doc.last_updated, false));
+                    }
+                })
+                .or_insert_with(|| {
+                    HashMap::from_iter(documents.into_iter().map(|doc| (doc.id, (doc.last_updated, false))))
+                });
+
             Ok(())
         }
 
-        async fn del(&self, keyspace: &str, doc_id: Key) -> Result<(), Self::Error> {
-            self.multi_del(keyspace, [doc_id].into_iter()).await
+        async fn mark_as_tombstone(&self, keyspace: &str, doc_id: Key, timestamp: HLCTimestamp) -> Result<(), Self::Error> {
+            self.mark_many_as_tombstone(keyspace, [(doc_id, timestamp)].into_iter()).await
         }
 
-        async fn multi_del(
+        async fn mark_many_as_tombstone(
             &self,
             keyspace: &str,
-            doc_ids: impl Iterator<Item = Key> + Send,
+            documents: impl Iterator<Item = (Key, HLCTimestamp)> + Send,
         ) -> Result<(), Self::Error> {
+            let docs = documents.collect::<Vec<_>>();
             self.data
                 .write()
                 .entry(keyspace.to_string())
                 .and_modify(|entries| {
-                    for doc_id in doc_ids {
+                    for (doc_id, _) in docs.iter() {
                         entries.remove(&doc_id);
                     }
                 });
+            self.metadata
+                .write()
+                .entry(keyspace.to_string())
+                .and_modify(|entries| {
+                    for (doc_id, ts) in docs {
+                        entries.insert(doc_id, (ts, true));
+                    }
+                });
+
             Ok(())
         }
 

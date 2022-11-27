@@ -367,13 +367,13 @@ where
     if removed.len() == 1 {
         let (key, ts) = removed.pop().expect("get element");
 
-        storage.del(keyspace.name(), key).await?;
+        storage.mark_as_tombstone(keyspace.name(), key, ts).await?;
         keyspace.del::<SS>(key, ts).await?;
         return Ok::<_, S::Error>(());
     }
 
     storage
-        .multi_del(keyspace.name(), removed.iter().map(|(k, _)| *k))
+        .mark_many_as_tombstone(keyspace.name(), removed.iter().copied())
         .await?;
 
     keyspace.multi_del::<SS>(removed).await
