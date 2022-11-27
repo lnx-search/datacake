@@ -3,7 +3,7 @@ use datacake_crdt::HLCTimestamp;
 use tonic::{Request, Response, Status};
 
 use crate::core::Document;
-use crate::keyspace::KeyspaceGroup;
+use crate::keyspace::{ConsistencySource, KeyspaceGroup};
 use crate::rpc::datacake_api::consistency_api_server::ConsistencyApi;
 use crate::rpc::datacake_api::{
     Empty,
@@ -35,7 +35,7 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
 
         self.group.clock().register_ts(document.last_updated).await;
 
-        crate::core::put_data(&inner.keyspace, document, &self.group)
+        crate::core::put_data::<ConsistencySource, _>(&inner.keyspace, document, &self.group)
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
 
@@ -55,7 +55,7 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
             doc
         });
 
-        crate::core::put_many_data(&inner.keyspace, documents, &self.group)
+        crate::core::put_many_data::<ConsistencySource, _>(&inner.keyspace, documents, &self.group)
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
 
@@ -75,7 +75,7 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
 
         self.group.clock().register_ts(last_updated).await;
 
-        crate::core::del_data(&inner.keyspace, doc_id, last_updated, &self.group)
+        crate::core::del_data::<ConsistencySource, _>(&inner.keyspace, doc_id, last_updated, &self.group)
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
 
@@ -103,7 +103,7 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
                 (id, ts)
             });
 
-        crate::core::del_many_data(&inner.keyspace, documents, &self.group)
+        crate::core::del_many_data::<ConsistencySource, _>(&inner.keyspace, documents, &self.group)
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
 

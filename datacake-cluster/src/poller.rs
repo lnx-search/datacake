@@ -10,7 +10,7 @@ use tokio::task::JoinHandle;
 use tokio::time::{interval, Interval};
 use tonic::transport::Channel;
 
-use crate::keyspace::{CounterKey, KeyspaceGroup, KeyspaceState, KeyspaceTimestamps};
+use crate::keyspace::{CounterKey, KeyspaceGroup, KeyspaceState, KeyspaceTimestamps, ReplicationSource, StateSource};
 use crate::rpc::ReplicationClient;
 use crate::Storage;
 
@@ -289,7 +289,7 @@ where
     // The removal task can operate interdependently of the modified handler.
     // If, in the process of handling removals, the modified handler errors,
     // we simply let the removal task continue on as normal.
-    let removal_task = tokio::spawn(handle_removals(keyspace.clone(), removed));
+    let removal_task = tokio::spawn(handle_removals::<ReplicationSource, _>(keyspace.clone(), removed));
 
     let res = handle_modified(&mut state.client, keyspace, modified).await;
     removal_task.await.expect("join task")?;
@@ -331,7 +331,7 @@ where
         // If we were to do this the other way around, we could potentially
         // end up being in a situation where the state *thinks* it's up to date
         // but in reality it's not.
-        keyspace.multi_put(doc_timestamps).await?;
+        keyspace.multi_put::<ReplicationSource>(doc_timestamps).await?;
     }
 
     Ok(())
@@ -342,11 +342,12 @@ where
 ///
 /// This does not remove the metadata of the document entirely, instead the document is marked
 /// as deleted along with the main data itself, but we keep a history of the deletes we've made.
-async fn handle_removals<S>(
+async fn handle_removals<SS, S>(
     keyspace: KeyspaceState<S>,
     mut removed: StateChanges,
 ) -> Result<(), S::Error>
 where
+    SS: StateSource + Send + Sync + 'static,
     S: Storage + Send + Sync + 'static,
 {
     let storage = keyspace.storage();
@@ -355,7 +356,7 @@ where
         let (key, ts) = removed.pop().expect("get element");
 
         storage.del(keyspace.name(), key).await?;
-        keyspace.del(key, ts).await?;
+        keyspace.del::<SS>(key, ts).await?;
         return Ok::<_, S::Error>(());
     }
 
@@ -363,7 +364,7 @@ where
         .multi_del(keyspace.name(), removed.iter().map(|(k, _)| *k))
         .await?;
 
-    keyspace.multi_del(removed).await
+    keyspace.multi_del::<SS>(removed).await
 }
 
 pub struct KeyspacePollHandle {

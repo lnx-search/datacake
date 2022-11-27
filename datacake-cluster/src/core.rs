@@ -6,6 +6,7 @@ use datacake_crdt::{HLCTimestamp, Key};
 
 use crate::rpc::datacake_api;
 use crate::{error, KeyspaceGroup, Storage};
+use crate::keyspace::StateSource;
 
 #[derive(Clone)]
 pub struct Document {
@@ -102,12 +103,13 @@ impl From<HLCTimestamp> for datacake_api::Timestamp {
 }
 
 /// Inserts or updates the given keyspace locally and updates the given keyspace state.
-pub(crate) async fn put_data<S>(
+pub(crate) async fn put_data<SS, S>(
     keyspace: &str,
     document: Document,
     group: &KeyspaceGroup<S>,
 ) -> Result<(), error::DatacakeError<S::Error>>
 where
+    SS: StateSource + Send + Sync + 'static,
     S: Storage + Send + Sync + 'static,
 {
     let doc_id = document.id;
@@ -117,19 +119,20 @@ where
 
     let keyspace = group.get_or_create_keyspace(keyspace).await;
 
-    keyspace.put(doc_id, last_updated).await?;
+    keyspace.put::<SS>(doc_id, last_updated).await?;
 
     Ok(())
 }
 
 /// Inserts or updates many entries in the given keyspace
 /// locally and updates the given keyspace state.
-pub(crate) async fn put_many_data<S>(
+pub(crate) async fn put_many_data<SS, S>(
     keyspace: &str,
     documents: impl Iterator<Item = Document> + Send,
     group: &KeyspaceGroup<S>,
 ) -> Result<(), error::DatacakeError<S::Error>>
 where
+    SS: StateSource + Send + Sync + 'static,
     S: Storage + Send + Sync + 'static,
 {
     let mut entries = Vec::new();
@@ -142,19 +145,20 @@ where
 
     let keyspace = group.get_or_create_keyspace(keyspace).await;
 
-    keyspace.multi_put(entries).await?;
+    keyspace.multi_put::<SS>(entries).await?;
 
     Ok(())
 }
 
 /// Removes a document from the local keyspace and updates the given keyspace state.
-pub(crate) async fn del_data<S>(
+pub(crate) async fn del_data<SS, S>(
     keyspace: &str,
     doc_id: Key,
     last_updated: HLCTimestamp,
     group: &KeyspaceGroup<S>,
 ) -> Result<(), error::DatacakeError<S::Error>>
 where
+    SS: StateSource + Send + Sync + 'static,
     S: Storage + Send + Sync + 'static,
 {
     let keyspace = group.get_or_create_keyspace(keyspace).await;
@@ -166,18 +170,19 @@ where
 
     group.storage().del(keyspace.name(), doc_id).await?;
 
-    keyspace.del(doc_id, last_updated).await?;
+    keyspace.del::<SS>(doc_id, last_updated).await?;
 
     Ok(())
 }
 
 /// Removes multiple documents from the local keyspace and updates the given keyspace state.
-pub(crate) async fn del_many_data<S>(
+pub(crate) async fn del_many_data<SS, S>(
     keyspace: &str,
     documents: impl Iterator<Item = (Key, HLCTimestamp)> + Send,
     group: &KeyspaceGroup<S>,
 ) -> Result<(), error::DatacakeError<S::Error>>
 where
+    SS: StateSource + Send + Sync + 'static,
     S: Storage + Send + Sync + 'static,
 {
     let mut entries = Vec::new();
@@ -209,7 +214,7 @@ where
         .multi_del(keyspace.name(), valid_updates)
         .await?;
 
-    keyspace.multi_del(entries).await?;
+    keyspace.multi_del::<SS>(entries).await?;
 
     Ok(())
 }
@@ -221,6 +226,15 @@ mod tests {
     use super::*;
     use crate::storage::mem_store::MemStore;
 
+    #[derive(Debug, Copy, Clone)]
+    pub struct TestSource;
+
+    impl StateSource for TestSource {
+        fn source_id() -> usize {
+            0
+        }
+    }
+
     #[tokio::test]
     async fn test_put_data() {
         static KEYSPACE: &str = "put-data-keyspace";
@@ -230,7 +244,7 @@ mod tests {
         // Test insert
         let doc_ts = clock.get_time().await;
         let doc = Document::new(1, doc_ts, b"hello, world".to_vec());
-        put_data(KEYSPACE, doc.clone(), &group)
+        put_data::<TestSource, _>(KEYSPACE, doc.clone(), &group)
             .await
             .expect("Put new data should be successful.");
 
@@ -260,7 +274,7 @@ mod tests {
         // Test updating an existing document.
         let updated_doc_ts = clock.get_time().await;
         let updated_doc = Document::new(1, updated_doc_ts, b"hello, world".to_vec());
-        put_data(KEYSPACE, updated_doc.clone(), &group)
+        put_data::<TestSource, _>(KEYSPACE, updated_doc.clone(), &group)
             .await
             .expect("Put new data should be successful.");
 
@@ -305,13 +319,13 @@ mod tests {
             clock.get_time().await,
             b"hello, world from doc 3".to_vec(),
         );
-        put_data(KEYSPACE, doc_1.clone(), &group)
+        put_data::<TestSource, _>(KEYSPACE, doc_1.clone(), &group)
             .await
             .expect("Put new data should be successful.");
-        put_data(KEYSPACE, doc_2.clone(), &group)
+        put_data::<TestSource, _>(KEYSPACE, doc_2.clone(), &group)
             .await
             .expect("Put new data should be successful.");
-        put_data(KEYSPACE, doc_3.clone(), &group)
+        put_data::<TestSource, _>(KEYSPACE, doc_3.clone(), &group)
             .await
             .expect("Put new data should be successful.");
 
@@ -338,7 +352,7 @@ mod tests {
         // Test insert
         let doc_ts = clock.get_time().await;
         let doc = Document::new(1, doc_ts, b"hello, world".to_vec());
-        put_many_data(KEYSPACE, vec![doc.clone()].into_iter(), &group)
+        put_many_data::<TestSource, _>(KEYSPACE, vec![doc.clone()].into_iter(), &group)
             .await
             .expect("Put new data should be successful.");
 
@@ -368,7 +382,7 @@ mod tests {
         // Test updating an existing document.
         let updated_doc_ts = clock.get_time().await;
         let updated_doc = Document::new(1, updated_doc_ts, b"hello, world".to_vec());
-        put_many_data(KEYSPACE, vec![updated_doc.clone()].into_iter(), &group)
+        put_many_data::<TestSource, _>(KEYSPACE, vec![updated_doc.clone()].into_iter(), &group)
             .await
             .expect("Put new data should be successful.");
 
@@ -413,7 +427,7 @@ mod tests {
             clock.get_time().await,
             b"hello, world from doc 3".to_vec(),
         );
-        put_many_data(
+        put_many_data::<TestSource, _>(
             KEYSPACE,
             vec![doc_1.clone(), doc_2.clone(), doc_3.clone()].into_iter(),
             &group,
@@ -456,7 +470,7 @@ mod tests {
             clock.get_time().await,
             b"hello, world from doc 3".to_vec(),
         );
-        put_many_data(
+        put_many_data::<TestSource, _>(
             KEYSPACE,
             vec![doc_1.clone(), doc_2.clone(), doc_3.clone()].into_iter(),
             &group,
@@ -466,7 +480,7 @@ mod tests {
 
         // The new timestamp is newer than the insert so this should be successful.
         let delete_timestamp = clock.get_time().await;
-        del_data(KEYSPACE, doc_1.id, delete_timestamp, &group)
+        del_data::<TestSource, _>(KEYSPACE, doc_1.id, delete_timestamp, &group)
             .await
             .expect("Delete doc.");
 
@@ -487,7 +501,7 @@ mod tests {
         );
 
         // This should not be deleted as it has the same timestamp as the insert, and inserts always wins.
-        del_data(KEYSPACE, doc_2.id, doc_2.last_updated, &group)
+        del_data::<TestSource, _>(KEYSPACE, doc_2.id, doc_2.last_updated, &group)
             .await
             .expect("Delete doc.");
 
@@ -509,7 +523,7 @@ mod tests {
 
         // This should not be deleted as the timestamp is older than the insert.
         let new_timestamp = HLCTimestamp::new(500, 0, 0);
-        del_data(KEYSPACE, doc_2.id, new_timestamp, &group)
+        del_data::<TestSource, _>(KEYSPACE, doc_2.id, new_timestamp, &group)
             .await
             .expect("Delete doc.");
 
@@ -551,7 +565,7 @@ mod tests {
             clock.get_time().await,
             b"hello, world from doc 3".to_vec(),
         );
-        put_many_data(
+        put_many_data::<TestSource, _>(
             KEYSPACE,
             vec![doc_1.clone(), doc_2.clone(), doc_3.clone()].into_iter(),
             &group,
@@ -561,7 +575,7 @@ mod tests {
 
         // The new timestamp is newer than the insert so this should be successful.
         let delete_timestamp = clock.get_time().await;
-        del_many_data(
+        del_many_data::<TestSource, _>(
             KEYSPACE,
             vec![(doc_1.id, delete_timestamp)].into_iter(),
             &group,
@@ -586,7 +600,7 @@ mod tests {
         );
 
         // This should not be deleted as it has the same timestamp as the insert, and inserts always wins.
-        del_many_data(
+        del_many_data::<TestSource, _>(
             KEYSPACE,
             vec![(doc_2.id, doc_2.last_updated)].into_iter(),
             &group,
@@ -612,7 +626,7 @@ mod tests {
 
         // This should not be deleted as the timestamp is older than the insert.
         let new_timestamp = HLCTimestamp::new(500, 0, 0);
-        del_many_data(
+        del_many_data::<TestSource, _>(
             KEYSPACE,
             vec![(doc_2.id, new_timestamp)].into_iter(),
             &group,
