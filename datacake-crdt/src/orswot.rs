@@ -374,17 +374,30 @@ impl<const N: usize> OrSWotSet<N> {
     ///
     /// This is useful for conserving memory and preventing an infinitely
     /// growing tombstone state.
-    pub fn purge_old_deletes(&mut self) -> Vec<Key> {
+    pub fn purge_old_deletes(&mut self) -> Vec<(Key, HLCTimestamp)> {
         let mut deleted_keys = vec![];
         for (k, stamp) in mem::take(&mut self.dead) {
             if !self.versions.is_ts_before_last_observed_event(stamp) {
                 self.dead.insert(k, stamp);
             } else {
-                deleted_keys.push(k);
+                deleted_keys.push((k, stamp));
             }
         }
 
         deleted_keys
+    }
+
+    /// Adds a set of tombstones to the state tombstone list.
+    ///
+    /// This bypasses the observation timestamp check, which is useful
+    /// for replaying purges which may not have been successful.
+    ///
+    /// WARNING:
+    /// If you do not know where to use this, you do not wan't to use this.
+    pub fn add_raw_tombstones(&mut self, tombstones: Vec<(Key, HLCTimestamp)>) {
+        for (key, stamp) in tombstones {
+            self.dead.insert(key, stamp);
+        }
     }
 
     /// Insert a key into the set with a given timestamp.
