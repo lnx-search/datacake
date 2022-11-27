@@ -65,7 +65,12 @@ pub trait Storage {
     ///     This operation is permitted to delete the actual value of the document, but there
     ///     must be a marker indicating that the given document has been marked as deleted at
     ///     the provided timestamp.
-    async fn mark_as_tombstone(&self, keyspace: &str, doc_id: Key, timestamp: HLCTimestamp) -> Result<(), Self::Error>;
+    async fn mark_as_tombstone(
+        &self,
+        keyspace: &str,
+        doc_id: Key,
+        timestamp: HLCTimestamp,
+    ) -> Result<(), Self::Error>;
 
     /// Marks a set of documents in the store as a tombstone.
     ///
@@ -142,9 +147,7 @@ pub mod test_suite {
         ) -> Result<(), Self::Error> {
             let keys = keys.collect::<Vec<_>>();
             info!(keyspace = keyspace, keys = ?keys, "remove_many_metadata");
-            self.0
-                .remove_tombstones(keyspace, keys.into_iter())
-                .await
+            self.0.remove_tombstones(keyspace, keys.into_iter()).await
         }
 
         async fn put(
@@ -166,7 +169,12 @@ pub mod test_suite {
             self.0.multi_put(keyspace, documents.into_iter()).await
         }
 
-        async fn mark_as_tombstone(&self, keyspace: &str, doc_id: Key, timestamp: HLCTimestamp) -> Result<(), Self::Error> {
+        async fn mark_as_tombstone(
+            &self,
+            keyspace: &str,
+            doc_id: Key,
+            timestamp: HLCTimestamp,
+        ) -> Result<(), Self::Error> {
             info!(keyspace = keyspace, doc_id = doc_id, timestamp = %timestamp, "mark_as_tombstone");
             self.0.mark_as_tombstone(keyspace, doc_id, timestamp).await
         }
@@ -178,7 +186,9 @@ pub mod test_suite {
         ) -> Result<(), Self::Error> {
             let documents = documents.collect::<Vec<_>>();
             info!(keyspace = keyspace, documents = ?documents, "mark_many_as_tombstone");
-            self.0.mark_many_as_tombstone(keyspace, documents.into_iter()).await
+            self.0
+                .mark_many_as_tombstone(keyspace, documents.into_iter())
+                .await
         }
 
         async fn get(
@@ -247,9 +257,7 @@ pub mod test_suite {
         assert_eq!(metadata, to_hashset([]), "New keyspace should be empty.");
 
         let doc = Document::new(1, clock.send().unwrap(), Vec::new());
-        let res = storage
-            .put(KEYSPACE, doc)
-            .await;
+        let res = storage.put(KEYSPACE, doc).await;
         assert!(
             res.is_ok(),
             "Setting metadata on a new keyspace should not error. Got {:?}",
@@ -257,9 +265,7 @@ pub mod test_suite {
         );
 
         let doc = Document::new(2, clock.send().unwrap(), Vec::new());
-        let res = storage
-            .put(KEYSPACE, doc)
-            .await;
+        let res = storage.put(KEYSPACE, doc).await;
         assert!(
             res.is_ok(),
             "Setting metadata on a existing keyspace should not error. Got {:?}",
@@ -310,11 +316,7 @@ pub mod test_suite {
         storage
             .multi_put(
                 KEYSPACE,
-                [
-                    doc_1.clone(),
-                    doc_2.clone(),
-                    doc_3.clone(),
-                ].into_iter(),
+                [doc_1.clone(), doc_2.clone(), doc_3.clone()].into_iter(),
             )
             .await
             .expect("Put documents");
@@ -348,7 +350,8 @@ pub mod test_suite {
                 [
                     (doc_1.id, doc_1.last_updated),
                     (doc_2.id, doc_2.last_updated),
-                ].into_iter(),
+                ]
+                .into_iter(),
             )
             .await
             .expect("Mark documents as tombstones.");
@@ -386,7 +389,10 @@ pub mod test_suite {
         doc_2.last_updated = clock.send().unwrap();
         doc_3.last_updated = clock.send().unwrap();
         storage
-            .multi_put(KEYSPACE, [doc_1.clone(), doc_2.clone(), doc_3.clone()].into_iter())
+            .multi_put(
+                KEYSPACE,
+                [doc_1.clone(), doc_2.clone(), doc_3.clone()].into_iter(),
+            )
             .await
             .expect("Set metadata entry 3.");
         let metadata = storage
@@ -414,7 +420,8 @@ pub mod test_suite {
                     (doc_1.id, doc_1.last_updated),
                     (doc_2.id, doc_2.last_updated),
                     (doc_3.id, doc_3.last_updated),
-                ].into_iter(),
+                ]
+                .into_iter(),
             )
             .await
             .expect("Mark documents as tombstones.");
@@ -466,7 +473,8 @@ pub mod test_suite {
             .collect::<Vec<_>>();
         assert!(res.is_empty(), "Expected no document to be returned.");
 
-        let mut doc_1 = Document::new(1, clock.send().unwrap(), b"Hello, world!".to_vec());
+        let mut doc_1 =
+            Document::new(1, clock.send().unwrap(), b"Hello, world!".to_vec());
         let mut doc_2 = Document::new(2, clock.send().unwrap(), Vec::new());
         let mut doc_3 = Document::new(
             3,
@@ -545,7 +553,8 @@ pub mod test_suite {
                     (doc_1.id, doc_1.last_updated),
                     (doc_2.id, doc_2.last_updated),
                     (4, clock.send().unwrap()),
-                ].into_iter(),
+                ]
+                .into_iter(),
             )
             .await
             .expect("Merk documents as tombstones");
@@ -663,7 +672,9 @@ pub mod mem_store {
                     }
                 })
                 .or_insert_with(|| {
-                    HashMap::from_iter(documents.clone().into_iter().map(|doc| (doc.id, doc)))
+                    HashMap::from_iter(
+                        documents.clone().into_iter().map(|doc| (doc.id, doc)),
+                    )
                 });
             self.metadata
                 .write()
@@ -674,14 +685,24 @@ pub mod mem_store {
                     }
                 })
                 .or_insert_with(|| {
-                    HashMap::from_iter(documents.into_iter().map(|doc| (doc.id, (doc.last_updated, false))))
+                    HashMap::from_iter(
+                        documents
+                            .into_iter()
+                            .map(|doc| (doc.id, (doc.last_updated, false))),
+                    )
                 });
 
             Ok(())
         }
 
-        async fn mark_as_tombstone(&self, keyspace: &str, doc_id: Key, timestamp: HLCTimestamp) -> Result<(), Self::Error> {
-            self.mark_many_as_tombstone(keyspace, [(doc_id, timestamp)].into_iter()).await
+        async fn mark_as_tombstone(
+            &self,
+            keyspace: &str,
+            doc_id: Key,
+            timestamp: HLCTimestamp,
+        ) -> Result<(), Self::Error> {
+            self.mark_many_as_tombstone(keyspace, [(doc_id, timestamp)].into_iter())
+                .await
         }
 
         async fn mark_many_as_tombstone(

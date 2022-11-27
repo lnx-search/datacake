@@ -43,6 +43,7 @@ impl ChitchatTransport for ChitchatService {
 #[cfg(test)]
 mod tests {
     use std::net::{IpAddr, Ipv4Addr};
+
     use super::*;
 
     #[tokio::test]
@@ -58,10 +59,7 @@ mod tests {
             source: addr.serialize_to_vec(),
         });
 
-        service
-            .send_msg(msg_req)
-            .await
-            .expect("Send message");
+        service.send_msg(msg_req).await.expect("Send message");
 
         let (source, msg) = rx.try_recv().expect("Message should be registered");
         assert_eq!(source, addr);

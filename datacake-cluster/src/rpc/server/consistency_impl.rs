@@ -130,13 +130,13 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
+
+    use super::*;
     use crate::rpc::datacake_api::DocumentMetadata;
     use crate::storage::mem_store::MemStore;
-    use super::*;
 
     #[tokio::test]
     async fn test_consistency_put() {
@@ -149,7 +149,7 @@ mod tests {
         let doc = Document::new(1, clock.get_time().await, b"Hello, world".to_vec());
         let put_req = Request::new(PutPayload {
             keyspace: KEYSPACE.to_string(),
-            document: Some(doc.clone().into())
+            document: Some(doc.clone().into()),
         });
 
         service
@@ -204,11 +204,7 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(
             saved_docs,
-            vec![
-                doc_1.clone(),
-                doc_2.clone(),
-                doc_3.clone(),
-            ],
+            vec![doc_1.clone(), doc_2.clone(), doc_3.clone(),],
             "Documents stored should match."
         );
 
@@ -235,7 +231,8 @@ mod tests {
         let storage = group.storage();
         let service = ConsistencyService::new(group.clone());
 
-        let mut doc = Document::new(1, clock.get_time().await, b"Hello, world 1".to_vec());
+        let mut doc =
+            Document::new(1, clock.get_time().await, b"Hello, world 1".to_vec());
         add_docs(KEYSPACE, vec![doc.clone()], &service).await;
 
         let saved_doc = storage
@@ -251,18 +248,12 @@ mod tests {
             document: Some(DocumentMetadata {
                 id: doc.id,
                 last_updated: Some(doc.last_updated.into()),
-            })
+            }),
         });
 
-        service
-            .remove(remove_req)
-            .await
-            .expect("Remove document.");
+        service.remove(remove_req).await.expect("Remove document.");
 
-        let saved_doc = storage
-            .get(KEYSPACE, doc.id)
-            .await
-            .expect("Get new doc.");
+        let saved_doc = storage.get(KEYSPACE, doc.id).await.expect("Get new doc.");
         assert!(saved_doc.is_none(), "Documents should no longer exist.");
 
         let metadata = storage
@@ -270,12 +261,7 @@ mod tests {
             .await
             .expect("Iter metadata")
             .collect::<Vec<_>>();
-        assert_eq!(
-            metadata,
-            vec![
-                (doc.id, doc.last_updated, true),
-            ]
-        );
+        assert_eq!(metadata, vec![(doc.id, doc.last_updated, true),]);
     }
 
     #[tokio::test]
@@ -286,10 +272,17 @@ mod tests {
         let storage = group.storage();
         let service = ConsistencyService::new(group.clone());
 
-        let mut doc_1 = Document::new(1, clock.get_time().await, b"Hello, world 1".to_vec());
-        let mut doc_2 = Document::new(2, clock.get_time().await, b"Hello, world 2".to_vec());
+        let mut doc_1 =
+            Document::new(1, clock.get_time().await, b"Hello, world 1".to_vec());
+        let mut doc_2 =
+            Document::new(2, clock.get_time().await, b"Hello, world 2".to_vec());
         let doc_3 = Document::new(3, clock.get_time().await, b"Hello, world 3".to_vec());
-        add_docs(KEYSPACE, vec![doc_1.clone(), doc_2.clone(), doc_3.clone()], &service).await;
+        add_docs(
+            KEYSPACE,
+            vec![doc_1.clone(), doc_2.clone(), doc_3.clone()],
+            &service,
+        )
+        .await;
 
         let saved_docs = storage
             .multi_get(KEYSPACE, vec![doc_1.id, doc_2.id, doc_3.id].into_iter())
@@ -298,11 +291,7 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(
             saved_docs,
-            vec![
-                doc_1.clone(),
-                doc_2.clone(),
-                doc_3.clone(),
-            ],
+            vec![doc_1.clone(), doc_2.clone(), doc_3.clone(),],
             "Documents stored should match."
         );
 
@@ -311,8 +300,14 @@ mod tests {
         let remove_req = Request::new(MultiRemovePayload {
             keyspace: KEYSPACE.to_string(),
             documents: vec![
-                DocumentMetadata { id: doc_1.id, last_updated: Some(doc_1.last_updated.into()) },
-                DocumentMetadata { id: doc_2.id, last_updated: Some(doc_2.last_updated.into()) },
+                DocumentMetadata {
+                    id: doc_1.id,
+                    last_updated: Some(doc_1.last_updated.into()),
+                },
+                DocumentMetadata {
+                    id: doc_2.id,
+                    last_updated: Some(doc_2.last_updated.into()),
+                },
             ],
         });
 
@@ -347,7 +342,11 @@ mod tests {
         );
     }
 
-    async fn add_docs(keyspace: &str, docs: Vec<Document>, service: &ConsistencyService<MemStore>) {
+    async fn add_docs(
+        keyspace: &str,
+        docs: Vec<Document>,
+        service: &ConsistencyService<MemStore>,
+    ) {
         let put_req = Request::new(MultiPutPayload {
             keyspace: keyspace.to_string(),
             documents: docs.into_iter().map(|d| d.into()).collect(),

@@ -92,14 +92,14 @@ impl<S: Storage + Send + Sync + 'static> ReplicationApi for ReplicationService<S
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use std::borrow::Cow;
-    use crate::Document;
+
+    use super::*;
     use crate::keyspace::{KeyspaceTimestamps, ReplicationSource};
     use crate::storage::mem_store::MemStore;
-    use super::*;
+    use crate::Document;
 
     #[tokio::test]
     async fn test_poll_keyspace() {
@@ -115,12 +115,16 @@ mod tests {
             .expect("Get keyspace info")
             .into_inner();
 
-        let counters: KeyspaceTimestamps = rkyv::from_bytes(&resp.keyspace_timestamps).expect("Deserialize timestamps");
+        let counters: KeyspaceTimestamps =
+            rkyv::from_bytes(&resp.keyspace_timestamps).expect("Deserialize timestamps");
         assert!(counters.is_empty(), "No keyspace should exist initially.");
 
         // Add a new keyspace which is effectively changed.
         let keyspace = group.get_or_create_keyspace(KEYSPACE).await;
-        keyspace.put::<ReplicationSource>(1, clock.get_time().await).await.expect("Put key.");
+        keyspace
+            .put::<ReplicationSource>(1, clock.get_time().await)
+            .await
+            .expect("Put key.");
 
         let poll_req = Request::new(Empty {});
         let resp = service
@@ -130,9 +134,14 @@ mod tests {
             .into_inner();
 
         let blank_timestamps = KeyspaceTimestamps::default();
-        let counters: KeyspaceTimestamps = rkyv::from_bytes(&resp.keyspace_timestamps).expect("Deserialize timestamps");
+        let counters: KeyspaceTimestamps =
+            rkyv::from_bytes(&resp.keyspace_timestamps).expect("Deserialize timestamps");
         let diff = blank_timestamps.diff(&counters).collect::<Vec<_>>();
-        assert_eq!(diff, vec![Cow::Borrowed(KEYSPACE)], "No keyspace should exist initially.");
+        assert_eq!(
+            diff,
+            vec![Cow::Borrowed(KEYSPACE)],
+            "No keyspace should exist initially."
+        );
     }
 
     #[tokio::test]
@@ -143,9 +152,15 @@ mod tests {
         let service = ReplicationService::new(group.clone());
 
         let keyspace = group.get_or_create_keyspace(KEYSPACE).await;
-        keyspace.put::<ReplicationSource>(1, clock.get_time().await).await.expect("Put key.");
+        keyspace
+            .put::<ReplicationSource>(1, clock.get_time().await)
+            .await
+            .expect("Put key.");
         let last_updated = keyspace.last_updated();
-        let state = keyspace.serialize().await.expect("Get serialized version of state");
+        let state = keyspace
+            .serialize()
+            .await
+            .expect("Get serialized version of state");
 
         let state_req = Request::new(GetState {
             keyspace: KEYSPACE.to_string(),
@@ -157,7 +172,10 @@ mod tests {
             .expect("Get keyspace state.")
             .into_inner();
 
-        assert_eq!(resp.last_updated, last_updated, "Last updated timestamps should match.");
+        assert_eq!(
+            resp.last_updated, last_updated,
+            "Last updated timestamps should match."
+        );
         assert_eq!(resp.set_data, state, "State data should match.");
     }
 
@@ -172,8 +190,14 @@ mod tests {
         let keyspace = group.get_or_create_keyspace(KEYSPACE).await;
 
         let doc = Document::new(1, clock.get_time().await, b"Hello, world".to_vec());
-        storage.put(KEYSPACE, doc.clone()).await.expect("Store entry");
-        keyspace.put::<ReplicationSource>(doc.id, doc.last_updated).await.expect("Set state value.");
+        storage
+            .put(KEYSPACE, doc.clone())
+            .await
+            .expect("Store entry");
+        keyspace
+            .put::<ReplicationSource>(doc.id, doc.last_updated)
+            .await
+            .expect("Set state value.");
 
         let fetch_docs_req = Request::new(FetchDocs {
             keyspace: KEYSPACE.to_string(),
