@@ -35,9 +35,13 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
 
         self.group.clock().register_ts(document.last_updated).await;
 
-        crate::core::put_data::<ConsistencySource, _>(&inner.keyspace, document, &self.group)
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?;
+        crate::core::put_data::<ConsistencySource, _>(
+            &inner.keyspace,
+            document,
+            &self.group,
+        )
+        .await
+        .map_err(|e| Status::internal(e.to_string()))?;
 
         Ok(Response::new(Empty {}))
     }
@@ -55,9 +59,13 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
             doc
         });
 
-        crate::core::put_many_data::<ConsistencySource, _>(&inner.keyspace, documents, &self.group)
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?;
+        crate::core::put_many_data::<ConsistencySource, _>(
+            &inner.keyspace,
+            documents,
+            &self.group,
+        )
+        .await
+        .map_err(|e| Status::internal(e.to_string()))?;
 
         self.group.clock().register_ts(newest_ts).await;
 
@@ -75,9 +83,14 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
 
         self.group.clock().register_ts(last_updated).await;
 
-        crate::core::del_data::<ConsistencySource, _>(&inner.keyspace, doc_id, last_updated, &self.group)
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?;
+        crate::core::del_data::<ConsistencySource, _>(
+            &inner.keyspace,
+            doc_id,
+            last_updated,
+            &self.group,
+        )
+        .await
+        .map_err(|e| Status::internal(e.to_string()))?;
 
         Ok(Response::new(Empty {}))
     }
@@ -103,9 +116,13 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
                 (id, ts)
             });
 
-        crate::core::del_many_data::<ConsistencySource, _>(&inner.keyspace, documents, &self.group)
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?;
+        crate::core::del_many_data::<ConsistencySource, _>(
+            &inner.keyspace,
+            documents,
+            &self.group,
+        )
+        .await
+        .map_err(|e| Status::internal(e.to_string()))?;
 
         self.group.clock().register_ts(newest_ts).await;
 

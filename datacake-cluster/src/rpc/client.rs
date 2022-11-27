@@ -137,7 +137,7 @@ impl ReplicationClient {
     pub async fn get_state(
         &mut self,
         keyspace: impl Into<String>,
-    ) -> Result<(u64, OrSWotSet), Status> {
+    ) -> Result<(u64, OrSWotSet<{ crate::keyspace::NUM_SOURCES }>), Status> {
         let resp = self
             .inner
             .get_state(GetState {

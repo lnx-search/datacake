@@ -4,9 +4,9 @@ use std::hash::{Hash, Hasher};
 use bytes::Bytes;
 use datacake_crdt::{HLCTimestamp, Key};
 
+use crate::keyspace::StateSource;
 use crate::rpc::datacake_api;
 use crate::{error, KeyspaceGroup, Storage};
-use crate::keyspace::StateSource;
 
 #[derive(Clone)]
 pub struct Document {
@@ -382,9 +382,13 @@ mod tests {
         // Test updating an existing document.
         let updated_doc_ts = clock.get_time().await;
         let updated_doc = Document::new(1, updated_doc_ts, b"hello, world".to_vec());
-        put_many_data::<TestSource, _>(KEYSPACE, vec![updated_doc.clone()].into_iter(), &group)
-            .await
-            .expect("Put new data should be successful.");
+        put_many_data::<TestSource, _>(
+            KEYSPACE,
+            vec![updated_doc.clone()].into_iter(),
+            &group,
+        )
+        .await
+        .expect("Put new data should be successful.");
 
         let keyspace = group.get_or_create_keyspace(KEYSPACE).await;
         let (additions, removals) = keyspace.symetrical_diff(OrSWotSet::default()).await;

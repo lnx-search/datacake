@@ -31,7 +31,7 @@ use tokio_stream::wrappers::WatchStream;
 
 use crate::clock::Clock;
 use crate::core::Document;
-use crate::keyspace::{KeyspaceGroup, ConsistencySource};
+use crate::keyspace::{ConsistencySource, KeyspaceGroup};
 use crate::node::{ClusterMember, DatacakeNode};
 use crate::nodes_selector::{
     Consistency,
@@ -295,7 +295,8 @@ where
         let last_updated = self.clock.get_time().await;
         let document = Document::new(doc_id, last_updated, data);
 
-        core::put_data::<ConsistencySource, _>(keyspace, document.clone(), &self.group).await?;
+        core::put_data::<ConsistencySource, _>(keyspace, document.clone(), &self.group)
+            .await?;
 
         let factory = |node| {
             let keyspace = keyspace.to_string();
@@ -345,7 +346,12 @@ where
             .map(|(id, data)| Document::new(id, last_updated, data))
             .collect::<Vec<_>>();
 
-        core::put_many_data::<ConsistencySource, _>(keyspace, docs.clone().into_iter(), &self.group).await?;
+        core::put_many_data::<ConsistencySource, _>(
+            keyspace,
+            docs.clone().into_iter(),
+            &self.group,
+        )
+        .await?;
 
         let factory = |node| {
             let keyspace = keyspace.to_string();
@@ -386,7 +392,13 @@ where
 
         let last_updated = self.clock.get_time().await;
 
-        core::del_data::<ConsistencySource, _>(keyspace, doc_id, last_updated, &self.group).await?;
+        core::del_data::<ConsistencySource, _>(
+            keyspace,
+            doc_id,
+            last_updated,
+            &self.group,
+        )
+        .await?;
 
         let factory = |node| {
             let keyspace = keyspace.to_string();
@@ -434,7 +446,12 @@ where
             .map(|id| (id, last_updated))
             .collect::<Vec<_>>();
 
-        core::del_many_data::<ConsistencySource, _>(keyspace, docs.clone().into_iter(), &self.group).await?;
+        core::del_many_data::<ConsistencySource, _>(
+            keyspace,
+            docs.clone().into_iter(),
+            &self.group,
+        )
+        .await?;
 
         let factory = |node| {
             let keyspace = keyspace.to_string();

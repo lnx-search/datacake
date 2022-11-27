@@ -97,8 +97,12 @@ impl<const N: usize> NodeVersions<N> {
         let min = self
             .nodes_max_stamps
             .iter()
-            .filter_map(|stamps| stamps.get(&node))
-            .copied()
+            .map(|stamps| {
+                stamps
+                    .get(&node)
+                    .copied()
+                    .unwrap_or_else(|| HLCTimestamp::new(0, 0, node))
+            })
             .min();
 
         if let Some(min) = min {
@@ -1008,7 +1012,7 @@ mod tests {
     #[test]
     fn test_multi_source_handling() {
         let mut clock = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 0);
-        let mut node_set = OrSWotSet::<2>::default();
+        let mut node_set = OrSWotSet::<1>::default();
 
         // A basic example of the purging system.
         node_set.insert_with_source(0, 1, clock.send().unwrap());
@@ -1021,6 +1025,8 @@ mod tests {
         // Since we're only using one source here, we should be able to safely purge key `1`.
         let purged = node_set.purge_old_deletes();
         assert_eq!(purged, vec![1]);
+
+        let mut node_set = OrSWotSet::<2>::default();
 
         // Insert a new entry from source `1` and `0`.
         node_set.insert_with_source(0, 1, clock.send().unwrap());
@@ -1057,5 +1063,10 @@ mod tests {
         assert!(node_set.insert_with_source(0, 5, initial_ts));
         assert!(node_set.insert_with_source(1, 6, old_ts));
         assert!(!node_set.insert_with_source(0, 5, old_ts));
+
+        assert!(node_set.insert_with_source(0, 6, initial_ts));
+        assert!(node_set.delete_with_source(1, 4, clock.send().unwrap()));
+        assert!(node_set.delete_with_source(0, 3, clock.send().unwrap()));
+        assert!(!node_set.delete_with_source(1, 4, initial_ts));
     }
 }

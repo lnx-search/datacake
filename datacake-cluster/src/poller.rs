@@ -10,7 +10,14 @@ use tokio::task::JoinHandle;
 use tokio::time::{interval, Interval};
 use tonic::transport::Channel;
 
-use crate::keyspace::{CounterKey, KeyspaceGroup, KeyspaceState, KeyspaceTimestamps, ReplicationSource, StateSource};
+use crate::keyspace::{
+    CounterKey,
+    KeyspaceGroup,
+    KeyspaceState,
+    KeyspaceTimestamps,
+    ReplicationSource,
+    StateSource,
+};
 use crate::rpc::ReplicationClient;
 use crate::Storage;
 
@@ -289,7 +296,10 @@ where
     // The removal task can operate interdependently of the modified handler.
     // If, in the process of handling removals, the modified handler errors,
     // we simply let the removal task continue on as normal.
-    let removal_task = tokio::spawn(handle_removals::<ReplicationSource, _>(keyspace.clone(), removed));
+    let removal_task = tokio::spawn(handle_removals::<ReplicationSource, _>(
+        keyspace.clone(),
+        removed,
+    ));
 
     let res = handle_modified(&mut state.client, keyspace, modified).await;
     removal_task.await.expect("join task")?;
@@ -331,7 +341,9 @@ where
         // If we were to do this the other way around, we could potentially
         // end up being in a situation where the state *thinks* it's up to date
         // but in reality it's not.
-        keyspace.multi_put::<ReplicationSource>(doc_timestamps).await?;
+        keyspace
+            .multi_put::<ReplicationSource>(doc_timestamps)
+            .await?;
     }
 
     Ok(())
