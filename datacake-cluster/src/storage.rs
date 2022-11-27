@@ -443,6 +443,39 @@ pub mod test_suite {
             metadata.is_empty(),
             "Persisted metadata entries should be empty after tombstone purge."
         );
+
+        doc_1.last_updated = clock.send().unwrap();
+        doc_2.last_updated = clock.send().unwrap();
+        doc_3.last_updated = clock.send().unwrap();
+        let doc_4_ts = clock.send().unwrap();
+        storage
+            .mark_many_as_tombstone(
+                KEYSPACE,
+                [
+                    (doc_1.id, doc_1.last_updated),
+                    (doc_2.id, doc_2.last_updated),
+                    (doc_3.id, doc_3.last_updated),
+                    (4, doc_4_ts),
+                ]
+                .into_iter(),
+            )
+            .await
+            .expect("Mark documents as tombstones.");
+        let metadata = storage
+            .iter_metadata(KEYSPACE)
+            .await
+            .expect("Produce metadata iterator.")
+            .collect::<HashSet<(Key, HLCTimestamp, bool)>>();
+        assert_eq!(
+            metadata,
+            to_hashset([
+                (doc_1.id, doc_1.last_updated, true),
+                (doc_2.id, doc_2.last_updated, true),
+                (doc_3.id, doc_3.last_updated, true),
+                (4, doc_4_ts, true),
+            ]),
+            "Persisted tombstones should be tracked."
+        );
     }
 
     #[instrument(name = "test_basic_persistence_test", skip(storage))]
