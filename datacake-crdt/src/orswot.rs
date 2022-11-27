@@ -18,25 +18,32 @@ pub type StateChanges = Vec<(Key, HLCTimestamp)>;
 #[error("The set cannot be (de)serialized from the provided set of bytes.")]
 pub struct BadState;
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 #[repr(C)]
 #[cfg_attr(feature = "rkyv-support", derive(Serialize, Deserialize, Archive))]
 #[cfg_attr(feature = "rkyv-support", archive(compare(PartialEq)))]
-#[cfg_attr(feature = "rkyv-support", archive_attr(derive(CheckBytes, Debug)))]
-pub struct NodeVersions {
-    nodes_max_stamps: Vec<HashMap<u32, HLCTimestamp>>,
+#[cfg_attr(feature = "rkyv-support", archive_attr(derive(CheckBytes)))]
+pub struct NodeVersions<const N: usize> {
+    nodes_max_stamps: [HashMap<u32, HLCTimestamp>; N],
     safe_last_stamps: HashMap<u32, HLCTimestamp>,
 }
 
-impl NodeVersions {
+impl<const N: usize> Default for NodeVersions<N> {
+    fn default() -> Self {
+        let stamps_template = [(); N];
+
+        Self {
+            nodes_max_stamps: stamps_template.map(|_| HashMap::new()),
+            safe_last_stamps: HashMap::new(),
+        }
+    }
+}
+
+impl<const N: usize> NodeVersions<N> {
     /// merges the current node versions with another node versions set.
-    fn merge(&mut self, other: NodeVersions) {
+    fn merge(&mut self, other: NodeVersions<N>) {
         let mut nodes = HashSet::new();
         for (source, other_nodes) in other.nodes_max_stamps.into_iter().enumerate() {
-            if source >= self.nodes_max_stamps.len() {
-                self.nodes_max_stamps.resize_with(source + 1, HashMap::new);
-            }
-
             let existing_nodes = &mut self.nodes_max_stamps[source];
             for (node, ts) in other_nodes {
                 nodes.insert(node);
@@ -64,10 +71,6 @@ impl NodeVersions {
 
     /// Attempts to update the latest observed timestamp for a given source.
     fn try_update_max_stamp(&mut self, source: usize, ts: HLCTimestamp) -> bool {
-        if source >= self.nodes_max_stamps.len() {
-            self.nodes_max_stamps.resize_with(source + 1, HashMap::new);
-        }
-
         match self.nodes_max_stamps[source].entry(ts.node()) {
             Entry::Occupied(mut entry) => {
                 // We have already observed these events at some point from this node.
@@ -116,7 +119,7 @@ impl NodeVersions {
 #[repr(C)]
 #[cfg_attr(feature = "rkyv", derive(Serialize, Deserialize, Archive))]
 #[cfg_attr(feature = "rkyv", archive(compare(PartialEq)))]
-#[cfg_attr(feature = "rkyv", archive_attr(derive(CheckBytes, Debug)))]
+#[cfg_attr(feature = "rkyv", archive_attr(derive(CheckBytes)))]
 /// A CRDT which supports purging of deleted entry tombstones.
 ///
 /// This implementation is largely based on the Riak DB implementations
@@ -177,13 +180,13 @@ impl NodeVersions {
 /// assert!(node_a_set.get(&1).is_none(), "Key a was not correctly removed.");
 /// assert!(node_b_set.get(&1).is_none(), "Key a was not correctly removed.");
 /// ```
-pub struct OrSWotSet {
+pub struct OrSWotSet<const N: usize = 1> {
     entries: BTreeMap<Key, HLCTimestamp>,
     dead: HashMap<Key, HLCTimestamp>,
-    versions: NodeVersions,
+    versions: NodeVersions<N>,
 }
 
-impl OrSWotSet {
+impl<const N: usize> OrSWotSet<N> {
     #[cfg(feature = "rkyv")]
     /// Deserializes a [OrSWotSet] from a array of bytes.
     pub fn from_bytes(data: &[u8]) -> Result<Self, BadState> {
@@ -207,7 +210,7 @@ impl OrSWotSet {
     ///
     /// NOTE:
     ///     The difference is *not* the symmetric difference between the two sets.
-    pub fn diff(&self, other: &OrSWotSet) -> (StateChanges, StateChanges) {
+    pub fn diff(&self, other: &OrSWotSet<N>) -> (StateChanges, StateChanges) {
         let mut changes = Vec::new();
         let mut removals = Vec::new();
 
@@ -246,7 +249,7 @@ impl OrSWotSet {
     /// In this case any conflicts are deterministically resolved via the key's [HLCTimestamp]
     /// any deletes are tracked or ignored depending on this timestamp due to the nature
     /// of the ORSWOT CRDT.
-    pub fn merge(&mut self, other: OrSWotSet) {
+    pub fn merge(&mut self, other: OrSWotSet<N>) {
         let base_entries = other.entries.into_iter().map(|(k, ts)| (k, ts, false));
 
         let remote_versions = other.versions;
@@ -377,6 +380,8 @@ impl OrSWotSet {
         k: Key,
         ts: HLCTimestamp,
     ) -> bool {
+        debug_assert!(source < N);
+
         let mut has_set = false;
 
         self.versions.try_update_max_stamp(source, ts);
@@ -429,6 +434,8 @@ impl OrSWotSet {
         k: Key,
         ts: HLCTimestamp,
     ) -> bool {
+        debug_assert!(source < N);
+
         let mut has_set = false;
 
         if !self.versions.try_update_max_stamp(source, ts) {
@@ -474,7 +481,7 @@ mod tests {
         let mut node_b = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 1);
 
         // We create our new set for node a.
-        let mut node_a_set = OrSWotSet::default();
+        let mut node_a_set = OrSWotSet::<1>::default();
 
         // We add a new set of entries into our set.
         node_a_set.insert(1, node_a.send().unwrap());
@@ -519,7 +526,7 @@ mod tests {
         let mut node_b = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 1);
 
         // We create our new set for node a.
-        let mut node_a_set = OrSWotSet::default();
+        let mut node_a_set = OrSWotSet::<1>::default();
 
         // We add a new set of entries into our set.
         // It's important that our `3` key is first here, as it means the counter
@@ -587,7 +594,7 @@ mod tests {
         let mut node_b = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 1);
 
         // We create our new set for node a.
-        let mut node_a_set = OrSWotSet::default();
+        let mut node_a_set = OrSWotSet::<1>::default();
 
         // We add a new set of entries into our set.
         node_a_set.insert(1, node_a.send().unwrap());
@@ -630,7 +637,7 @@ mod tests {
         let mut node_b = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 1);
 
         // We create our new set for node a.
-        let mut node_a_set = OrSWotSet::default();
+        let mut node_a_set = OrSWotSet::<1>::default();
 
         // We add a new set of entries into our set.
         node_a_set.insert(1, node_a.send().unwrap());
@@ -685,7 +692,7 @@ mod tests {
         let mut node_b = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 1);
 
         // We create our new set for node a.
-        let mut node_a_set = OrSWotSet::default();
+        let mut node_a_set = OrSWotSet::<1>::default();
 
         // We add a new set of entries into our set.
         node_a_set.insert(1, node_a.send().unwrap());
@@ -781,7 +788,7 @@ mod tests {
         std::thread::sleep(Duration::from_millis(200));
 
         // We create our new set for node a.
-        let mut node_a_set = OrSWotSet::default();
+        let mut node_a_set = OrSWotSet::<1>::default();
 
         let did_add = node_a_set.insert(1, node_a.send().unwrap());
         assert!(did_add, "Expected entry insert to be added.");
@@ -802,7 +809,7 @@ mod tests {
         std::thread::sleep(Duration::from_millis(200));
 
         // We create our new set for node a.
-        let mut node_a_set = OrSWotSet::default();
+        let mut node_a_set = OrSWotSet::<1>::default();
 
         let did_add = node_a_set.insert(1, node_a.send().unwrap());
         assert!(did_add, "Expected entry insert to be added.");
@@ -819,8 +826,8 @@ mod tests {
         let mut node_a = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 0);
         let mut node_b = HLCTimestamp::new(get_unix_timestamp_ms() + 5000, 0, 1);
 
-        let mut node_a_set = OrSWotSet::default();
-        let mut node_b_set = OrSWotSet::default();
+        let mut node_a_set = OrSWotSet::<1>::default();
+        let mut node_b_set = OrSWotSet::<1>::default();
 
         let insert_ts_1 = node_a.send().unwrap();
         node_a_set.insert(1, insert_ts_1);
@@ -874,8 +881,8 @@ mod tests {
         let mut node_a = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 0);
         let mut node_b = HLCTimestamp::new(get_unix_timestamp_ms() + 5000, 0, 1);
 
-        let mut node_a_set = OrSWotSet::default();
-        let mut node_b_set = OrSWotSet::default();
+        let mut node_a_set = OrSWotSet::<1>::default();
+        let mut node_b_set = OrSWotSet::<1>::default();
 
         // This should get overriden by node b.
         node_a_set.insert(1, node_a.send().unwrap());
@@ -922,8 +929,8 @@ mod tests {
         let node_a = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 0);
         let node_b = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 1);
 
-        let mut node_a_set = OrSWotSet::default();
-        let mut node_b_set = OrSWotSet::default();
+        let mut node_a_set = OrSWotSet::<1>::default();
+        let mut node_b_set = OrSWotSet::<1>::default();
 
         // This delete conflicts with the insert timestamp.
         // We expect node with the biggest ID to win.
@@ -970,8 +977,8 @@ mod tests {
         let has_changed = node_b_set.insert(1, node_b);
         assert!(has_changed, "Set b should insert the value.");
 
-        let mut node_a_set = OrSWotSet::default();
-        let mut node_b_set = OrSWotSet::default();
+        let mut node_a_set = OrSWotSet::<1>::default();
+        let mut node_b_set = OrSWotSet::<1>::default();
 
         // This delete conflicts with the insert timestamp.
         // We expect node with the biggest ID to win.
@@ -999,7 +1006,7 @@ mod tests {
     #[test]
     fn test_multi_source_handling() {
         let mut clock = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 0);
-        let mut node_set = OrSWotSet::default();
+        let mut node_set = OrSWotSet::<2>::default();
 
         // A basic example of the purging system.
         node_set.insert_with_source(0, 1, clock.send().unwrap());
@@ -1036,5 +1043,8 @@ mod tests {
         // We should now have successfully removed the key.
         let purged = node_set.purge_old_deletes();
         assert_eq!(purged, vec![1]);
+
+        // TODO: Add test for deletions being skipped? And inserts as well?
+        // TODO: Also make insets obey the observation rule again as that is needed for correctness.
     }
 }
