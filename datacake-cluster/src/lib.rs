@@ -40,7 +40,15 @@ use crate::nodes_selector::{
     NodeSelectorHandle,
 };
 use crate::poller::ShutdownHandle;
-use crate::rpc::{ConsistencyClient, Context, GrpcTransport, RpcNetwork, TIMEOUT_LIMIT};
+use crate::rpc::{
+    ConsistencyClient,
+    Context,
+    DefaultRegistry,
+    GrpcTransport,
+    RpcNetwork,
+    ServiceRegistry,
+    TIMEOUT_LIMIT,
+};
 
 pub static DEFAULT_DATA_CENTER: &str = "datacake-dc-unknown";
 pub static DEFAULT_CLUSTER_ID: &str = "datacake-cluster-unknown";
@@ -72,6 +80,43 @@ impl ClusterOptions {
     pub fn with_data_center(mut self, dc: impl Display) -> Self {
         self.data_center = Cow::Owned(dc.to_string());
         self
+    }
+}
+
+#[derive(Debug, Clone)]
+/// Configuration for the cluster network.
+pub struct ConnectionConfig {
+    /// The binding address for the RPC server to bind and listen on.
+    ///
+    /// This is often `0.0.0.0` + your chosen port.
+    pub listen_addr: SocketAddr,
+
+    /// The public address to be broadcast to other cluster members.
+    ///
+    /// This is normally the machine's public IP address and the port the server is listening on.
+    pub public_addr: SocketAddr,
+
+    /// A set of initial seed nodes which the node will attempt to connect to and learn of any
+    /// other members in the cluster.
+    ///
+    /// Normal `2` or `3` seeds is fine when running a multi-node cluster.
+    /// Having only `1` seed can be dangerous if both nodes happen to go down but the seed
+    /// does not restart before this node, as it will be unable to re-join the cluster.
+    pub seed_nodes: Vec<String>,
+}
+
+impl ConnectionConfig {
+    /// Creates a new connection config.
+    pub fn new(
+        listen_addr: SocketAddr,
+        public_addr: SocketAddr,
+        seeds: impl Into<Vec<String>>,
+    ) -> Self {
+        Self {
+            listen_addr,
+            public_addr,
+            seed_nodes: seeds.into(),
+        }
     }
 }
 
@@ -114,15 +159,52 @@ where
     /// their basic state.
     pub async fn connect<DS>(
         node_id: impl Into<String>,
-        listen_addr: SocketAddr,
-        public_addr: SocketAddr,
-        seed_nodes: Vec<String>,
+        connection_cfg: ConnectionConfig,
         datastore: S,
         node_selector: DS,
         options: ClusterOptions,
     ) -> Result<Self, error::DatacakeError<S::Error>>
     where
         DS: NodeSelector + Send + 'static,
+    {
+        Self::connect_with_registry(
+            node_id,
+            connection_cfg,
+            datastore,
+            node_selector,
+            DefaultRegistry,
+            options,
+        )
+        .await
+    }
+
+    /// Starts the Datacake cluster with a custom service registry, connecting to the targeted seed nodes.
+    ///
+    /// A custom service registry can be used in order to add additional GRPC services to the
+    /// RPC server in order to avoid listening on multiple addresses.
+    ///
+    /// When connecting to the cluster, the `node_id` **must be unique** otherwise
+    /// the cluster will incorrectly propagate state and not become consistent.
+    ///
+    /// Typically you will only have one cluster and therefore only have one `cluster_id`
+    /// which should be the same for each node in the cluster.
+    /// Currently the `cluster_id` is not handled by anything other than
+    /// [chitchat](https://docs.rs/chitchat/0.4.1/chitchat/)
+    ///
+    /// No seed nodes need to be live at the time of connecting for the cluster to start correctly,
+    /// but they are required in order for nodes to discover one-another and share
+    /// their basic state.
+    pub async fn connect_with_registry<DS, R>(
+        node_id: impl Into<String>,
+        connection_cfg: ConnectionConfig,
+        datastore: S,
+        node_selector: DS,
+        service_registry: R,
+        options: ClusterOptions,
+    ) -> Result<Self, error::DatacakeError<S::Error>>
+    where
+        DS: NodeSelector + Send + 'static,
+        R: ServiceRegistry + Send + Sync + Clone + 'static,
     {
         let node_id = node_id.into();
 
@@ -136,16 +218,16 @@ where
         group.load_states_from_storage().await?;
 
         let selector = nodes_selector::start_node_selector(
-            public_addr,
+            connection_cfg.public_addr,
             options.data_center.clone(),
             node_selector,
         )
         .await;
 
         let cluster_info = ClusterInfo {
-            listen_addr,
-            public_addr,
-            seed_nodes,
+            listen_addr: connection_cfg.listen_addr,
+            public_addr: connection_cfg.public_addr,
+            seed_nodes: connection_cfg.seed_nodes,
             data_center: options.data_center.as_ref(),
         };
         let node = connect_node(
@@ -154,6 +236,7 @@ where
             group.clone(),
             network.clone(),
             cluster_info,
+            service_registry,
         )
         .await?;
 
@@ -162,7 +245,7 @@ where
         info!(
             node_id = %node_id,
             cluster_id = %options.cluster_id,
-            listen_addr = %listen_addr,
+            listen_addr = %connection_cfg.listen_addr,
             "Datacake cluster connected."
         );
 
@@ -577,20 +660,23 @@ struct ClusterInfo<'a> {
 ///
 /// The node will attempt to establish connections to the seed nodes and
 /// will broadcast the node's public address to communicate.
-async fn connect_node<S>(
+async fn connect_node<S, R>(
     node_id: String,
     cluster_id: String,
     group: KeyspaceGroup<S>,
     network: RpcNetwork,
     cluster_info: ClusterInfo<'_>,
+    service_registry: R,
 ) -> Result<DatacakeNode, error::DatacakeError<S::Error>>
 where
     S: Storage + Send + Sync + 'static,
+    R: ServiceRegistry + Send + Sync + Clone + 'static,
 {
     let (chitchat_tx, chitchat_rx) = flume::bounded(1000);
     let context = Context {
         chitchat_messages: chitchat_tx,
         keyspace_group: group,
+        service_registry,
     };
     let transport = GrpcTransport::new(network.clone(), context, chitchat_rx);
 

@@ -12,19 +12,27 @@ use tokio::sync::oneshot;
 use crate::rpc::chitchat_transport_api::chitchat_transport_client::ChitchatTransportClient;
 use crate::rpc::chitchat_transport_api::ChitchatRpcMessage;
 use crate::rpc::network::RpcNetwork;
+use crate::rpc::server::ServiceRegistry;
 use crate::storage::Storage;
 
 #[derive(Clone)]
 /// Chitchat compatible transport built on top of an existing GRPC connection.
 ///
 /// This allows us to maintain a single connection rather than both a UDP and TCP connection.
-pub struct GrpcTransport<S: Storage>(Arc<GrpcTransportInner<S>>);
+pub struct GrpcTransport<S, R>(Arc<GrpcTransportInner<S, R>>)
+where
+    S: Storage,
+    R: ServiceRegistry + Clone;
 
-impl<S: Storage> GrpcTransport<S> {
+impl<S, R> GrpcTransport<S, R>
+where
+    S: Storage,
+    R: ServiceRegistry + Clone,
+{
     /// Creates a new GRPC transport instances.
     pub fn new(
         network: RpcNetwork,
-        ctx: super::server::Context<S>,
+        ctx: super::server::Context<S, R>,
         messages: flume::Receiver<(SocketAddr, ChitchatMessage)>,
     ) -> Self {
         Self(Arc::new(GrpcTransportInner {
@@ -36,8 +44,12 @@ impl<S: Storage> GrpcTransport<S> {
     }
 }
 
-impl<S: Storage> Deref for GrpcTransport<S> {
-    type Target = GrpcTransportInner<S>;
+impl<S, R> Deref for GrpcTransport<S, R>
+where
+    S: Storage,
+    R: ServiceRegistry + Clone,
+{
+    type Target = GrpcTransportInner<S, R>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -45,7 +57,11 @@ impl<S: Storage> Deref for GrpcTransport<S> {
 }
 
 #[async_trait]
-impl<S: Storage + Sync + Send + 'static> Transport for GrpcTransport<S> {
+impl<S, R> Transport for GrpcTransport<S, R>
+where
+    S: Storage + Sync + Send + 'static,
+    R: ServiceRegistry + Send + Sync + Clone + 'static,
+{
     async fn open(&self, listen_addr: SocketAddr) -> anyhow::Result<Box<dyn Socket>> {
         let shutdown =
             super::server::connect_server(listen_addr, self.ctx.clone()).await?;
@@ -62,12 +78,16 @@ impl<S: Storage + Sync + Send + 'static> Transport for GrpcTransport<S> {
     }
 }
 
-pub struct GrpcTransportInner<S: Storage> {
+pub struct GrpcTransportInner<S, R>
+where
+    S: Storage,
+    R: ServiceRegistry + Clone,
+{
     /// The RPC clients available to this cluster.
     network: RpcNetwork,
 
     /// Context to be passed when binding a new RPC server instance.
-    ctx: super::server::Context<S>,
+    ctx: super::server::Context<S, R>,
 
     /// The set of server handles that should be kept alive until the system shuts down.
     shutdown_handles: Mutex<Vec<oneshot::Sender<()>>>,
