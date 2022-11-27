@@ -9,6 +9,7 @@ mod node;
 mod nodes_selector;
 mod poller;
 mod rpc;
+mod statistics;
 mod storage;
 
 use std::borrow::Cow;
@@ -16,6 +17,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::Display;
 use std::future::Future;
 use std::net::SocketAddr;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -24,6 +26,7 @@ use chitchat::FailureDetectorConfig;
 use datacake_crdt::{get_unix_timestamp_ms, Key};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+pub use statistics::ClusterStatistics;
 #[cfg(feature = "test-utils")]
 pub use storage::test_suite;
 pub use storage::Storage;
@@ -138,6 +141,7 @@ where
     group: KeyspaceGroup<S>,
     clock: Clock,
     node_selector: NodeSelectorHandle,
+    statistics: ClusterStatistics,
 }
 
 impl<S> DatacakeCluster<S>
@@ -213,6 +217,7 @@ where
 
         let group = KeyspaceGroup::new(storage.clone(), clock.clone()).await;
         let network = RpcNetwork::default();
+        let statistics = ClusterStatistics::default();
 
         // Load the keyspace states.
         group.load_states_from_storage().await?;
@@ -237,10 +242,18 @@ where
             network.clone(),
             cluster_info,
             service_registry,
+            statistics.clone(),
         )
         .await?;
 
-        setup_poller(group.clone(), network.clone(), &node, selector.clone()).await?;
+        setup_poller(
+            group.clone(),
+            network.clone(),
+            &node,
+            selector.clone(),
+            statistics.clone(),
+        )
+        .await?;
 
         info!(
             node_id = %node_id,
@@ -254,6 +267,7 @@ where
             network,
             group,
             clock,
+            statistics,
             node_selector: selector,
         })
     }
@@ -261,6 +275,12 @@ where
     /// Shuts down the cluster and cleans up any connections.
     pub async fn shutdown(self) {
         self.node.shutdown().await;
+    }
+
+    #[inline]
+    /// Gets the live cluster statistics.
+    pub fn statistics(&self) -> &ClusterStatistics {
+        &self.statistics
     }
 
     /// Creates a new handle to the underlying storage system.
@@ -272,6 +292,7 @@ where
             group: self.group.clone(),
             clock: self.clock.clone(),
             node_selector: self.node_selector.clone(),
+            statistics: self.statistics.clone(),
         }
     }
 
@@ -298,6 +319,7 @@ where
     group: KeyspaceGroup<S>,
     clock: Clock,
     node_selector: NodeSelectorHandle,
+    statistics: ClusterStatistics,
 }
 
 impl<S> Clone for DatacakeHandle<S>
@@ -310,6 +332,7 @@ where
             group: self.group.clone(),
             clock: self.clock.clone(),
             node_selector: self.node_selector.clone(),
+            statistics: self.statistics.clone(),
         }
     }
 }
@@ -318,6 +341,12 @@ impl<S> DatacakeHandle<S>
 where
     S: Storage + Send + Sync + 'static,
 {
+    #[inline]
+    /// Gets the live cluster statistics.
+    pub fn statistics(&self) -> &ClusterStatistics {
+        &self.statistics
+    }
+
     /// Creates a new handle to the underlying storage system with a preset keyspace.
     ///
     /// Changes applied to the handle are distributed across the cluster.
@@ -667,6 +696,7 @@ async fn connect_node<S, R>(
     network: RpcNetwork,
     cluster_info: ClusterInfo<'_>,
     service_registry: R,
+    statistics: ClusterStatistics,
 ) -> Result<DatacakeNode, error::DatacakeError<S::Error>>
 where
     S: Storage + Send + Sync + 'static,
@@ -693,6 +723,7 @@ where
         cluster_info.seed_nodes,
         FailureDetectorConfig::default(),
         &transport,
+        statistics,
     )
     .await?;
 
@@ -706,6 +737,7 @@ async fn setup_poller<S>(
     network: RpcNetwork,
     node: &DatacakeNode,
     node_selector: NodeSelectorHandle,
+    statistics: ClusterStatistics,
 ) -> Result<(), error::DatacakeError<S::Error>>
 where
     S: Storage + Send + Sync + 'static,
@@ -716,6 +748,7 @@ where
         network,
         node_selector,
         changes,
+        statistics,
     ));
     Ok(())
 }
@@ -728,6 +761,7 @@ async fn watch_membership_changes<S>(
     network: RpcNetwork,
     node_selector: NodeSelectorHandle,
     mut changes: WatchStream<Vec<ClusterMember>>,
+    statistics: ClusterStatistics,
 ) where
     S: Storage + Send + Sync + 'static,
 {
@@ -746,6 +780,9 @@ async fn watch_membership_changes<S>(
                 data_centers.entry(dc).or_default().push(member.public_addr);
             }
 
+            statistics
+                .num_data_centers
+                .store(data_centers.len() as u64, Ordering::Relaxed);
             node_selector.set_nodes(data_centers).await;
         }
 
@@ -797,6 +834,7 @@ async fn watch_membership_changes<S>(
                 keyspace_group.clone(),
                 channel,
                 POLLING_INTERVAL_DURATION,
+                statistics.clone(),
             );
             let handle = state.shutdown_handle();
             tokio::spawn(poller::node_poller(state));

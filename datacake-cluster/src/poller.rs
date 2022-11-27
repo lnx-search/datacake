@@ -19,9 +19,9 @@ use crate::keyspace::{
     StateSource,
 };
 use crate::rpc::ReplicationClient;
-use crate::Storage;
+use crate::{ClusterStatistics, Storage};
 
-const KEYSPACE_SYNC_TIMEOUT: Duration = Duration::from_micros(10);
+const KEYSPACE_SYNC_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_NUMBER_OF_DOCS_PER_FETCH: usize = 100_000;
 
 /// A actor responsible for continuously polling a node's keyspace state
@@ -58,6 +58,9 @@ where
     /// If a handle exists and is not done, this means the keyspace
     /// is currently already in the process of being synchronised.
     handles: HashMap<Cow<'static, str>, KeyspacePollHandle>,
+
+    /// Global node statistics.
+    statistics: ClusterStatistics,
 }
 
 impl<S> NodePollerState<S>
@@ -71,10 +74,12 @@ where
         keyspace_group: KeyspaceGroup<S>,
         rpc_channel: Channel,
         interval_duration: Duration,
+        statistics: ClusterStatistics,
     ) -> Self {
         Self {
             target_node_id,
             target_rpc_addr,
+            statistics,
             group: keyspace_group,
             last_keyspace_timestamps: Default::default(),
             channel: rpc_channel,
@@ -120,6 +125,7 @@ where
                 .unwrap_or_default(),
             done: Arc::new(AtomicBool::new(false)),
             client: ReplicationClient::from(self.channel.clone()),
+            statistics: self.statistics.clone(),
         }
     }
 }
@@ -157,6 +163,9 @@ where
 
     /// The client the task can use for RPC.
     client: ReplicationClient,
+
+    /// Global node statistics.
+    statistics: ClusterStatistics,
 }
 
 impl<S> TaskState<S>
@@ -231,8 +240,16 @@ where
     let diff = keyspace_timestamps.diff(&state.last_keyspace_timestamps);
 
     for keyspace in diff {
+        state
+            .statistics
+            .num_keyspace_changes
+            .fetch_add(1, Ordering::Relaxed);
         if let Some(handle) = state.handles.remove(&keyspace) {
             if handle.is_timeout() {
+                state
+                    .statistics
+                    .num_slow_sync_tasks
+                    .fetch_add(1, Ordering::Relaxed);
                 handle.handle.abort();
                 continue;
             }
@@ -246,10 +263,19 @@ where
         let mut task_state = state.create_task_state(keyspace.clone());
         let done = task_state.done.clone();
         let inner = tokio::spawn(async move {
+            task_state
+                .statistics
+                .num_ongoing_sync_tasks
+                .fetch_add(1, Ordering::Relaxed);
+
             let start = Instant::now();
 
             match begin_keyspace_sync(&mut task_state).await {
                 Err(e) => {
+                    task_state
+                        .statistics
+                        .num_failed_sync_tasks
+                        .fetch_add(1, Ordering::Relaxed);
                     error!(
                         error = ?e,
                         keyspace = %task_state.keyspace,
@@ -269,6 +295,11 @@ where
                     task_state.set_done(ts);
                 },
             }
+
+            task_state
+                .statistics
+                .num_ongoing_sync_tasks
+                .fetch_sub(1, Ordering::Relaxed);
         });
 
         state

@@ -19,7 +19,7 @@ use tokio_stream::wrappers::WatchStream;
 use tokio_stream::StreamExt;
 
 use crate::error::DatacakeError;
-use crate::DEFAULT_DATA_CENTER;
+use crate::{ClusterStatistics, DEFAULT_DATA_CENTER};
 
 static DATA_CENTER_KEY: &str = "data_center";
 const GOSSIP_INTERVAL: Duration = if cfg!(test) {
@@ -89,6 +89,7 @@ impl DatacakeNode {
         seed_nodes: Vec<String>,
         failure_detector_config: FailureDetectorConfig,
         transport: &dyn Transport,
+        statistics: ClusterStatistics,
     ) -> Result<Self, DatacakeError<E>>
     where
         E: Error + Send + 'static,
@@ -138,7 +139,19 @@ impl DatacakeNode {
             let mut node_change_rx = chitchat.lock().await.ready_nodes_watcher();
 
             while let Some(members_set) = node_change_rx.next().await {
-                let state_snapshot = chitchat.lock().await.state_snapshot();
+                let state_snapshot = {
+                    let lock = chitchat.lock().await;
+                    let live_member_count = lock.live_nodes().count();
+                    let dead_member_count = lock.dead_nodes().count();
+
+                    statistics
+                        .num_live_members
+                        .store(live_member_count as u64, Ordering::Relaxed);
+                    statistics
+                        .num_dead_members
+                        .store(dead_member_count as u64, Ordering::Relaxed);
+                    lock.state_snapshot()
+                };
 
                 let mut members = members_set
                     .into_iter()
@@ -331,6 +344,7 @@ mod tests {
             seeds,
             failure_detector_config,
             transport,
+            ClusterStatistics::default(),
         )
         .await?;
         Ok(node)
