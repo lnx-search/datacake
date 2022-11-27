@@ -13,6 +13,18 @@ use crate::timestamp::HLCTimestamp;
 pub type Key = u64;
 pub type StateChanges = Vec<(Key, HLCTimestamp)>;
 
+/// The period of time in milliseconds, to remove from the
+/// safe timestamp cut off.
+///
+/// This allows the system to essentially forgive some latency between events.
+///
+/// This is 1 hour by default.
+pub const FORGIVENESS_PERIOD: u64 = if cfg!(test) {
+    0
+} else {
+    3_600_000
+};
+
 #[cfg(feature = "rkyv-support")]
 #[derive(Debug, thiserror::Error)]
 #[error("The set cannot be (de)serialized from the provided set of bytes.")]
@@ -106,7 +118,8 @@ impl<const N: usize> NodeVersions<N> {
             .min();
 
         if let Some(min) = min {
-            self.safe_last_stamps.insert(node, min);
+            let ts = HLCTimestamp::new(min.millis().saturating_sub(FORGIVENESS_PERIOD), min.counter(), min.node());
+            self.safe_last_stamps.insert(node, ts);
         }
     }
 
