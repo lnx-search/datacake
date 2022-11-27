@@ -384,7 +384,9 @@ impl<const N: usize> OrSWotSet<N> {
 
         let mut has_set = false;
 
-        self.versions.try_update_max_stamp(source, ts);
+        if !self.versions.try_update_max_stamp(source, ts) {
+            return has_set;
+        }
 
         if let Some(deleted_ts) = self.dead.remove(&k) {
             // Our deleted timestamp is newer, so we don't want to adjust our markings.
@@ -1044,7 +1046,16 @@ mod tests {
         let purged = node_set.purge_old_deletes();
         assert_eq!(purged, vec![1]);
 
-        // TODO: Add test for deletions being skipped? And inserts as well?
-        // TODO: Also make insets obey the observation rule again as that is needed for correctness.
+        let old_ts = clock.send().unwrap();
+        let initial_ts = clock.send().unwrap();
+
+        // Deletes from one source shouldn't affect deletes from the other.
+        assert!(node_set.delete_with_source(0, 4, initial_ts));
+        assert!(node_set.delete_with_source(1, 3, old_ts));
+        assert!(!node_set.delete_with_source(0, 3, old_ts));
+
+        assert!(node_set.insert_with_source(0, 5, initial_ts));
+        assert!(node_set.insert_with_source(1, 6, old_ts));
+        assert!(!node_set.insert_with_source(0, 5, old_ts));
     }
 }
