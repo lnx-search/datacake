@@ -23,9 +23,11 @@ use std::time::Duration;
 
 use bytes::Bytes;
 use chitchat::FailureDetectorConfig;
+use chitchat::transport::Transport;
 use datacake_crdt::{get_unix_timestamp_ms, Key};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use itertools::Itertools;
 
 pub use nodes_selector::{
     Consistency,
@@ -118,12 +120,15 @@ impl ConnectionConfig {
     pub fn new(
         listen_addr: SocketAddr,
         public_addr: SocketAddr,
-        seeds: impl Into<Vec<String>>,
+        seeds: impl IntoIterator<Item = impl AsRef<str>>,
     ) -> Self {
         Self {
             listen_addr,
             public_addr,
-            seed_nodes: seeds.into(),
+            seed_nodes: seeds
+                .into_iter()
+                .map(|seed| seed.as_ref().to_string())
+                .collect(),
         }
     }
 }
@@ -147,6 +152,7 @@ where
     clock: Clock,
     node_selector: NodeSelectorHandle,
     statistics: ClusterStatistics,
+    _transport: Box<dyn Transport>,
 }
 
 impl<S> DatacakeCluster<S>
@@ -242,7 +248,7 @@ where
             seed_nodes: connection_cfg.seed_nodes,
             data_center: options.data_center.as_ref(),
         };
-        let node = connect_node(
+        let (node, transport) = connect_node(
             node_id.clone(),
             options.cluster_id.clone(),
             group.clone(),
@@ -277,6 +283,9 @@ where
             clock,
             statistics,
             node_selector: selector,
+
+            // Needs to live to run the network.
+            _transport: transport,
         })
     }
 
@@ -315,6 +324,22 @@ where
             inner: self.handle(),
             keyspace: Cow::Owned(keyspace.into()),
         }
+    }
+
+    /// Waits for the provided set of node_ids to be part of the cluster.
+    pub async fn wait_for_nodes(&self, node_ids: &[impl AsRef<str>], timeout: Duration) -> Result<(), anyhow::Error> {
+        self.node.wait_for_members(
+            |members| {
+                node_ids
+                    .iter()
+                    .all(|node| members
+                        .iter()
+                        .map(|m| m.node_id.as_str())
+                        .contains(&node.as_ref())
+                    )
+            },
+            timeout
+        ).await
     }
 }
 
@@ -713,7 +738,7 @@ async fn connect_node<S, R>(
     cluster_info: ClusterInfo<'_>,
     service_registry: R,
     statistics: ClusterStatistics,
-) -> Result<DatacakeNode, error::DatacakeError<S::Error>>
+) -> Result<(DatacakeNode, Box<dyn Transport>), error::DatacakeError<S::Error>>
 where
     S: Storage + Send + Sync + 'static,
     R: ServiceRegistry + Send + Sync + Clone + 'static,
@@ -743,7 +768,7 @@ where
     )
     .await?;
 
-    Ok(node)
+    Ok((node, Box::new(transport)))
 }
 
 /// Starts the background task which watches for membership changes

@@ -63,6 +63,7 @@ where
     R: ServiceRegistry + Send + Sync + Clone + 'static,
 {
     async fn open(&self, listen_addr: SocketAddr) -> anyhow::Result<Box<dyn Socket>> {
+        info!(listen_addr = %listen_addr, "Starting RPC server.");
         let shutdown =
             super::server::connect_server(listen_addr, self.ctx.clone()).await?;
 
@@ -109,6 +110,7 @@ impl Socket for GrpcConnection {
         to: SocketAddr,
         msg: ChitchatMessage,
     ) -> anyhow::Result<()> {
+        trace!(to = %to, msg = ?msg, "Gossip send");
         let message = msg.serialize_to_vec();
         let source = self.self_addr.serialize_to_vec();
 

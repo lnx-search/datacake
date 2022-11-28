@@ -26,6 +26,7 @@ impl RpcNetwork {
             }
         }
 
+        trace!(addr = %addr, "Connect client to network.");
         self.connect(addr).await
     }
 

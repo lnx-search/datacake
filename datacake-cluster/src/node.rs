@@ -209,7 +209,6 @@ impl DatacakeNode {
         self.stop.store(true, Ordering::Relaxed);
     }
 
-    #[cfg(test)]
     /// Convenience method for testing that waits for the predicate to hold true for the cluster's
     /// members.
     pub async fn wait_for_members<F>(

@@ -393,6 +393,10 @@ where
     SS: StateSource + Send + Sync + 'static,
     S: Storage + Send + Sync + 'static,
 {
+    if removed.is_empty() {
+        return Ok(())
+    }
+
     let storage = keyspace.storage();
 
     if removed.len() == 1 {
@@ -446,3 +450,5 @@ impl KeyspacePollHandle {
         self.started_at.elapsed() >= KEYSPACE_SYNC_TIMEOUT
     }
 }
+
+// TODO: Add unit tests
