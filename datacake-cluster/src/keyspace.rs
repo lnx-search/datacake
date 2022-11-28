@@ -101,6 +101,7 @@ where
     S: Storage + Send + Sync + Default + 'static,
 {
     #[cfg(any(test, feature = "test-utils"))]
+    #[allow(unused)]
     pub async fn new_for_test() -> Self {
         let clock = Clock::new(0);
         let storage = Arc::new(S::default());
@@ -503,6 +504,7 @@ impl<S: Storage> KeyspaceState<S> {
     }
 
     #[cfg(any(test, feature = "test-utils"))]
+    #[allow(unused)]
     /// Calculates the symmetrical difference between the two sets.
     ///
     /// This is only exposed as a test utility as it should not be used as part of
@@ -571,6 +573,7 @@ enum Op {
         tx: oneshot::Sender<(StateChanges, StateChanges)>,
     },
     #[cfg(any(test, feature = "test-utils"))]
+    #[allow(unused)]
     SymDiff {
         set: OrSWotSet<NUM_SOURCES>,
         tx: oneshot::Sender<(StateChanges, StateChanges)>,

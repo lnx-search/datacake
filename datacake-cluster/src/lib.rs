@@ -26,9 +26,20 @@ use chitchat::FailureDetectorConfig;
 use datacake_crdt::{get_unix_timestamp_ms, Key};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+
+pub use nodes_selector::{
+    Consistency,
+    ConsistencyError,
+    NodeSelector,
+    NodeSelectorHandle,
+    DCAwareSelector,
+};
 pub use statistics::ClusterStatistics;
 #[cfg(feature = "test-utils")]
 pub use storage::test_suite;
+#[cfg(feature = "test-utils")]
+pub use storage::mem_store;
+
 pub use storage::Storage;
 use tokio_stream::wrappers::WatchStream;
 
@@ -36,12 +47,6 @@ use crate::clock::Clock;
 use crate::core::Document;
 use crate::keyspace::{ConsistencySource, KeyspaceGroup};
 use crate::node::{ClusterMember, DatacakeNode};
-use crate::nodes_selector::{
-    Consistency,
-    ConsistencyError,
-    NodeSelector,
-    NodeSelectorHandle,
-};
 use crate::poller::ShutdownHandle;
 use crate::rpc::{
     ConsistencyClient,

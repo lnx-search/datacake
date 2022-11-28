@@ -205,7 +205,7 @@ pub trait NodeSelector {
     ) -> Result<Vec<SocketAddr>, ConsistencyError>;
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default)]
 pub struct DCAwareSelector;
 
 impl NodeSelector for DCAwareSelector {
