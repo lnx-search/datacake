@@ -223,6 +223,8 @@ where
         let group = KeyspaceGroup::new(storage.clone(), clock.clone()).await;
         let network = RpcNetwork::default();
         let statistics = ClusterStatistics::default();
+        statistics.num_live_members.store(1, Ordering::Relaxed);
+        statistics.num_data_centers.store(1, Ordering::Relaxed);
 
         // Load the keyspace states.
         group.load_states_from_storage().await?;
@@ -252,6 +254,7 @@ where
         .await?;
 
         setup_poller(
+            Cow::Owned(node_id.clone()),
             group.clone(),
             network.clone(),
             &node,
@@ -650,11 +653,15 @@ where
     }
 
     /// Insert or update multiple documents into the datastore at once.
-    pub async fn put_many(
+    pub async fn put_many<I, T>(
         &self,
-        documents: Vec<(Key, Vec<u8>)>,
+        documents: I,
         consistency: Consistency,
-    ) -> Result<(), error::DatacakeError<S::Error>> {
+    ) -> Result<(), error::DatacakeError<S::Error>>
+    where
+        T: Iterator<Item = (Key, Vec<u8>)> + Send,
+        I: IntoIterator<IntoIter = T> + Send,
+    {
         self.inner
             .put_many(self.keyspace.as_ref(), documents, consistency)
             .await
@@ -672,11 +679,15 @@ where
     }
 
     /// Delete multiple documents from the datastore from the set of doc IDs.
-    pub async fn del_many(
+    pub async fn del_many<I, T>(
         &self,
-        doc_ids: Vec<Key>,
+        doc_ids: I,
         consistency: Consistency,
-    ) -> Result<(), error::DatacakeError<S::Error>> {
+    ) -> Result<(), error::DatacakeError<S::Error>>
+    where
+        T: Iterator<Item = Key> + Send,
+        I: IntoIterator<IntoIter = T> + Send,
+    {
         self.inner
             .del_many(self.keyspace.as_ref(), doc_ids, consistency)
             .await
@@ -738,6 +749,7 @@ where
 /// Starts the background task which watches for membership changes
 /// intern starting and stopping polling services for each member.
 async fn setup_poller<S>(
+    node_id: Cow<'static, str>,
     keyspace_group: KeyspaceGroup<S>,
     network: RpcNetwork,
     node: &DatacakeNode,
@@ -749,6 +761,7 @@ where
 {
     let changes = node.member_change_watcher();
     tokio::spawn(watch_membership_changes(
+        node_id,
         keyspace_group,
         network,
         node_selector,
@@ -762,6 +775,7 @@ where
 ///
 /// When nodes leave and join, pollers are stopped and started as required.
 async fn watch_membership_changes<S>(
+    self_node_id: Cow<'static, str>,
     keyspace_group: KeyspaceGroup<S>,
     network: RpcNetwork,
     node_selector: NodeSelectorHandle,
@@ -773,8 +787,11 @@ async fn watch_membership_changes<S>(
     let mut poller_handles = HashMap::<SocketAddr, ShutdownHandle>::new();
     let mut last_network_set = HashSet::new();
     while let Some(members) = changes.next().await {
+        info!(num_members = members.len(), "Cluster membership has changed.");
+
         let new_network_set = members
             .iter()
+            .filter(|member| member.node_id != self_node_id.as_ref())
             .map(|member| (member.node_id.clone(), member.public_addr))
             .collect::<HashSet<_>>();
 

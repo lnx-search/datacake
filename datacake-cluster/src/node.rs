@@ -141,12 +141,8 @@ impl DatacakeNode {
             while let Some(members_set) = node_change_rx.next().await {
                 let state_snapshot = {
                     let lock = chitchat.lock().await;
-                    let live_member_count = lock.live_nodes().count();
                     let dead_member_count = lock.dead_nodes().count();
 
-                    statistics
-                        .num_live_members
-                        .store(live_member_count as u64, Ordering::Relaxed);
                     statistics
                         .num_dead_members
                         .store(dead_member_count as u64, Ordering::Relaxed);
@@ -168,6 +164,10 @@ impl DatacakeNode {
                     })
                     .collect::<Vec<_>>();
                 members.push(me.clone());
+
+                statistics
+                    .num_live_members
+                    .store(members.len() as u64, Ordering::Relaxed);
 
                 if stop_flag.load(Ordering::Relaxed) {
                     debug!("Received a stop signal. Stopping.");
