@@ -1,7 +1,13 @@
 use std::net::SocketAddr;
 use std::time::Duration;
-use datacake_cluster::{ClusterOptions, ConnectionConfig, DatacakeCluster, DCAwareSelector};
+
 use datacake_cluster::mem_store::MemStore;
+use datacake_cluster::{
+    ClusterOptions,
+    ConnectionConfig,
+    DCAwareSelector,
+    DatacakeCluster,
+};
 
 #[tokio::test]
 async fn test_basic_connect() -> anyhow::Result<()> {
@@ -16,7 +22,8 @@ async fn test_basic_connect() -> anyhow::Result<()> {
         MemStore::default(),
         DCAwareSelector::default(),
         ClusterOptions::default(),
-    ).await?;
+    )
+    .await?;
 
     tokio::time::sleep(Duration::from_secs(1)).await;
 

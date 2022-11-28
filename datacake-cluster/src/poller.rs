@@ -394,7 +394,7 @@ where
     S: Storage + Send + Sync + 'static,
 {
     if removed.is_empty() {
-        return Ok(())
+        return Ok(());
     }
 
     let storage = keyspace.storage();

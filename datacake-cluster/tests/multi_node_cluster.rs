@@ -1,8 +1,15 @@
 use std::net::SocketAddr;
 use std::time::Duration;
+
 use bytes::Bytes;
-use datacake_cluster::{ClusterOptions, ConnectionConfig, Consistency, DatacakeCluster, DCAwareSelector};
 use datacake_cluster::mem_store::MemStore;
+use datacake_cluster::{
+    ClusterOptions,
+    ConnectionConfig,
+    Consistency,
+    DCAwareSelector,
+    DatacakeCluster,
+};
 
 #[tokio::test]
 async fn test_consistency_all() -> anyhow::Result<()> {
@@ -12,17 +19,15 @@ async fn test_consistency_all() -> anyhow::Result<()> {
     let node_2_addr = "127.0.0.1:8006".parse::<SocketAddr>().unwrap();
     let node_3_addr = "127.0.0.1:8007".parse::<SocketAddr>().unwrap();
 
-    let [node_1, node_2, node_3] = connect_cluster([node_1_addr, node_2_addr, node_3_addr]).await;
+    let [node_1, node_2, node_3] =
+        connect_cluster([node_1_addr, node_2_addr, node_3_addr]).await;
 
     let node_1_handle = node_1.handle_with_keyspace("my-keyspace");
     let node_2_handle = node_2.handle_with_keyspace("my-keyspace");
     let node_3_handle = node_3.handle_with_keyspace("my-keyspace");
 
     // Test reading
-    let doc = node_1_handle
-        .get(1)
-        .await
-        .expect("Get value.");
+    let doc = node_1_handle.get(1).await.expect("Get value.");
     assert!(doc.is_none(), "No document should not exist!");
 
     // Test writing
@@ -63,24 +68,14 @@ async fn test_consistency_all() -> anyhow::Result<()> {
         .expect("Del value.");
 
     // Node 3 should have the value as it's just written locally.
-    let doc = node_3_handle
-        .get(1)
-        .await
-        .expect("Get value.");
+    let doc = node_3_handle.get(1).await.expect("Get value.");
     assert!(doc.is_none(), "No document should not exist!");
 
     // Nodes 2 and 1 should also have the value immediately due to the consistency level.
-    let doc = node_2_handle
-        .get(1)
-        .await
-        .expect("Get value.");
+    let doc = node_2_handle.get(1).await.expect("Get value.");
     assert!(doc.is_none());
-    let doc = node_1_handle
-        .get(1)
-        .await
-        .expect("Get value.");
+    let doc = node_1_handle.get(1).await.expect("Get value.");
     assert!(doc.is_none());
-
 
     // Delete a non-existent key from the cluster
     node_3_handle
@@ -89,20 +84,11 @@ async fn test_consistency_all() -> anyhow::Result<()> {
         .expect("Del value.");
 
     // All of the nodes should register the delete.
-    let doc = node_3_handle
-        .get(1)
-        .await
-        .expect("Get value.");
+    let doc = node_3_handle.get(1).await.expect("Get value.");
     assert!(doc.is_none(), "No document should not exist!");
-    let doc = node_2_handle
-        .get(1)
-        .await
-        .expect("Get value.");
+    let doc = node_2_handle.get(1).await.expect("Get value.");
     assert!(doc.is_none());
-    let doc = node_1_handle
-        .get(1)
-        .await
-        .expect("Get value.");
+    let doc = node_1_handle.get(1).await.expect("Get value.");
     assert!(doc.is_none());
 
     node_1.shutdown().await;
@@ -120,17 +106,15 @@ async fn test_consistency_none() -> anyhow::Result<()> {
     let node_2_addr = "127.0.0.1:8009".parse::<SocketAddr>().unwrap();
     let node_3_addr = "127.0.0.1:8010".parse::<SocketAddr>().unwrap();
 
-    let [node_1, node_2, node_3] = connect_cluster([node_1_addr, node_2_addr, node_3_addr]).await;
+    let [node_1, node_2, node_3] =
+        connect_cluster([node_1_addr, node_2_addr, node_3_addr]).await;
 
     let node_1_handle = node_1.handle_with_keyspace("my-keyspace");
     let node_2_handle = node_2.handle_with_keyspace("my-keyspace");
     let node_3_handle = node_3.handle_with_keyspace("my-keyspace");
 
     // Test reading
-    let doc = node_1_handle
-        .get(1)
-        .await
-        .expect("Get value.");
+    let doc = node_1_handle.get(1).await.expect("Get value.");
     assert!(doc.is_none(), "No document should not exist!");
 
     // Test writing
@@ -149,15 +133,9 @@ async fn test_consistency_none() -> anyhow::Result<()> {
     assert_eq!(doc.data, Bytes::from_static(b"Hello, world"));
 
     // Nodes 2 and 3 will not have the value yet as syncing has not taken place.
-    let doc = node_2_handle
-        .get(1)
-        .await
-        .expect("Get value.");
+    let doc = node_2_handle.get(1).await.expect("Get value.");
     assert!(doc.is_none(), "No document should not exist!");
-    let doc = node_3_handle
-        .get(1)
-        .await
-        .expect("Get value.");
+    let doc = node_3_handle.get(1).await.expect("Get value.");
     assert!(doc.is_none(), "No document should not exist!");
 
     // 2 seconds should be enough for this test to propagate state without becoming flaky.
@@ -186,10 +164,7 @@ async fn test_consistency_none() -> anyhow::Result<()> {
         .expect("Del value.");
 
     // Node 3 should have the value as it's just written locally.
-    let doc = node_3_handle
-        .get(1)
-        .await
-        .expect("Get value.");
+    let doc = node_3_handle.get(1).await.expect("Get value.");
     assert!(doc.is_none(), "No document should not exist!");
 
     // Nodes 2 and 1 should not see the changes yet.
@@ -211,15 +186,9 @@ async fn test_consistency_none() -> anyhow::Result<()> {
     tokio::time::sleep(Duration::from_secs(2)).await;
 
     // Nodes should be caught up now.
-    let doc = node_2_handle
-        .get(1)
-        .await
-        .expect("Get value.");
+    let doc = node_2_handle.get(1).await.expect("Get value.");
     assert!(doc.is_none());
-    let doc = node_1_handle
-        .get(1)
-        .await
-        .expect("Get value.");
+    let doc = node_1_handle.get(1).await.expect("Get value.");
     assert!(doc.is_none());
 
     // Delete a non-existent key from the cluster
@@ -229,20 +198,11 @@ async fn test_consistency_none() -> anyhow::Result<()> {
         .expect("Del value.");
 
     // All of the nodes should register the delete.
-    let doc = node_3_handle
-        .get(1)
-        .await
-        .expect("Get value.");
+    let doc = node_3_handle.get(1).await.expect("Get value.");
     assert!(doc.is_none(), "No document should not exist!");
-    let doc = node_2_handle
-        .get(1)
-        .await
-        .expect("Get value.");
+    let doc = node_2_handle.get(1).await.expect("Get value.");
     assert!(doc.is_none());
-    let doc = node_1_handle
-        .get(1)
-        .await
-        .expect("Get value.");
+    let doc = node_1_handle.get(1).await.expect("Get value.");
     assert!(doc.is_none());
 
     node_1.shutdown().await;
@@ -260,7 +220,8 @@ async fn test_async_operations() -> anyhow::Result<()> {
     let node_2_addr = "127.0.0.1:8012".parse::<SocketAddr>().unwrap();
     let node_3_addr = "127.0.0.1:8013".parse::<SocketAddr>().unwrap();
 
-    let [node_1, node_2, node_3] = connect_cluster([node_1_addr, node_2_addr, node_3_addr]).await;
+    let [node_1, node_2, node_3] =
+        connect_cluster([node_1_addr, node_2_addr, node_3_addr]).await;
 
     let node_1_handle = node_1.handle_with_keyspace("my-keyspace");
     let node_2_handle = node_2.handle_with_keyspace("my-keyspace");
@@ -321,19 +282,29 @@ async fn test_async_operations() -> anyhow::Result<()> {
         .expect("Get value.")
         .expect("Document should not be none");
     assert_eq!(doc.id, 1);
-    assert_eq!(doc.data.as_ref(), Bytes::from_static(b"Hello, world from node-3"));
+    assert_eq!(
+        doc.data.as_ref(),
+        Bytes::from_static(b"Hello, world from node-3")
+    );
     let doc = node_3_handle
         .get(1)
         .await
         .expect("Get value.")
         .expect("Document should not be none");
     assert_eq!(doc.id, 1);
-    assert_eq!(doc.data.as_ref(), Bytes::from_static(b"Hello, world from node-3"));
+    assert_eq!(
+        doc.data.as_ref(),
+        Bytes::from_static(b"Hello, world from node-3")
+    );
 
     // This goes for all operations.
     // Node 2 will win, even though they're technically happening at the exact same time.
     node_1_handle
-        .put(1, b"Hello, world from node-1 but updated".to_vec(), Consistency::None)
+        .put(
+            1,
+            b"Hello, world from node-1 but updated".to_vec(),
+            Consistency::None,
+        )
         .await
         .expect("Put value.");
     node_2_handle
@@ -348,13 +319,13 @@ async fn test_async_operations() -> anyhow::Result<()> {
         .expect("Get value.")
         .expect("Document should not be none");
     assert_eq!(doc.id, 1);
-    assert_eq!(doc.data, Bytes::from_static(b"Hello, world from node-1 but updated"));
+    assert_eq!(
+        doc.data,
+        Bytes::from_static(b"Hello, world from node-1 but updated")
+    );
 
     // Node 2 has only seen it's delete so far, so it assumes it's correct.
-    let doc = node_2_handle
-        .get(1)
-        .await
-        .expect("Get value.");
+    let doc = node_2_handle.get(1).await.expect("Get value.");
     assert!(doc.is_none(), "Document should be deleted.");
 
     // Node 3 isn't even aware of the changes yet.
@@ -370,20 +341,11 @@ async fn test_async_operations() -> anyhow::Result<()> {
     tokio::time::sleep(Duration::from_secs(2)).await;
 
     // And now everything is consistent.
-    let doc = node_1_handle
-        .get(1)
-        .await
-        .expect("Get value.");
+    let doc = node_1_handle.get(1).await.expect("Get value.");
     assert!(doc.is_none(), "Document should be deleted.");
-    let doc = node_2_handle
-        .get(1)
-        .await
-        .expect("Get value.");
+    let doc = node_2_handle.get(1).await.expect("Get value.");
     assert!(doc.is_none(), "Document should be deleted.");
-    let doc = node_3_handle
-        .get(1)
-        .await
-        .expect("Get value.");
+    let doc = node_3_handle.get(1).await.expect("Get value.");
     assert!(doc.is_none(), "Document should be deleted.");
 
     node_1.shutdown().await;
@@ -393,11 +355,22 @@ async fn test_async_operations() -> anyhow::Result<()> {
     Ok(())
 }
 
-
 async fn connect_cluster(addrs: [SocketAddr; 3]) -> [DatacakeCluster<MemStore>; 3] {
-    let node_1_connection_cfg = ConnectionConfig::new(addrs[0], addrs[0], &[addrs[1].to_string(), addrs[2].to_string()]);
-    let node_2_connection_cfg = ConnectionConfig::new(addrs[1], addrs[1], &[addrs[0].to_string(), addrs[2].to_string()]);
-    let node_3_connection_cfg = ConnectionConfig::new(addrs[2], addrs[2], &[addrs[0].to_string(), addrs[1].to_string()]);
+    let node_1_connection_cfg = ConnectionConfig::new(
+        addrs[0],
+        addrs[0],
+        &[addrs[1].to_string(), addrs[2].to_string()],
+    );
+    let node_2_connection_cfg = ConnectionConfig::new(
+        addrs[1],
+        addrs[1],
+        &[addrs[0].to_string(), addrs[2].to_string()],
+    );
+    let node_3_connection_cfg = ConnectionConfig::new(
+        addrs[2],
+        addrs[2],
+        &[addrs[0].to_string(), addrs[1].to_string()],
+    );
 
     let node_1 = DatacakeCluster::connect(
         "node-1",
@@ -405,25 +378,40 @@ async fn connect_cluster(addrs: [SocketAddr; 3]) -> [DatacakeCluster<MemStore>; 
         MemStore::default(),
         DCAwareSelector::default(),
         ClusterOptions::default(),
-    ).await.expect("Connect node.");
+    )
+    .await
+    .expect("Connect node.");
     let node_2 = DatacakeCluster::connect(
         "node-2",
         node_2_connection_cfg,
         MemStore::default(),
         DCAwareSelector::default(),
         ClusterOptions::default(),
-    ).await.expect("Connect node.");
+    )
+    .await
+    .expect("Connect node.");
     let node_3 = DatacakeCluster::connect(
         "node-3",
         node_3_connection_cfg,
         MemStore::default(),
         DCAwareSelector::default(),
         ClusterOptions::default(),
-    ).await.expect("Connect node.");
+    )
+    .await
+    .expect("Connect node.");
 
-    node_1.wait_for_nodes(&["node-2", "node-3"], Duration::from_secs(2)).await.expect("Nodes should connect within timeout.");
-    node_2.wait_for_nodes(&["node-3", "node-1"], Duration::from_secs(2)).await.expect("Nodes should connect within timeout.");
-    node_3.wait_for_nodes(&["node-2", "node-1"], Duration::from_secs(2)).await.expect("Nodes should connect within timeout.");
+    node_1
+        .wait_for_nodes(&["node-2", "node-3"], Duration::from_secs(2))
+        .await
+        .expect("Nodes should connect within timeout.");
+    node_2
+        .wait_for_nodes(&["node-3", "node-1"], Duration::from_secs(2))
+        .await
+        .expect("Nodes should connect within timeout.");
+    node_3
+        .wait_for_nodes(&["node-2", "node-1"], Duration::from_secs(2))
+        .await
+        .expect("Nodes should connect within timeout.");
 
     let stats = node_1.statistics();
     assert_eq!(stats.num_data_centers(), 1);

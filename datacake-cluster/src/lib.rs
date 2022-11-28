@@ -22,26 +22,24 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use bytes::Bytes;
-use chitchat::FailureDetectorConfig;
 use chitchat::transport::Transport;
+use chitchat::FailureDetectorConfig;
 use datacake_crdt::{get_unix_timestamp_ms, Key};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use itertools::Itertools;
-
 pub use nodes_selector::{
     Consistency,
     ConsistencyError,
+    DCAwareSelector,
     NodeSelector,
     NodeSelectorHandle,
-    DCAwareSelector,
 };
 pub use statistics::ClusterStatistics;
 #[cfg(feature = "test-utils")]
-pub use storage::test_suite;
-#[cfg(feature = "test-utils")]
 pub use storage::mem_store;
-
+#[cfg(feature = "test-utils")]
+pub use storage::test_suite;
 pub use storage::Storage;
 use tokio_stream::wrappers::WatchStream;
 
@@ -327,19 +325,24 @@ where
     }
 
     /// Waits for the provided set of node_ids to be part of the cluster.
-    pub async fn wait_for_nodes(&self, node_ids: &[impl AsRef<str>], timeout: Duration) -> Result<(), anyhow::Error> {
-        self.node.wait_for_members(
-            |members| {
-                node_ids
-                    .iter()
-                    .all(|node| members
-                        .iter()
-                        .map(|m| m.node_id.as_str())
-                        .contains(&node.as_ref())
-                    )
-            },
-            timeout
-        ).await
+    pub async fn wait_for_nodes(
+        &self,
+        node_ids: &[impl AsRef<str>],
+        timeout: Duration,
+    ) -> Result<(), anyhow::Error> {
+        self.node
+            .wait_for_members(
+                |members| {
+                    node_ids.iter().all(|node| {
+                        members
+                            .iter()
+                            .map(|m| m.node_id.as_str())
+                            .contains(&node.as_ref())
+                    })
+                },
+                timeout,
+            )
+            .await
     }
 }
 
@@ -812,7 +815,10 @@ async fn watch_membership_changes<S>(
     let mut poller_handles = HashMap::<SocketAddr, ShutdownHandle>::new();
     let mut last_network_set = HashSet::new();
     while let Some(members) = changes.next().await {
-        info!(num_members = members.len(), "Cluster membership has changed.");
+        info!(
+            num_members = members.len(),
+            "Cluster membership has changed."
+        );
 
         let new_network_set = members
             .iter()

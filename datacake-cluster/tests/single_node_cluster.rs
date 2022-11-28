@@ -1,8 +1,15 @@
 use std::net::SocketAddr;
 use std::time::Duration;
-use tracing::info;
-use datacake_cluster::{ClusterOptions, ConnectionConfig, Consistency, DatacakeCluster, DCAwareSelector};
+
 use datacake_cluster::mem_store::MemStore;
+use datacake_cluster::{
+    ClusterOptions,
+    ConnectionConfig,
+    Consistency,
+    DCAwareSelector,
+    DatacakeCluster,
+};
+use tracing::info;
 
 static KEYSPACE: &str = "my-keyspace";
 
@@ -19,7 +26,8 @@ async fn test_single_node_cluster() -> anyhow::Result<()> {
         MemStore::default(),
         DCAwareSelector::default(),
         ClusterOptions::default(),
-    ).await?;
+    )
+    .await?;
 
     tokio::time::sleep(Duration::from_millis(500)).await;
 
@@ -34,10 +42,7 @@ async fn test_single_node_cluster() -> anyhow::Result<()> {
     let handle = cluster.handle();
 
     // Test reading
-    let doc = handle
-        .get(KEYSPACE, 1)
-        .await
-        .expect("Get value.");
+    let doc = handle.get(KEYSPACE, 1).await.expect("Get value.");
     assert!(doc.is_none(), "No document should not exist!");
 
     // Test writing
@@ -58,20 +63,14 @@ async fn test_single_node_cluster() -> anyhow::Result<()> {
         .del(KEYSPACE, 1, Consistency::All)
         .await
         .expect("Del value.");
-    let doc = handle
-        .get(KEYSPACE, 1)
-        .await
-        .expect("Get value.");
+    let doc = handle.get(KEYSPACE, 1).await.expect("Get value.");
     assert!(doc.is_none(), "No document should not exist!");
 
     handle
         .del(KEYSPACE, 2, Consistency::All)
         .await
         .expect("Del value which doesnt exist locally.");
-    let doc = handle
-        .get(KEYSPACE, 2)
-        .await
-        .expect("Get value.");
+    let doc = handle.get(KEYSPACE, 2).await.expect("Get value.");
     assert!(doc.is_none(), "No document should not exist!");
 
     // We don't poll ourselves.
@@ -89,7 +88,6 @@ async fn test_single_node_cluster() -> anyhow::Result<()> {
     Ok(())
 }
 
-
 #[tokio::test]
 async fn test_single_node_cluster_with_keyspace_handle() -> anyhow::Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
@@ -103,7 +101,8 @@ async fn test_single_node_cluster_with_keyspace_handle() -> anyhow::Result<()> {
         MemStore::default(),
         DCAwareSelector::default(),
         ClusterOptions::default(),
-    ).await?;
+    )
+    .await?;
 
     tokio::time::sleep(Duration::from_millis(500)).await;
 
@@ -118,10 +117,7 @@ async fn test_single_node_cluster_with_keyspace_handle() -> anyhow::Result<()> {
     let handle = cluster.handle_with_keyspace(KEYSPACE);
 
     // Test reading
-    let doc = handle
-        .get(1)
-        .await
-        .expect("Get value.");
+    let doc = handle.get(1).await.expect("Get value.");
     assert!(doc.is_none(), "No document should not exist!");
 
     // Test writing
@@ -138,24 +134,15 @@ async fn test_single_node_cluster_with_keyspace_handle() -> anyhow::Result<()> {
     assert_eq!(doc.id, 1);
     assert_eq!(doc.data.as_ref(), b"Hello, world");
 
-    handle
-        .del(1, Consistency::All)
-        .await
-        .expect("Del value.");
-    let doc = handle
-        .get(1)
-        .await
-        .expect("Get value.");
+    handle.del(1, Consistency::All).await.expect("Del value.");
+    let doc = handle.get(1).await.expect("Get value.");
     assert!(doc.is_none(), "No document should not exist!");
 
     handle
         .del(2, Consistency::All)
         .await
         .expect("Del value which doesnt exist locally.");
-    let doc = handle
-        .get( 2)
-        .await
-        .expect("Get value.");
+    let doc = handle.get(2).await.expect("Get value.");
     assert!(doc.is_none(), "No document should not exist!");
 
     // We don't poll ourselves.
@@ -185,7 +172,8 @@ async fn test_single_node_cluster_bulk_op() -> anyhow::Result<()> {
         MemStore::default(),
         DCAwareSelector::default(),
         ClusterOptions::default(),
-    ).await?;
+    )
+    .await?;
 
     tokio::time::sleep(Duration::from_millis(500)).await;
 
@@ -237,7 +225,7 @@ async fn test_single_node_cluster_bulk_op() -> anyhow::Result<()> {
         .await
         .expect("Del value which doesnt exist locally.");
     let num_docs = handle
-        .get_many(KEYSPACE,  [2, 3, 5, 1])
+        .get_many(KEYSPACE, [2, 3, 5, 1])
         .await
         .expect("Get value.")
         .count();
@@ -257,7 +245,6 @@ async fn test_single_node_cluster_bulk_op() -> anyhow::Result<()> {
     Ok(())
 }
 
-
 #[tokio::test]
 async fn test_single_node_cluster_bulk_op_with_keyspace_handle() -> anyhow::Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
@@ -271,7 +258,8 @@ async fn test_single_node_cluster_bulk_op_with_keyspace_handle() -> anyhow::Resu
         MemStore::default(),
         DCAwareSelector::default(),
         ClusterOptions::default(),
-    ).await?;
+    )
+    .await?;
 
     tokio::time::sleep(Duration::from_millis(5000)).await;
 
@@ -286,11 +274,7 @@ async fn test_single_node_cluster_bulk_op_with_keyspace_handle() -> anyhow::Resu
     let handle = cluster.handle_with_keyspace(KEYSPACE);
 
     // Test reading
-    let num_docs = handle
-        .get_many([1])
-        .await
-        .expect("Get value.")
-        .count();
+    let num_docs = handle.get_many([1]).await.expect("Get value.").count();
     assert_eq!(num_docs, 0, "No document should not exist!");
 
     // Test writing
@@ -311,11 +295,7 @@ async fn test_single_node_cluster_bulk_op_with_keyspace_handle() -> anyhow::Resu
         .del_many([1], Consistency::All)
         .await
         .expect("Del value.");
-    let num_docs = handle
-        .get_many([1])
-        .await
-        .expect("Get value.")
-        .count();
+    let num_docs = handle.get_many([1]).await.expect("Get value.").count();
     assert_eq!(num_docs, 0, "No document should not exist!");
 
     handle
@@ -323,7 +303,7 @@ async fn test_single_node_cluster_bulk_op_with_keyspace_handle() -> anyhow::Resu
         .await
         .expect("Del value which doesnt exist locally.");
     let num_docs = handle
-        .get_many( [2, 3, 5, 1])
+        .get_many([2, 3, 5, 1])
         .await
         .expect("Get value.")
         .count();
