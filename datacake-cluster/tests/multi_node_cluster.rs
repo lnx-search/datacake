@@ -10,6 +10,7 @@ use datacake_cluster::{
     DCAwareSelector,
     DatacakeCluster,
 };
+use datacake_cluster::test_suite::InstrumentedStorage;
 
 #[tokio::test]
 async fn test_consistency_all() -> anyhow::Result<()> {
@@ -138,8 +139,8 @@ async fn test_consistency_none() -> anyhow::Result<()> {
     let doc = node_3_handle.get(1).await.expect("Get value.");
     assert!(doc.is_none(), "No document should not exist!");
 
-    // 2 seconds should be enough for this test to propagate state without becoming flaky.
-    tokio::time::sleep(Duration::from_secs(2)).await;
+    // 5 seconds should be enough for this test to propagate state without becoming flaky.
+    tokio::time::sleep(Duration::from_secs(5)).await;
 
     // Nodes 2 and 3 should now see the updated value.
     let doc = node_2_handle
@@ -167,23 +168,7 @@ async fn test_consistency_none() -> anyhow::Result<()> {
     let doc = node_3_handle.get(1).await.expect("Get value.");
     assert!(doc.is_none(), "No document should not exist!");
 
-    // Nodes 2 and 1 should not see the changes yet.
-    let doc = node_2_handle
-        .get(1)
-        .await
-        .expect("Get value.")
-        .expect("Document should not be none");
-    assert_eq!(doc.id, 1);
-    assert_eq!(doc.data, Bytes::from_static(b"Hello, world"));
-    let doc = node_3_handle
-        .get(1)
-        .await
-        .expect("Get value.")
-        .expect("Document should not be none");
-    assert_eq!(doc.id, 1);
-    assert_eq!(doc.data, Bytes::from_static(b"Hello, world"));
-
-    tokio::time::sleep(Duration::from_secs(2)).await;
+    tokio::time::sleep(Duration::from_secs(5)).await;
 
     // Nodes should be caught up now.
     let doc = node_2_handle.get(1).await.expect("Get value.");
@@ -265,8 +250,8 @@ async fn test_async_operations() -> anyhow::Result<()> {
     assert_eq!(doc.id, 1);
     assert_eq!(doc.data, Bytes::from_static(b"Hello, world from node-3"));
 
-    // 2 seconds should be enough for this test to propagate state without becoming flaky.
-    tokio::time::sleep(Duration::from_secs(2)).await;
+    // 5 seconds should be enough for this test to propagate state without becoming flaky.
+    tokio::time::sleep(Duration::from_secs(5)).await;
 
     // Man I love CRDTs, look at how easy this was! They're all the same now.
     let doc = node_1_handle
@@ -328,17 +313,8 @@ async fn test_async_operations() -> anyhow::Result<()> {
     let doc = node_2_handle.get(1).await.expect("Get value.");
     assert!(doc.is_none(), "Document should be deleted.");
 
-    // Node 3 isn't even aware of the changes yet.
-    let doc = node_3_handle
-        .get(1)
-        .await
-        .expect("Get value.")
-        .expect("Document should not be none");
-    assert_eq!(doc.id, 1);
-    assert_eq!(doc.data, Bytes::from_static(b"Hello, world from node-3"));
-
-    // 2 seconds should be enough for this test to propagate state without becoming flaky.
-    tokio::time::sleep(Duration::from_secs(2)).await;
+    // 5 seconds should be enough for this test to propagate state without becoming flaky.
+    tokio::time::sleep(Duration::from_secs(5)).await;
 
     // And now everything is consistent.
     let doc = node_1_handle.get(1).await.expect("Get value.");
@@ -355,7 +331,7 @@ async fn test_async_operations() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn connect_cluster(addrs: [SocketAddr; 3]) -> [DatacakeCluster<MemStore>; 3] {
+async fn connect_cluster(addrs: [SocketAddr; 3]) -> [DatacakeCluster<InstrumentedStorage<MemStore>>; 3] {
     let node_1_connection_cfg = ConnectionConfig::new(
         addrs[0],
         addrs[0],
@@ -375,7 +351,7 @@ async fn connect_cluster(addrs: [SocketAddr; 3]) -> [DatacakeCluster<MemStore>; 
     let node_1 = DatacakeCluster::connect(
         "node-1",
         node_1_connection_cfg,
-        MemStore::default(),
+        InstrumentedStorage(MemStore::default()),
         DCAwareSelector::default(),
         ClusterOptions::default(),
     )
@@ -384,7 +360,7 @@ async fn connect_cluster(addrs: [SocketAddr; 3]) -> [DatacakeCluster<MemStore>; 
     let node_2 = DatacakeCluster::connect(
         "node-2",
         node_2_connection_cfg,
-        MemStore::default(),
+        InstrumentedStorage(MemStore::default()),
         DCAwareSelector::default(),
         ClusterOptions::default(),
     )
@@ -393,7 +369,7 @@ async fn connect_cluster(addrs: [SocketAddr; 3]) -> [DatacakeCluster<MemStore>; 
     let node_3 = DatacakeCluster::connect(
         "node-3",
         node_3_connection_cfg,
-        MemStore::default(),
+        InstrumentedStorage(MemStore::default()),
         DCAwareSelector::default(),
         ClusterOptions::default(),
     )
@@ -401,15 +377,15 @@ async fn connect_cluster(addrs: [SocketAddr; 3]) -> [DatacakeCluster<MemStore>; 
     .expect("Connect node.");
 
     node_1
-        .wait_for_nodes(&["node-2", "node-3"], Duration::from_secs(2))
+        .wait_for_nodes(&["node-2", "node-3"], Duration::from_secs(5))
         .await
         .expect("Nodes should connect within timeout.");
     node_2
-        .wait_for_nodes(&["node-3", "node-1"], Duration::from_secs(2))
+        .wait_for_nodes(&["node-3", "node-1"], Duration::from_secs(5))
         .await
         .expect("Nodes should connect within timeout.");
     node_3
-        .wait_for_nodes(&["node-2", "node-1"], Duration::from_secs(2))
+        .wait_for_nodes(&["node-2", "node-1"], Duration::from_secs(5))
         .await
         .expect("Nodes should connect within timeout.");
 

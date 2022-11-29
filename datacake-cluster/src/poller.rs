@@ -240,6 +240,13 @@ where
     let diff = keyspace_timestamps.diff(&state.last_keyspace_timestamps);
 
     for keyspace in diff {
+        debug!(
+            modified_keyspace = %keyspace,
+            target_node_id = %state.target_node_id,
+            target_rpc_addr = %state.target_rpc_addr,
+            "Keyspace changed on remote mode.",
+        );
+
         state
             .statistics
             .num_keyspace_changes
@@ -310,6 +317,7 @@ where
     Ok(())
 }
 
+#[instrument(name = "sync-removed-docs", skip_all, fields(keyspace = %state.keyspace, target_node_id = %state.target_node_id))]
 /// Starts the synchronisation process of syncing the remote node's keyspace
 /// to the current node's keyspace.
 ///
@@ -340,6 +348,7 @@ where
     Ok(last_updated)
 }
 
+#[instrument(name = "sync-modified-docs", skip_all)]
 /// Fetches all the documents which have changed since the last state fetch.
 ///
 /// These documents are then persisted and the metadata marked accordingly.
@@ -380,6 +389,7 @@ where
     Ok(())
 }
 
+#[instrument(name = "sync-removed-docs", skip_all)]
 /// Removes the marked documents from the persisted storage and then
 /// marks the document metadata as a tombstone.
 ///

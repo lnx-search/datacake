@@ -53,9 +53,9 @@ impl Debug for Document {
         f.field("id", &self.id);
         f.field("last_updated", &self.last_updated);
 
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-utils"))]
         {
-            f.field("data", &Bytes::copy_from_slice(&self.data));
+            f.field("data", &self.data);
         }
 
         f.finish()

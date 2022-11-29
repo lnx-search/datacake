@@ -60,6 +60,10 @@ use crate::rpc::{
 
 pub static DEFAULT_DATA_CENTER: &str = "datacake-dc-unknown";
 pub static DEFAULT_CLUSTER_ID: &str = "datacake-cluster-unknown";
+
+#[cfg(any(test, feature = "test-utils"))]
+const POLLING_INTERVAL_DURATION: Duration = Duration::from_millis(250);
+#[cfg(not(any(test, feature = "test-utils")))]
 const POLLING_INTERVAL_DURATION: Duration = Duration::from_secs(1);
 
 /// Non-required configurations for the datacake cluster node.

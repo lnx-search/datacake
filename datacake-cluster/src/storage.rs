@@ -64,6 +64,9 @@ where
 }
 
 #[async_trait]
+/// The generic storage trait which encapsulates all the required persistence logic.
+///
+/// A test suite is available for ensuring correct behavour of stores.
 pub trait Storage {
     type Error: Error + Send + Sync + 'static;
     type DocsIter: Iterator<Item = Document>;
@@ -178,6 +181,10 @@ pub mod test_suite {
     use crate::core::Document;
     use crate::storage::Storage;
 
+    /// A wrapping type around another `Storage` implementation that
+    /// logs all the activity going into and out of the store.
+    ///
+    /// This is a very useful system for debugging issues with your store.
     pub struct InstrumentedStorage<S: Storage>(pub S);
 
     #[async_trait]
