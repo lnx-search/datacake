@@ -63,6 +63,7 @@ where
     }
 }
 
+// TODO: Add default methods with more complicated handlers in order to allow room for lnx stuff.
 #[async_trait]
 /// The generic storage trait which encapsulates all the required persistence logic.
 ///

@@ -462,3 +462,4 @@ impl KeyspacePollHandle {
 }
 
 // TODO: Add unit tests
+// TODO: Add more intelligent way of fetching entries.
