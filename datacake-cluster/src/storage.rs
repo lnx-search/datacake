@@ -305,8 +305,8 @@ pub mod test_suite {
 
     use super::BulkMutationError;
     use crate::core::Document;
-    use crate::PutContext;
     use crate::storage::Storage;
+    use crate::PutContext;
 
     /// A wrapping type around another `Storage` implementation that
     /// logs all the activity going into and out of the store.
@@ -343,7 +343,12 @@ pub mod test_suite {
             self.0.remove_tombstones(keyspace, keys.into_iter()).await
         }
 
-        async fn put_with_ctx(&self, keyspace: &str, document: Document, ctx: Option<&PutContext>) -> Result<(), Self::Error> {
+        async fn put_with_ctx(
+            &self,
+            keyspace: &str,
+            document: Document,
+            ctx: Option<&PutContext>,
+        ) -> Result<(), Self::Error> {
             info!(keyspace = keyspace, document = ?document, "put_with_ctx");
             self.0.put_with_ctx(keyspace, document, ctx).await
         }
@@ -357,10 +362,17 @@ pub mod test_suite {
             self.0.put(keyspace, document).await
         }
 
-        async fn multi_put_with_ctx(&self, keyspace: &str, documents: impl Iterator<Item=Document> + Send, ctx: Option<&PutContext>) -> Result<(), BulkMutationError<Self::Error>> {
+        async fn multi_put_with_ctx(
+            &self,
+            keyspace: &str,
+            documents: impl Iterator<Item = Document> + Send,
+            ctx: Option<&PutContext>,
+        ) -> Result<(), BulkMutationError<Self::Error>> {
             let documents = documents.collect::<Vec<_>>();
             info!(keyspace = keyspace, documents = ?documents, "put_with_ctx");
-            self.0.multi_put_with_ctx(keyspace, documents.into_iter(), ctx).await
+            self.0
+                .multi_put_with_ctx(keyspace, documents.into_iter(), ctx)
+                .await
         }
 
         async fn multi_put(
