@@ -40,7 +40,7 @@ pub use statistics::ClusterStatistics;
 pub use storage::mem_store;
 #[cfg(feature = "test-utils")]
 pub use storage::test_suite;
-pub use storage::Storage;
+pub use storage::{ProgressTracker, PutContext, Storage};
 use tokio_stream::wrappers::WatchStream;
 
 use crate::clock::Clock;
@@ -307,6 +307,8 @@ where
     /// Changes applied to the handle are distributed across the cluster.
     pub fn handle(&self) -> DatacakeHandle<S> {
         DatacakeHandle {
+            node_id: Cow::Owned(self.node.node_id.clone()),
+            public_addr: self.node.public_addr,
             network: self.network.clone(),
             group: self.group.clone(),
             clock: self.clock.clone(),
@@ -355,6 +357,8 @@ pub struct DatacakeHandle<S>
 where
     S: Storage + Send + Sync + 'static,
 {
+    node_id: Cow<'static, str>,
+    public_addr: SocketAddr,
     network: RpcNetwork,
     group: KeyspaceGroup<S>,
     clock: Clock,
@@ -368,6 +372,8 @@ where
 {
     fn clone(&self) -> Self {
         Self {
+            node_id: self.node_id.clone(),
+            public_addr: self.public_addr,
             network: self.network.clone(),
             group: self.group.clone(),
             clock: self.clock.clone(),
@@ -444,15 +450,24 @@ where
             .await
             .map_err(error::DatacakeError::ConsistencyError)?;
 
+        let node_id = self.node_id.clone();
+        let node_addr = self.public_addr;
         let last_updated = self.clock.get_time().await;
         let document = Document::new(doc_id, last_updated, data);
 
-        core::put_data::<ConsistencySource, _>(keyspace, document.clone(), &self.group)
-            .await?;
+        core::put_data::<ConsistencySource, _>(
+            keyspace,
+            document.clone(),
+            &self.group,
+            None,
+        )
+        .await?;
 
         let factory = |node| {
             let keyspace = keyspace.to_string();
             let document = document.clone();
+            let node_id = node_id.clone();
+            let node_addr = node_addr.clone();
             async move {
                 let channel = self
                     .network
@@ -463,7 +478,7 @@ where
                 let mut client = ConsistencyClient::from(channel);
 
                 client
-                    .put(keyspace, document)
+                    .put(keyspace, document, &node_id, node_addr)
                     .await
                     .map_err(|e| error::DatacakeError::RpcError(node, e))?;
 
@@ -492,6 +507,8 @@ where
             .await
             .map_err(error::DatacakeError::ConsistencyError)?;
 
+        let node_id = self.node_id.clone();
+        let node_addr = self.public_addr;
         let last_updated = self.clock.get_time().await;
         let docs = documents
             .into_iter()
@@ -502,12 +519,15 @@ where
             keyspace,
             docs.clone().into_iter(),
             &self.group,
+            None,
         )
         .await?;
 
         let factory = |node| {
             let keyspace = keyspace.to_string();
             let documents = docs.clone();
+            let node_id = node_id.clone();
+            let node_addr = node_addr;
             async move {
                 let channel = self
                     .network
@@ -518,7 +538,7 @@ where
                 let mut client = ConsistencyClient::from(channel);
 
                 client
-                    .multi_put(keyspace, documents.into_iter())
+                    .multi_put(keyspace, documents.into_iter(), &node_id, node_addr)
                     .await
                     .map_err(|e| error::DatacakeError::RpcError(node, e))?;
 
@@ -755,8 +775,9 @@ where
         chitchat_messages: chitchat_tx,
         keyspace_group: group,
         service_registry,
+        network,
     };
-    let transport = GrpcTransport::new(network.clone(), context, chitchat_rx);
+    let transport = GrpcTransport::new(context, chitchat_rx);
 
     let me = ClusterMember::new(
         node_id,

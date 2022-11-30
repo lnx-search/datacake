@@ -189,7 +189,7 @@ mod tests {
 
         let doc = Document::new(1, clock.get_time().await, b"Hello, world".to_vec());
         storage
-            .put(KEYSPACE, doc.clone())
+            .put_with_ctx(KEYSPACE, doc.clone(), None)
             .await
             .expect("Store entry");
         keyspace

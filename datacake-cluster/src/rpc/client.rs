@@ -1,3 +1,5 @@
+use std::net::SocketAddr;
+
 use datacake_crdt::{HLCTimestamp, Key, OrSWotSet};
 use rkyv::AlignedVec;
 use tonic::transport::Channel;
@@ -8,6 +10,7 @@ use crate::keyspace::KeyspaceTimestamps;
 use crate::rpc::datacake_api::consistency_api_client::ConsistencyApiClient;
 use crate::rpc::datacake_api::replication_api_client::ReplicationApiClient;
 use crate::rpc::datacake_api::{
+    Context,
     DocumentMetadata,
     Empty,
     FetchDocs,
@@ -37,11 +40,17 @@ impl ConsistencyClient {
         &mut self,
         keyspace: impl Into<String>,
         doc: Document,
+        node_id: &str,
+        node_addr: SocketAddr,
     ) -> Result<(), Status> {
         self.inner
             .put(PutPayload {
                 keyspace: keyspace.into(),
                 document: Some(doc.into()),
+                ctx: Some(Context {
+                    node_id: node_id.to_string(),
+                    node_addr: node_addr.to_string(),
+                }),
             })
             .await?;
         Ok(())
@@ -52,11 +61,17 @@ impl ConsistencyClient {
         &mut self,
         keyspace: impl Into<String>,
         docs: impl Iterator<Item = Document>,
+        node_id: &str,
+        node_addr: SocketAddr,
     ) -> Result<(), Status> {
         self.inner
             .multi_put(MultiPutPayload {
                 keyspace: keyspace.into(),
                 documents: docs.map(|doc| doc.into()).collect(),
+                ctx: Some(Context {
+                    node_id: node_id.to_string(),
+                    node_addr: node_addr.to_string(),
+                }),
             })
             .await?;
         Ok(())

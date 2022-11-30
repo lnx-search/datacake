@@ -32,12 +32,19 @@ service ReplicationApi {
 
 message PutPayload {
   string keyspace = 1;
-  Document document = 2;
+  Context ctx = 2;
+  Document document = 3;
 }
 
 message MultiPutPayload {
   string keyspace = 1;
-  repeated Document documents = 2;
+  Context ctx = 2;
+  repeated Document documents = 3;
+}
+
+message Context {
+  string node_id = 1;
+  string node_addr = 2;
 }
 
 message RemovePayload {

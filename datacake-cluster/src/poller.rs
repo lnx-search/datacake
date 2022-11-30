@@ -19,10 +19,11 @@ use crate::keyspace::{
     StateSource,
 };
 use crate::rpc::ReplicationClient;
+use crate::storage::{ProgressTracker, PutContext};
 use crate::{ClusterStatistics, Storage};
 
-const KEYSPACE_SYNC_TIMEOUT: Duration = Duration::from_secs(10);
-const MAX_NUMBER_OF_DOCS_PER_FETCH: usize = 100_000;
+const KEYSPACE_SYNC_TIMEOUT: Duration = Duration::from_secs(5);
+const MAX_NUMBER_OF_DOCS_PER_FETCH: usize = 50_000;
 
 /// A actor responsible for continuously polling a node's keyspace state
 /// and triggering the required callbacks.
@@ -123,9 +124,10 @@ where
                 .get(&CounterKey(keyspace))
                 .cloned()
                 .unwrap_or_default(),
-            done: Arc::new(AtomicBool::new(false)),
+            channel: self.channel.clone(),
             client: ReplicationClient::from(self.channel.clone()),
             statistics: self.statistics.clone(),
+            progress_tracker: ProgressTracker::default(),
         }
     }
 }
@@ -158,14 +160,17 @@ where
     /// The shared timestamp counter for the given keyspace.
     timestamp: Arc<AtomicU64>,
 
-    /// A flag signalling if the task is complete or not.
-    done: Arc<AtomicBool>,
-
     /// The client the task can use for RPC.
     client: ReplicationClient,
 
     /// Global node statistics.
     statistics: ClusterStatistics,
+
+    /// The remote node's RPC channel.
+    channel: Channel,
+
+    /// A atomic counter for ensuring that a task doesn't get prematurely aborted.
+    progress_tracker: ProgressTracker,
 }
 
 impl<S> TaskState<S>
@@ -176,7 +181,7 @@ where
     /// itself as completed.
     fn set_done(&self, ts: u64) {
         self.timestamp.store(ts, Ordering::SeqCst);
-        self.done.store(true, Ordering::SeqCst);
+        self.progress_tracker.set_done()
     }
 }
 
@@ -214,7 +219,7 @@ where
                 );
             }
             connected = false;
-            continue
+            continue;
         }
 
         connected = true;
@@ -258,8 +263,15 @@ where
             .statistics
             .num_keyspace_changes
             .fetch_add(1, Ordering::Relaxed);
-        if let Some(handle) = state.handles.remove(&keyspace) {
-            if handle.is_timeout() {
+        if let Some(mut handle) = state.handles.remove(&keyspace) {
+            if handle.harvest_is_timeout() {
+                warn!(
+                    keyspace = %keyspace,
+                    target_node_id = %state.target_node_id,
+                    target_rpc_addr = %state.target_rpc_addr,
+                    "SLOW TASK: Existing sync task has been timed out. Aborting task."
+                );
+
                 state
                     .statistics
                     .num_slow_sync_tasks
@@ -275,7 +287,7 @@ where
         }
 
         let mut task_state = state.create_task_state(keyspace.clone());
-        let done = task_state.done.clone();
+        let progress = task_state.progress_tracker.clone();
         let inner = tokio::spawn(async move {
             task_state
                 .statistics
@@ -284,6 +296,7 @@ where
 
             let start = Instant::now();
 
+            task_state.progress_tracker.register_progress();
             match begin_keyspace_sync(&mut task_state).await {
                 Err(e) => {
                     task_state
@@ -318,7 +331,7 @@ where
 
         state
             .handles
-            .insert(keyspace, KeyspacePollHandle::new(inner, done));
+            .insert(keyspace, KeyspacePollHandle::new(inner, progress));
     }
 
     Ok(())
@@ -339,6 +352,13 @@ where
 
     let (modified, removed) = keyspace.diff(set).await;
 
+    let ctx = PutContext {
+        progress: state.progress_tracker.clone(),
+        remote_node_id: state.target_node_id.clone(),
+        remote_addr: state.target_rpc_addr,
+        remote_rpc_channel: state.channel.clone(),
+    };
+
     // The removal task can operate interdependently of the modified handler.
     // If, in the process of handling removals, the modified handler errors,
     // we simply let the removal task continue on as normal.
@@ -347,7 +367,7 @@ where
         removed,
     ));
 
-    let res = handle_modified(&mut state.client, keyspace, modified).await;
+    let res = handle_modified(&mut state.client, keyspace, modified, ctx).await;
     removal_task.await.expect("join task")?;
 
     res?;
@@ -363,6 +383,7 @@ async fn handle_modified<S>(
     client: &mut ReplicationClient,
     keyspace: KeyspaceState<S>,
     modified: StateChanges,
+    ctx: PutContext,
 ) -> Result<(), anyhow::Error>
 where
     S: Storage + Send + Sync + 'static,
@@ -382,7 +403,9 @@ where
                 doc
             });
 
-        storage.multi_put(keyspace.name(), docs).await?;
+        storage
+            .multi_put_with_ctx(keyspace.name(), docs, Some(&ctx))
+            .await?;
 
         // We only update the metadata if the persistence has passed.
         // If we were to do this the other way around, we could potentially
@@ -446,25 +469,34 @@ where
 
 pub struct KeyspacePollHandle {
     handle: JoinHandle<()>,
-    done: Arc<AtomicBool>,
-    started_at: Instant,
+    progress: ProgressTracker,
+    last_checked: Instant,
+    last_recorded_stamp: u64,
 }
 
 impl KeyspacePollHandle {
-    fn new(handle: JoinHandle<()>, done: Arc<AtomicBool>) -> Self {
+    fn new(handle: JoinHandle<()>, progress: ProgressTracker) -> Self {
         Self {
             handle,
-            done,
-            started_at: Instant::now(),
+            progress,
+            last_checked: Instant::now(),
+            last_recorded_stamp: 0,
         }
     }
 
     fn is_done(&self) -> bool {
-        self.done.load(Ordering::Relaxed)
+        self.progress.done.load(Ordering::Relaxed)
     }
 
-    fn is_timeout(&self) -> bool {
-        self.started_at.elapsed() >= KEYSPACE_SYNC_TIMEOUT
+    fn harvest_is_timeout(&mut self) -> bool {
+        let recorded_stamp = self.progress.progress_counter.load(Ordering::Relaxed);
+
+        if recorded_stamp > self.last_recorded_stamp {
+            self.last_checked = Instant::now();
+            return false;
+        }
+
+        self.last_checked.elapsed() >= KEYSPACE_SYNC_TIMEOUT
     }
 }
 

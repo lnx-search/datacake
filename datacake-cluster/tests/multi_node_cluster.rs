@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use bytes::Bytes;
 use datacake_cluster::mem_store::MemStore;
+use datacake_cluster::test_suite::InstrumentedStorage;
 use datacake_cluster::{
     ClusterOptions,
     ConnectionConfig,
@@ -10,7 +11,6 @@ use datacake_cluster::{
     DCAwareSelector,
     DatacakeCluster,
 };
-use datacake_cluster::test_suite::InstrumentedStorage;
 
 #[tokio::test]
 async fn test_consistency_all() -> anyhow::Result<()> {
@@ -331,7 +331,9 @@ async fn test_async_operations() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn connect_cluster(addrs: [SocketAddr; 3]) -> [DatacakeCluster<InstrumentedStorage<MemStore>>; 3] {
+async fn connect_cluster(
+    addrs: [SocketAddr; 3],
+) -> [DatacakeCluster<InstrumentedStorage<MemStore>>; 3] {
     let node_1_connection_cfg = ConnectionConfig::new(
         addrs[0],
         addrs[0],

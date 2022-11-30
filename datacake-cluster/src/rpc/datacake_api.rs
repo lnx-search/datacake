@@ -3,14 +3,25 @@ pub struct PutPayload {
     #[prost(string, tag = "1")]
     pub keyspace: ::prost::alloc::string::String,
     #[prost(message, optional, tag = "2")]
+    pub ctx: ::core::option::Option<Context>,
+    #[prost(message, optional, tag = "3")]
     pub document: ::core::option::Option<Document>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct MultiPutPayload {
     #[prost(string, tag = "1")]
     pub keyspace: ::prost::alloc::string::String,
-    #[prost(message, repeated, tag = "2")]
+    #[prost(message, optional, tag = "2")]
+    pub ctx: ::core::option::Option<Context>,
+    #[prost(message, repeated, tag = "3")]
     pub documents: ::prost::alloc::vec::Vec<Document>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Context {
+    #[prost(string, tag = "1")]
+    pub node_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub node_addr: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RemovePayload {

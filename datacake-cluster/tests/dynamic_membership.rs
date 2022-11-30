@@ -1,9 +1,16 @@
 use std::net::SocketAddr;
 use std::time::Duration;
+
 use bytes::Bytes;
-use datacake_cluster::{ClusterOptions, ConnectionConfig, Consistency, DatacakeCluster, DCAwareSelector};
 use datacake_cluster::mem_store::MemStore;
 use datacake_cluster::test_suite::InstrumentedStorage;
+use datacake_cluster::{
+    ClusterOptions,
+    ConnectionConfig,
+    Consistency,
+    DCAwareSelector,
+    DatacakeCluster,
+};
 
 #[tokio::test]
 pub async fn test_member_join() -> anyhow::Result<()> {
@@ -118,15 +125,9 @@ pub async fn test_member_join() -> anyhow::Result<()> {
         .await
         .expect("Put value.");
 
-    let doc = node_3_handle
-        .get(1)
-        .await
-        .expect("Get value.");
+    let doc = node_3_handle.get(1).await.expect("Get value.");
     assert!(doc.is_none());
-    let doc = node_3_handle
-        .get(2)
-        .await
-        .expect("Get value.");
+    let doc = node_3_handle.get(2).await.expect("Get value.");
     assert!(doc.is_none());
 
     // Let state propagate
@@ -261,4 +262,3 @@ pub async fn test_member_leave() -> anyhow::Result<()> {
 
     Ok(())
 }
-

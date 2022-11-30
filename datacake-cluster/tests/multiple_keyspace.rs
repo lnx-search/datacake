@@ -1,8 +1,15 @@
 use std::net::SocketAddr;
 use std::time::Duration;
-use datacake_cluster::{ClusterOptions, ConnectionConfig, Consistency, DatacakeCluster, DCAwareSelector};
+
 use datacake_cluster::mem_store::MemStore;
 use datacake_cluster::test_suite::InstrumentedStorage;
+use datacake_cluster::{
+    ClusterOptions,
+    ConnectionConfig,
+    Consistency,
+    DCAwareSelector,
+    DatacakeCluster,
+};
 
 static KEYSPACE_1: &str = "my-first-keyspace";
 static KEYSPACE_2: &str = "my-second-keyspace";
@@ -13,11 +20,8 @@ async fn test_single_node() -> anyhow::Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
     let node_addr = "127.0.0.1:8014".parse::<SocketAddr>().unwrap();
-    let connection_cfg = ConnectionConfig::new(
-        node_addr,
-        node_addr,
-        Vec::<String>::new(),
-    );
+    let connection_cfg =
+        ConnectionConfig::new(node_addr, node_addr, Vec::<String>::new());
     let node = DatacakeCluster::connect(
         "node-1",
         connection_cfg,
@@ -31,7 +35,12 @@ async fn test_single_node() -> anyhow::Result<()> {
     let handle = node.handle();
 
     handle
-        .put(KEYSPACE_1, 1, b"Hello, world! From keyspace 1.".to_vec(), Consistency::All)
+        .put(
+            KEYSPACE_1,
+            1,
+            b"Hello, world! From keyspace 1.".to_vec(),
+            Consistency::All,
+        )
         .await
         .expect("Put doc.");
 
@@ -40,15 +49,9 @@ async fn test_single_node() -> anyhow::Result<()> {
         .await
         .expect("Get doc.")
         .expect("Get document just stored.");
-    let doc = handle
-        .get(KEYSPACE_2, 1)
-        .await
-        .expect("Get doc.");
+    let doc = handle.get(KEYSPACE_2, 1).await.expect("Get doc.");
     assert!(doc.is_none());
-    let doc = handle
-        .get(KEYSPACE_3, 1)
-        .await
-        .expect("Get doc.");
+    let doc = handle.get(KEYSPACE_3, 1).await.expect("Get doc.");
     assert!(doc.is_none());
 
     handle
@@ -56,20 +59,11 @@ async fn test_single_node() -> anyhow::Result<()> {
         .await
         .expect("Put doc.");
 
-    let doc = handle
-        .get(KEYSPACE_1, 1)
-        .await
-        .expect("Get doc.");
+    let doc = handle.get(KEYSPACE_1, 1).await.expect("Get doc.");
     assert!(doc.is_none());
-    let doc = handle
-        .get(KEYSPACE_2, 1)
-        .await
-        .expect("Get doc.");
+    let doc = handle.get(KEYSPACE_2, 1).await.expect("Get doc.");
     assert!(doc.is_none());
-    let doc = handle
-        .get(KEYSPACE_3, 1)
-        .await
-        .expect("Get doc.");
+    let doc = handle.get(KEYSPACE_3, 1).await.expect("Get doc.");
     assert!(doc.is_none());
 
     Ok(())
@@ -144,7 +138,12 @@ async fn test_multi_node() -> anyhow::Result<()> {
     let node_3_handle = node_3.handle();
 
     node_1_handle
-        .put(KEYSPACE_1, 1, b"Hello, world! From keyspace 1.".to_vec(), Consistency::All)
+        .put(
+            KEYSPACE_1,
+            1,
+            b"Hello, world! From keyspace 1.".to_vec(),
+            Consistency::All,
+        )
         .await
         .expect("Put doc.");
 
@@ -153,15 +152,9 @@ async fn test_multi_node() -> anyhow::Result<()> {
         .await
         .expect("Get doc.")
         .expect("Get document just stored.");
-    let doc = node_3_handle
-        .get(KEYSPACE_2, 1)
-        .await
-        .expect("Get doc.");
+    let doc = node_3_handle.get(KEYSPACE_2, 1).await.expect("Get doc.");
     assert!(doc.is_none());
-    let doc = node_1_handle
-        .get(KEYSPACE_3, 1)
-        .await
-        .expect("Get doc.");
+    let doc = node_1_handle.get(KEYSPACE_3, 1).await.expect("Get doc.");
     assert!(doc.is_none());
 
     node_2_handle
@@ -169,20 +162,11 @@ async fn test_multi_node() -> anyhow::Result<()> {
         .await
         .expect("Put doc.");
 
-    let doc = node_2_handle
-        .get(KEYSPACE_1, 1)
-        .await
-        .expect("Get doc.");
+    let doc = node_2_handle.get(KEYSPACE_1, 1).await.expect("Get doc.");
     assert!(doc.is_none());
-    let doc = node_3_handle
-        .get(KEYSPACE_2, 1)
-        .await
-        .expect("Get doc.");
+    let doc = node_3_handle.get(KEYSPACE_2, 1).await.expect("Get doc.");
     assert!(doc.is_none());
-    let doc = node_3_handle
-        .get(KEYSPACE_3, 1)
-        .await
-        .expect("Get doc.");
+    let doc = node_3_handle.get(KEYSPACE_3, 1).await.expect("Get doc.");
     assert!(doc.is_none());
 
     Ok(())

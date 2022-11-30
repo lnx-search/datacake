@@ -1,3 +1,6 @@
+use std::borrow::Cow;
+use std::net::SocketAddr;
+
 use async_trait::async_trait;
 use datacake_crdt::HLCTimestamp;
 use tonic::{Request, Response, Status};
@@ -6,6 +9,7 @@ use crate::core::Document;
 use crate::keyspace::{ConsistencySource, KeyspaceGroup};
 use crate::rpc::datacake_api::consistency_api_server::ConsistencyApi;
 use crate::rpc::datacake_api::{
+    Context,
     Empty,
     MultiPutPayload,
     MultiRemovePayload,
@@ -13,14 +17,40 @@ use crate::rpc::datacake_api::{
     RemovePayload,
 };
 use crate::storage::Storage;
+use crate::{ProgressTracker, PutContext, RpcNetwork};
 
 pub struct ConsistencyService<S: Storage> {
     group: KeyspaceGroup<S>,
+    network: RpcNetwork,
 }
 
 impl<S: Storage> ConsistencyService<S> {
-    pub fn new(group: KeyspaceGroup<S>) -> Self {
-        Self { group }
+    pub fn new(group: KeyspaceGroup<S>, network: RpcNetwork) -> Self {
+        Self { group, network }
+    }
+
+    fn get_put_ctx(&self, ctx: Option<Context>) -> Result<Option<PutContext>, Status> {
+        let ctx = if let Some(info) = ctx {
+            let remote_addr = info.node_addr.parse::<SocketAddr>().map_err(|e| {
+                Status::internal(format!(
+                    "Failed to parse remote node addr {} - {}",
+                    info.node_addr, e
+                ))
+            })?;
+
+            let remote_rpc_channel = self.network.connect_lazy(remote_addr);
+
+            Some(PutContext {
+                progress: ProgressTracker::default(),
+                remote_node_id: Cow::Owned(info.node_id),
+                remote_addr,
+                remote_rpc_channel,
+            })
+        } else {
+            None
+        };
+
+        Ok(ctx)
     }
 }
 
@@ -32,6 +62,7 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
     ) -> Result<Response<Empty>, Status> {
         let inner = request.into_inner();
         let document = Document::from(inner.document.unwrap());
+        let ctx = self.get_put_ctx(inner.ctx)?;
 
         self.group.clock().register_ts(document.last_updated).await;
 
@@ -39,6 +70,7 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
             &inner.keyspace,
             document,
             &self.group,
+            ctx.as_ref(),
         )
         .await
         .map_err(|e| Status::internal(e.to_string()))?;
@@ -58,11 +90,13 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
             }
             doc
         });
+        let ctx = self.get_put_ctx(inner.ctx)?;
 
         crate::core::put_many_data::<ConsistencySource, _>(
             &inner.keyspace,
             documents,
             &self.group,
+            ctx.as_ref(),
         )
         .await
         .map_err(|e| Status::internal(e.to_string()))?;
@@ -144,12 +178,13 @@ mod tests {
         let group = KeyspaceGroup::<MemStore>::new_for_test().await;
         let clock = group.clock();
         let storage = group.storage();
-        let service = ConsistencyService::new(group.clone());
+        let service = ConsistencyService::new(group.clone(), RpcNetwork::default());
 
         let doc = Document::new(1, clock.get_time().await, b"Hello, world".to_vec());
         let put_req = Request::new(PutPayload {
             keyspace: KEYSPACE.to_string(),
             document: Some(doc.clone().into()),
+            ctx: None,
         });
 
         service
@@ -178,13 +213,14 @@ mod tests {
         let group = KeyspaceGroup::<MemStore>::new_for_test().await;
         let clock = group.clock();
         let storage = group.storage();
-        let service = ConsistencyService::new(group.clone());
+        let service = ConsistencyService::new(group.clone(), RpcNetwork::default());
 
         let doc_1 = Document::new(1, clock.get_time().await, b"Hello, world 1".to_vec());
         let doc_2 = Document::new(2, clock.get_time().await, b"Hello, world 2".to_vec());
         let doc_3 = Document::new(3, clock.get_time().await, b"Hello, world 3".to_vec());
         let put_req = Request::new(MultiPutPayload {
             keyspace: KEYSPACE.to_string(),
+            ctx: None,
             documents: vec![
                 doc_1.clone().into(),
                 doc_2.clone().into(),
@@ -229,7 +265,7 @@ mod tests {
         let group = KeyspaceGroup::<MemStore>::new_for_test().await;
         let clock = group.clock();
         let storage = group.storage();
-        let service = ConsistencyService::new(group.clone());
+        let service = ConsistencyService::new(group.clone(), RpcNetwork::default());
 
         let mut doc =
             Document::new(1, clock.get_time().await, b"Hello, world 1".to_vec());
@@ -270,7 +306,7 @@ mod tests {
         let group = KeyspaceGroup::<MemStore>::new_for_test().await;
         let clock = group.clock();
         let storage = group.storage();
-        let service = ConsistencyService::new(group.clone());
+        let service = ConsistencyService::new(group.clone(), RpcNetwork::default());
 
         let mut doc_1 =
             Document::new(1, clock.get_time().await, b"Hello, world 1".to_vec());
@@ -349,6 +385,7 @@ mod tests {
     ) {
         let put_req = Request::new(MultiPutPayload {
             keyspace: keyspace.to_string(),
+            ctx: None,
             documents: docs.into_iter().map(|d| d.into()).collect(),
         });
 

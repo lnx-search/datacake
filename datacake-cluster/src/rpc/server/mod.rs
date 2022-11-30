@@ -17,6 +17,7 @@ use crate::rpc::server::chitchat_impl::ChitchatService;
 use crate::rpc::server::consistency_impl::ConsistencyService;
 use crate::rpc::server::replication_impl::ReplicationService;
 use crate::storage::Storage;
+use crate::RpcNetwork;
 
 pub struct Context<S, R>
 where
@@ -26,6 +27,7 @@ where
     pub chitchat_messages: flume::Sender<(SocketAddr, ChitchatMessage)>,
     pub keyspace_group: KeyspaceGroup<S>,
     pub service_registry: R,
+    pub network: RpcNetwork,
 }
 
 impl<S, R> Clone for Context<S, R>
@@ -38,6 +40,7 @@ where
             chitchat_messages: self.chitchat_messages.clone(),
             keyspace_group: self.keyspace_group.clone(),
             service_registry: self.service_registry.clone(),
+            network: self.network.clone(),
         }
     }
 }
@@ -71,7 +74,8 @@ where
     let (ready_tx, ready_rx) = oneshot::channel();
 
     let chitchat_service = ChitchatService::new(ctx.chitchat_messages);
-    let consistency_service = ConsistencyService::new(ctx.keyspace_group.clone());
+    let consistency_service =
+        ConsistencyService::new(ctx.keyspace_group.clone(), ctx.network.clone());
     let replication_service = ReplicationService::new(ctx.keyspace_group.clone());
 
     let router = Server::builder()

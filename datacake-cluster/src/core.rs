@@ -6,7 +6,7 @@ use datacake_crdt::{HLCTimestamp, Key};
 
 use crate::keyspace::StateSource;
 use crate::rpc::datacake_api;
-use crate::{error, KeyspaceGroup, Storage};
+use crate::{error, KeyspaceGroup, PutContext, Storage};
 
 #[derive(Clone)]
 pub struct Document {
@@ -107,6 +107,7 @@ pub(crate) async fn put_data<SS, S>(
     keyspace: &str,
     document: Document,
     group: &KeyspaceGroup<S>,
+    ctx: Option<&PutContext>,
 ) -> Result<(), error::DatacakeError<S::Error>>
 where
     SS: StateSource + Send + Sync + 'static,
@@ -115,7 +116,10 @@ where
     let doc_id = document.id;
     let last_updated = document.last_updated;
 
-    group.storage().put(keyspace, document).await?;
+    group
+        .storage()
+        .put_with_ctx(keyspace, document, ctx)
+        .await?;
 
     let keyspace = group.get_or_create_keyspace(keyspace).await;
 
@@ -130,6 +134,7 @@ pub(crate) async fn put_many_data<SS, S>(
     keyspace: &str,
     documents: impl Iterator<Item = Document> + Send,
     group: &KeyspaceGroup<S>,
+    ctx: Option<&PutContext>,
 ) -> Result<(), error::DatacakeError<S::Error>>
 where
     SS: StateSource + Send + Sync + 'static,
@@ -141,7 +146,10 @@ where
         doc
     });
 
-    let res = group.storage().multi_put(keyspace, documents).await;
+    let res = group
+        .storage()
+        .multi_put_with_ctx(keyspace, documents, ctx)
+        .await;
 
     let keyspace = group.get_or_create_keyspace(keyspace).await;
     entries.sort_by_key(|entry| entry.1);
@@ -269,7 +277,7 @@ mod tests {
         // Test insert
         let doc_ts = clock.get_time().await;
         let doc = Document::new(1, doc_ts, b"hello, world".to_vec());
-        put_data::<TestSource, _>(KEYSPACE, doc.clone(), &group)
+        put_data::<TestSource, _>(KEYSPACE, doc.clone(), &group, None)
             .await
             .expect("Put new data should be successful.");
 
@@ -299,7 +307,7 @@ mod tests {
         // Test updating an existing document.
         let updated_doc_ts = clock.get_time().await;
         let updated_doc = Document::new(1, updated_doc_ts, b"hello, world".to_vec());
-        put_data::<TestSource, _>(KEYSPACE, updated_doc.clone(), &group)
+        put_data::<TestSource, _>(KEYSPACE, updated_doc.clone(), &group, None)
             .await
             .expect("Put new data should be successful.");
 
@@ -344,13 +352,13 @@ mod tests {
             clock.get_time().await,
             b"hello, world from doc 3".to_vec(),
         );
-        put_data::<TestSource, _>(KEYSPACE, doc_1.clone(), &group)
+        put_data::<TestSource, _>(KEYSPACE, doc_1.clone(), &group, None)
             .await
             .expect("Put new data should be successful.");
-        put_data::<TestSource, _>(KEYSPACE, doc_2.clone(), &group)
+        put_data::<TestSource, _>(KEYSPACE, doc_2.clone(), &group, None)
             .await
             .expect("Put new data should be successful.");
-        put_data::<TestSource, _>(KEYSPACE, doc_3.clone(), &group)
+        put_data::<TestSource, _>(KEYSPACE, doc_3.clone(), &group, None)
             .await
             .expect("Put new data should be successful.");
 
@@ -377,9 +385,14 @@ mod tests {
         // Test insert
         let doc_ts = clock.get_time().await;
         let doc = Document::new(1, doc_ts, b"hello, world".to_vec());
-        put_many_data::<TestSource, _>(KEYSPACE, vec![doc.clone()].into_iter(), &group)
-            .await
-            .expect("Put new data should be successful.");
+        put_many_data::<TestSource, _>(
+            KEYSPACE,
+            vec![doc.clone()].into_iter(),
+            &group,
+            None,
+        )
+        .await
+        .expect("Put new data should be successful.");
 
         let keyspace = group.get_or_create_keyspace(KEYSPACE).await;
         let (additions, removals) = keyspace.symetrical_diff(OrSWotSet::default()).await;
@@ -411,6 +424,7 @@ mod tests {
             KEYSPACE,
             vec![updated_doc.clone()].into_iter(),
             &group,
+            None,
         )
         .await
         .expect("Put new data should be successful.");
@@ -460,6 +474,7 @@ mod tests {
             KEYSPACE,
             vec![doc_1.clone(), doc_2.clone(), doc_3.clone()].into_iter(),
             &group,
+            None,
         )
         .await
         .expect("Put new data should be successful.");
@@ -503,6 +518,7 @@ mod tests {
             KEYSPACE,
             vec![doc_1.clone(), doc_2.clone(), doc_3.clone()].into_iter(),
             &group,
+            None,
         )
         .await
         .expect("Put new data should be successful.");
@@ -598,6 +614,7 @@ mod tests {
             KEYSPACE,
             vec![doc_1.clone(), doc_2.clone(), doc_3.clone()].into_iter(),
             &group,
+            None,
         )
         .await
         .expect("Put new data should be successful.");

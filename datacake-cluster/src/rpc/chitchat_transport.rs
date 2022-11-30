@@ -33,12 +33,10 @@ where
 {
     /// Creates a new GRPC transport instances.
     pub fn new(
-        network: RpcNetwork,
         ctx: super::server::Context<S, R>,
         messages: flume::Receiver<(SocketAddr, ChitchatMessage)>,
     ) -> Self {
         Self(Arc::new(GrpcTransportInner {
-            network,
             ctx,
             shutdown_handles: Default::default(),
             messages,
@@ -64,12 +62,14 @@ where
     S: Storage + Sync + Send + 'static,
     R: ServiceRegistry + Send + Sync + Clone + 'static,
 {
-    async fn open(&self, listen_addr: SocketAddr) -> Result<Box<dyn Socket>, TransportError> {
+    async fn open(
+        &self,
+        listen_addr: SocketAddr,
+    ) -> Result<Box<dyn Socket>, TransportError> {
         info!(listen_addr = %listen_addr, "Starting RPC server.");
-        let shutdown =
-            super::server::connect_server(listen_addr, self.ctx.clone())
-                .await
-                .map_err(|e| TransportError::Other(e.into()))?;
+        let shutdown = super::server::connect_server(listen_addr, self.ctx.clone())
+            .await
+            .map_err(|e| TransportError::Other(e.into()))?;
 
         {
             self.shutdown_handles.lock().push(shutdown);
@@ -77,7 +77,7 @@ where
 
         Ok(Box::new(GrpcConnection {
             self_addr: listen_addr,
-            network: self.network.clone(),
+            network: self.ctx.network.clone(),
             messages: self.messages.clone(),
         }))
     }
@@ -88,9 +88,6 @@ where
     S: Storage,
     R: ServiceRegistry + Clone,
 {
-    /// The RPC clients available to this cluster.
-    network: RpcNetwork,
-
     /// Context to be passed when binding a new RPC server instance.
     ctx: super::server::Context<S, R>,
 
@@ -118,10 +115,10 @@ impl Socket for GrpcConnection {
         let message = msg.serialize_to_vec();
         let source = self.self_addr.serialize_to_vec();
 
-        let channel = self.network
-            .get_or_connect(to)
-            .await
-            .map_err(|e| io::Error::new(ErrorKind::ConnectionRefused, e.to_string()))?;
+        let channel =
+            self.network.get_or_connect(to).await.map_err(|e| {
+                io::Error::new(ErrorKind::ConnectionRefused, e.to_string())
+            })?;
 
         let mut client = ChitchatTransportClient::new(channel);
         client
@@ -133,7 +130,8 @@ impl Socket for GrpcConnection {
     }
 
     async fn recv(&mut self) -> Result<(SocketAddr, ChitchatMessage), TransportError> {
-        let msg = self.messages
+        let msg = self
+            .messages
             .recv_async()
             .await
             .map_err(|e| io::Error::new(ErrorKind::NotConnected, e.to_string()))?;
