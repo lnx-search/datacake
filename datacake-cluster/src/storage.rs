@@ -182,10 +182,6 @@ pub trait Storage {
     /// from the local node itself. If context is `Some(ctx)` then it has originated from
     /// a remote node.
     ///
-    /// The system calls this method as part of call to the higher level `put` operation,
-    /// this means that the system will never call `put` directly and this can be overriden
-    /// and changed if required.
-    ///
     /// If the given `keyspace` does not exist, it should be created. A new keyspace name should
     /// not result in an error being returned by the storage trait.
     ///
@@ -223,10 +219,6 @@ pub trait Storage {
     /// In the case the context is `None`, this indicates that the operation originates
     /// from the local node itself. If context is `Some(ctx)` then it has originated from
     /// a remote node.
-    ///
-    /// The system calls this method as part of call to the higher level `multi_put` operation,
-    /// this means that the system will never call `multi_put` directly and this can be overriden
-    /// and changed if required.
     ///
     /// If the given `keyspace` does not exist, it should be created. A new keyspace name should
     /// not result in an error being returned by the storage trait.
@@ -313,6 +305,7 @@ pub mod test_suite {
 
     use super::BulkMutationError;
     use crate::core::Document;
+    use crate::PutContext;
     use crate::storage::Storage;
 
     /// A wrapping type around another `Storage` implementation that
@@ -350,6 +343,11 @@ pub mod test_suite {
             self.0.remove_tombstones(keyspace, keys.into_iter()).await
         }
 
+        async fn put_with_ctx(&self, keyspace: &str, document: Document, ctx: Option<&PutContext>) -> Result<(), Self::Error> {
+            info!(keyspace = keyspace, document = ?document, "put_with_ctx");
+            self.0.put_with_ctx(keyspace, document, ctx).await
+        }
+
         async fn put(
             &self,
             keyspace: &str,
@@ -357,6 +355,12 @@ pub mod test_suite {
         ) -> Result<(), Self::Error> {
             info!(keyspace = keyspace, document = ?document, "put");
             self.0.put(keyspace, document).await
+        }
+
+        async fn multi_put_with_ctx(&self, keyspace: &str, documents: impl Iterator<Item=Document> + Send, ctx: Option<&PutContext>) -> Result<(), BulkMutationError<Self::Error>> {
+            let documents = documents.collect::<Vec<_>>();
+            info!(keyspace = keyspace, documents = ?documents, "put_with_ctx");
+            self.0.multi_put_with_ctx(keyspace, documents.into_iter(), ctx).await
         }
 
         async fn multi_put(
