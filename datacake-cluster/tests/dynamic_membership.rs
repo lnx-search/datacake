@@ -118,12 +118,10 @@ pub async fn test_member_leave() -> anyhow::Result<()> {
     let stats = node_1.statistics();
     assert_eq!(stats.num_data_centers(), 1);
     assert_eq!(stats.num_live_members(), 2);
-    assert_eq!(stats.num_dead_members(), 1);
 
     let stats = node_2.statistics();
     assert_eq!(stats.num_data_centers(), 1);
     assert_eq!(stats.num_live_members(), 2);
-    assert_eq!(stats.num_dead_members(), 1);
 
     Ok(())
 }

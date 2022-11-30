@@ -198,19 +198,26 @@ where
 
     let mut client = ReplicationClient::from(state.channel.clone());
 
+    let mut connected = true;
     loop {
         if state.tick().await {
             break;
         }
 
         if let Err(e) = poll_node(&mut state, &mut client).await {
-            error!(
-                error = ?e,
-                target_node_id = %state.target_node_id,
-                target_rpc_addr = %state.target_rpc_addr,
-                "Unable to poll node due to error.",
-            );
+            if connected {
+                error!(
+                    error = ?e,
+                    target_node_id = %state.target_node_id,
+                    target_rpc_addr = %state.target_rpc_addr,
+                    "Unable to poll node due to error.",
+                );
+            }
+            connected = false;
+            continue
         }
+
+        connected = true;
     }
 
     info!(

@@ -820,6 +820,7 @@ async fn watch_membership_changes<S>(
     let mut last_network_set = HashSet::new();
     while let Some(members) = changes.next().await {
         info!(
+            self_node_id = %self_node_id,
             num_members = members.len(),
             "Cluster membership has changed."
         );
@@ -846,6 +847,7 @@ async fn watch_membership_changes<S>(
         // Remove client no longer apart of the network.
         for (node_id, addr) in last_network_set.difference(&new_network_set) {
             info!(
+                self_node_id = %self_node_id,
                 target_node_id = %node_id,
                 target_addr = %addr,
                 "Node is no longer part of cluster."
@@ -861,6 +863,7 @@ async fn watch_membership_changes<S>(
         // Add new clients for each new node.
         for (node_id, addr) in new_network_set.difference(&last_network_set) {
             info!(
+                self_node_id = %self_node_id,
                 target_node_id = %node_id,
                 target_addr = %addr,
                 "Node has connected to the cluster."

@@ -1,11 +1,13 @@
+use std::io::ErrorKind;
 use std::net::SocketAddr;
 use std::ops::Deref;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use chitchat::serialize::Serializable;
-use chitchat::transport::{Socket, Transport};
+use chitchat::transport::{Socket, Transport, TransportError};
 use chitchat::ChitchatMessage;
+use futures::io;
 use parking_lot::Mutex;
 use tokio::sync::oneshot;
 
@@ -62,10 +64,12 @@ where
     S: Storage + Sync + Send + 'static,
     R: ServiceRegistry + Send + Sync + Clone + 'static,
 {
-    async fn open(&self, listen_addr: SocketAddr) -> anyhow::Result<Box<dyn Socket>> {
+    async fn open(&self, listen_addr: SocketAddr) -> Result<Box<dyn Socket>, TransportError> {
         info!(listen_addr = %listen_addr, "Starting RPC server.");
         let shutdown =
-            super::server::connect_server(listen_addr, self.ctx.clone()).await?;
+            super::server::connect_server(listen_addr, self.ctx.clone())
+                .await
+                .map_err(|e| TransportError::Other(e.into()))?;
 
         {
             self.shutdown_handles.lock().push(shutdown);
@@ -109,24 +113,30 @@ impl Socket for GrpcConnection {
         &mut self,
         to: SocketAddr,
         msg: ChitchatMessage,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), TransportError> {
         trace!(to = %to, msg = ?msg, "Gossip send");
         let message = msg.serialize_to_vec();
         let source = self.self_addr.serialize_to_vec();
 
-        let channel = self.network.get_or_connect(to).await?;
+        let channel = self.network
+            .get_or_connect(to)
+            .await
+            .map_err(|e| io::Error::new(ErrorKind::ConnectionRefused, e.to_string()))?;
+
         let mut client = ChitchatTransportClient::new(channel);
         client
             .send_msg(ChitchatRpcMessage { message, source })
-            .await?;
+            .await
+            .map_err(|e| io::Error::new(ErrorKind::ConnectionAborted, e.to_string()))?;
 
         Ok(())
     }
 
-    async fn recv(&mut self) -> anyhow::Result<(SocketAddr, ChitchatMessage)> {
-        self.messages
+    async fn recv(&mut self) -> Result<(SocketAddr, ChitchatMessage), TransportError> {
+        let msg = self.messages
             .recv_async()
             .await
-            .map_err(anyhow::Error::from)
+            .map_err(|e| io::Error::new(ErrorKind::NotConnected, e.to_string()))?;
+        Ok(msg)
     }
 }

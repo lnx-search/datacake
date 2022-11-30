@@ -28,7 +28,7 @@ anyhow = "1"
 rand = "0.8.5"
 bytecheck = "0.6.9"
 
-chitchat = { git = "https://github.com/ChillFish8/chitchat.git", rev = "7436860" }
+chitchat = { git = "https://github.com/quickwit-oss/chitchat.git", branch = "chillfish8-add-better-error-handling" }
 tokio = { version = "1", default-features = false, features = ["sync", "time"] }
 rkyv = { version = "0.7.9", features = ["validation"] }
 
