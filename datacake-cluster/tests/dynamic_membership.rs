@@ -1,1 +1,130 @@
+use std::net::SocketAddr;
+use std::time::Duration;
+use datacake_cluster::{ClusterOptions, ConnectionConfig, DatacakeCluster, DCAwareSelector};
+use datacake_cluster::mem_store::MemStore;
+use datacake_cluster::test_suite::InstrumentedStorage;
+
+#[tokio::test]
+pub async fn test_member_join() -> anyhow::Result<()> {
+    let _ = tracing_subscriber::fmt::try_init();
+
+    let node_1_addr = "127.0.0.1:8018".parse::<SocketAddr>().unwrap();
+    let node_2_addr = "127.0.0.1:8019".parse::<SocketAddr>().unwrap();
+    let node_3_addr = "127.0.0.1:8020".parse::<SocketAddr>().unwrap();
+    let node_1_connection_cfg = ConnectionConfig::new(
+        node_1_addr,
+        node_1_addr,
+        &[node_2_addr.to_string(), node_3_addr.to_string()],
+    );
+    let node_2_connection_cfg = ConnectionConfig::new(
+        node_2_addr,
+        node_2_addr,
+        &[node_1_addr.to_string(), node_3_addr.to_string()],
+    );
+    let node_3_connection_cfg = ConnectionConfig::new(
+        node_3_addr,
+        node_3_addr,
+        &[node_1_addr.to_string(), node_2_addr.to_string()],
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+pub async fn test_member_leave() -> anyhow::Result<()> {
+    let _ = tracing_subscriber::fmt::try_init();
+
+    let node_1_addr = "127.0.0.1:8021".parse::<SocketAddr>().unwrap();
+    let node_2_addr = "127.0.0.1:8022".parse::<SocketAddr>().unwrap();
+    let node_3_addr = "127.0.0.1:8023".parse::<SocketAddr>().unwrap();
+    let node_1_connection_cfg = ConnectionConfig::new(
+        node_1_addr,
+        node_1_addr,
+        &[node_2_addr.to_string(), node_3_addr.to_string()],
+    );
+    let node_2_connection_cfg = ConnectionConfig::new(
+        node_2_addr,
+        node_2_addr,
+        &[node_1_addr.to_string(), node_3_addr.to_string()],
+    );
+    let node_3_connection_cfg = ConnectionConfig::new(
+        node_3_addr,
+        node_3_addr,
+        &[node_1_addr.to_string(), node_2_addr.to_string()],
+    );
+
+    let node_1 = DatacakeCluster::connect(
+        "node-1",
+        node_1_connection_cfg,
+        InstrumentedStorage(MemStore::default()),
+        DCAwareSelector::default(),
+        ClusterOptions::default(),
+    )
+    .await
+    .expect("Connect node.");
+    let node_2 = DatacakeCluster::connect(
+        "node-2",
+        node_2_connection_cfg,
+        InstrumentedStorage(MemStore::default()),
+        DCAwareSelector::default(),
+        ClusterOptions::default(),
+    )
+    .await
+    .expect("Connect node.");
+    let node_3 = DatacakeCluster::connect(
+        "node-3",
+        node_3_connection_cfg.clone(),
+        InstrumentedStorage(MemStore::default()),
+        DCAwareSelector::default(),
+        ClusterOptions::default(),
+    )
+    .await
+    .expect("Connect node.");
+
+    node_1
+        .wait_for_nodes(&["node-2", "node-3"], Duration::from_secs(5))
+        .await
+        .expect("Nodes should connect within timeout.");
+    node_2
+        .wait_for_nodes(&["node-3", "node-1"], Duration::from_secs(5))
+        .await
+        .expect("Nodes should connect within timeout.");
+    node_3
+        .wait_for_nodes(&["node-2", "node-1"], Duration::from_secs(5))
+        .await
+        .expect("Nodes should connect within timeout.");
+
+    let stats = node_1.statistics();
+    assert_eq!(stats.num_data_centers(), 1);
+    assert_eq!(stats.num_live_members(), 3);
+    assert_eq!(stats.num_dead_members(), 0);
+
+    let stats = node_2.statistics();
+    assert_eq!(stats.num_data_centers(), 1);
+    assert_eq!(stats.num_live_members(), 3);
+    assert_eq!(stats.num_dead_members(), 0);
+
+    let stats = node_3.statistics();
+    assert_eq!(stats.num_data_centers(), 1);
+    assert_eq!(stats.num_live_members(), 3);
+    assert_eq!(stats.num_dead_members(), 0);
+
+    node_3.shutdown().await;
+
+    // Let the cluster sort itself out.
+    // It's a long time because the system tries to give the node time to become apart of the system again.
+    tokio::time::sleep(Duration::from_secs(60)).await;
+
+    let stats = node_1.statistics();
+    assert_eq!(stats.num_data_centers(), 1);
+    assert_eq!(stats.num_live_members(), 2);
+    assert_eq!(stats.num_dead_members(), 1);
+
+    let stats = node_2.statistics();
+    assert_eq!(stats.num_data_centers(), 1);
+    assert_eq!(stats.num_live_members(), 2);
+    assert_eq!(stats.num_dead_members(), 1);
+
+    Ok(())
+}
 

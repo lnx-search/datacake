@@ -9,7 +9,7 @@ static KEYSPACE_2: &str = "my-second-keyspace";
 static KEYSPACE_3: &str = "my-third-keyspace";
 
 #[tokio::test]
-async fn test_multiple_keyspace_single_node() -> anyhow::Result<()> {
+async fn test_single_node() -> anyhow::Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
     let node_addr = "127.0.0.1:8014".parse::<SocketAddr>().unwrap();
@@ -76,7 +76,7 @@ async fn test_multiple_keyspace_single_node() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn test_multiple_keyspace_multi_node() -> anyhow::Result<()> {
+async fn test_multi_node() -> anyhow::Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
     let node_1_addr = "127.0.0.1:8015".parse::<SocketAddr>().unwrap();
