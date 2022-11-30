@@ -250,7 +250,7 @@ pub async fn test_member_leave() -> anyhow::Result<()> {
 
     // Let the cluster sort itself out.
     // It's a long time because the system tries to give the node time to become apart of the system again.
-    tokio::time::sleep(Duration::from_secs(60)).await;
+    tokio::time::sleep(Duration::from_secs(120)).await;
 
     let stats = node_1.statistics();
     assert_eq!(stats.num_data_centers(), 1);
