@@ -170,7 +170,7 @@ mod tests {
 
     use super::*;
     use crate::rpc::datacake_api::DocumentMetadata;
-    use crate::storage::mem_store::MemStore;
+    use crate::test_utils::MemStore;
 
     #[tokio::test]
     async fn test_consistency_put() {

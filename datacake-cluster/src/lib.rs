@@ -11,6 +11,8 @@ mod poller;
 mod rpc;
 mod statistics;
 mod storage;
+#[cfg(any(test, feature = "test-utils"))]
+pub mod test_utils;
 
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -36,8 +38,6 @@ pub use nodes_selector::{
     NodeSelectorHandle,
 };
 pub use statistics::ClusterStatistics;
-#[cfg(feature = "test-utils")]
-pub use storage::mem_store;
 #[cfg(feature = "test-utils")]
 pub use storage::test_suite;
 pub use storage::{ProgressTracker, PutContext, Storage};

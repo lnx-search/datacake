@@ -311,6 +311,12 @@ impl<S: Storage> KeyspaceState<S> {
         }
     }
 
+    #[cfg(test)]
+    /// Creates a new keyspace state for a test.
+    pub async fn for_test(storage: Arc<S>) -> Self {
+        Self::spawn(storage, Cow::Borrowed("test-keyspace"),Default::default(),Default::default()).await
+    }
+
     #[inline]
     /// Gets the timestamp which the keyspace was last modified.
     pub fn last_updated(&self) -> u64 {
@@ -721,9 +727,9 @@ impl StateSource for ReplicationSource {
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
+    use crate::test_utils::MemStore;
 
     use super::*;
-    use crate::storage::mem_store::MemStore;
 
     #[derive(Debug, Copy, Clone)]
     pub struct TestSource;

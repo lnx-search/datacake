@@ -98,8 +98,8 @@ mod tests {
 
     use super::*;
     use crate::keyspace::{KeyspaceTimestamps, ReplicationSource};
-    use crate::storage::mem_store::MemStore;
     use crate::Document;
+    use crate::test_utils::MemStore;
 
     #[tokio::test]
     async fn test_poll_keyspace() {
