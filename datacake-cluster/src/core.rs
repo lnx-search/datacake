@@ -256,8 +256,8 @@ where
 mod tests {
     use datacake_crdt::OrSWotSet;
 
-    use crate::test_utils::MemStore;
     use super::*;
+    use crate::test_utils::MemStore;
 
     #[derive(Debug, Copy, Clone)]
     pub struct TestSource;

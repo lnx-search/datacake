@@ -11,11 +11,12 @@ use futures::io;
 use parking_lot::Mutex;
 use tokio::sync::oneshot;
 
-use crate::rpc::chitchat_transport_api::chitchat_transport_client::ChitchatTransportClient;
-use crate::rpc::chitchat_transport_api::ChitchatRpcMessage;
+use crate::rpc::datacake_api::chitchat_transport_client::ChitchatTransportClient;
+use crate::rpc::datacake_api::ChitchatRpcMessage;
 use crate::rpc::network::RpcNetwork;
 use crate::rpc::server::ServiceRegistry;
 use crate::storage::Storage;
+use crate::Clock;
 
 #[derive(Clone)]
 /// Chitchat compatible transport built on top of an existing GRPC connection.
@@ -76,6 +77,7 @@ where
         }
 
         Ok(Box::new(GrpcConnection {
+            clock: self.ctx.keyspace_group.clock().clone(),
             self_addr: listen_addr,
             network: self.ctx.network.clone(),
             messages: self.messages.clone(),
@@ -99,6 +101,7 @@ where
 }
 
 pub struct GrpcConnection {
+    clock: Clock,
     self_addr: SocketAddr,
     network: RpcNetwork,
     messages: flume::Receiver<(SocketAddr, ChitchatMessage)>,
@@ -120,9 +123,14 @@ impl Socket for GrpcConnection {
                 io::Error::new(ErrorKind::ConnectionRefused, e.to_string())
             })?;
 
+        let ts = self.clock.get_time().await;
         let mut client = ChitchatTransportClient::new(channel);
         client
-            .send_msg(ChitchatRpcMessage { message, source })
+            .send_msg(ChitchatRpcMessage {
+                message,
+                source,
+                timestamp: Some(ts.into()),
+            })
             .await
             .map_err(|e| io::Error::new(ErrorKind::ConnectionAborted, e.to_string()))?;
 

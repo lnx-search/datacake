@@ -1,4 +1,18 @@
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ChitchatRpcMessage {
+    #[prost(bytes = "vec", tag = "1")]
+    pub message: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "vec", tag = "2")]
+    pub source: ::prost::alloc::vec::Vec<u8>,
+    #[prost(message, optional, tag = "3")]
+    pub timestamp: ::core::option::Option<Timestamp>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PollPayload {
+    #[prost(message, optional, tag = "1")]
+    pub timestamp: ::core::option::Option<Timestamp>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct PutPayload {
     #[prost(string, tag = "1")]
     pub keyspace: ::prost::alloc::string::String,
@@ -39,8 +53,10 @@ pub struct MultiRemovePayload {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct KeyspaceInfo {
+    #[prost(message, optional, tag = "1")]
+    pub timestamp: ::core::option::Option<Timestamp>,
     /// A mapping of a given keyspace and the timestamp of when it was last updated.
-    #[prost(bytes = "vec", tag = "1")]
+    #[prost(bytes = "vec", tag = "2")]
     pub keyspace_timestamps: ::prost::alloc::vec::Vec<u8>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -48,6 +64,8 @@ pub struct GetState {
     /// The keyspace to fetch the CRDT set from.
     #[prost(string, tag = "1")]
     pub keyspace: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "2")]
+    pub timestamp: ::core::option::Option<Timestamp>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct KeyspaceOrSwotSet {
@@ -57,6 +75,8 @@ pub struct KeyspaceOrSwotSet {
     /// The serialized data form of the keyspace orswot set.
     #[prost(bytes = "vec", tag = "2")]
     pub set_data: ::prost::alloc::vec::Vec<u8>,
+    #[prost(message, optional, tag = "3")]
+    pub timestamp: ::core::option::Option<Timestamp>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FetchDocs {
@@ -66,12 +86,16 @@ pub struct FetchDocs {
     /// The set of document ids to fetch.
     #[prost(uint64, repeated, tag = "2")]
     pub doc_ids: ::prost::alloc::vec::Vec<u64>,
+    #[prost(message, optional, tag = "3")]
+    pub timestamp: ::core::option::Option<Timestamp>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FetchedDocs {
     /// The returning set of documents with their applicable data and metadata.
     #[prost(message, repeated, tag = "1")]
     pub documents: ::prost::alloc::vec::Vec<Document>,
+    #[prost(message, optional, tag = "3")]
+    pub timestamp: ::core::option::Option<Timestamp>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Empty {}
@@ -101,6 +125,96 @@ pub struct DocumentMetadata {
     /// The timestamp of when the document was last updated.
     #[prost(message, optional, tag = "2")]
     pub last_updated: ::core::option::Option<Timestamp>,
+}
+/// Generated client implementations.
+pub mod chitchat_transport_client {
+    #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
+    use tonic::codegen::*;
+    use tonic::codegen::http::Uri;
+    #[derive(Debug, Clone)]
+    pub struct ChitchatTransportClient<T> {
+        inner: tonic::client::Grpc<T>,
+    }
+    impl ChitchatTransportClient<tonic::transport::Channel> {
+        /// Attempt to create a new client by connecting to a given endpoint.
+        pub async fn connect<D>(dst: D) -> Result<Self, tonic::transport::Error>
+        where
+            D: std::convert::TryInto<tonic::transport::Endpoint>,
+            D::Error: Into<StdError>,
+        {
+            let conn = tonic::transport::Endpoint::new(dst)?.connect().await?;
+            Ok(Self::new(conn))
+        }
+    }
+    impl<T> ChitchatTransportClient<T>
+    where
+        T: tonic::client::GrpcService<tonic::body::BoxBody>,
+        T::Error: Into<StdError>,
+        T::ResponseBody: Body<Data = Bytes> + Send + 'static,
+        <T::ResponseBody as Body>::Error: Into<StdError> + Send,
+    {
+        pub fn new(inner: T) -> Self {
+            let inner = tonic::client::Grpc::new(inner);
+            Self { inner }
+        }
+        pub fn with_origin(inner: T, origin: Uri) -> Self {
+            let inner = tonic::client::Grpc::with_origin(inner, origin);
+            Self { inner }
+        }
+        pub fn with_interceptor<F>(
+            inner: T,
+            interceptor: F,
+        ) -> ChitchatTransportClient<InterceptedService<T, F>>
+        where
+            F: tonic::service::Interceptor,
+            T::ResponseBody: Default,
+            T: tonic::codegen::Service<
+                http::Request<tonic::body::BoxBody>,
+                Response = http::Response<
+                    <T as tonic::client::GrpcService<tonic::body::BoxBody>>::ResponseBody,
+                >,
+            >,
+            <T as tonic::codegen::Service<
+                http::Request<tonic::body::BoxBody>,
+            >>::Error: Into<StdError> + Send + Sync,
+        {
+            ChitchatTransportClient::new(InterceptedService::new(inner, interceptor))
+        }
+        /// Compress requests with the given encoding.
+        ///
+        /// This requires the server to support it otherwise it might respond with an
+        /// error.
+        #[must_use]
+        pub fn send_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.inner = self.inner.send_compressed(encoding);
+            self
+        }
+        /// Enable decompressing responses.
+        #[must_use]
+        pub fn accept_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.inner = self.inner.accept_compressed(encoding);
+            self
+        }
+        pub async fn send_msg(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ChitchatRpcMessage>,
+        ) -> Result<tonic::Response<super::Empty>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/datacake_api.ChitchatTransport/send_msg",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+    }
 }
 /// Generated client implementations.
 pub mod consistency_api_client {
@@ -327,7 +441,7 @@ pub mod replication_api_client {
         /// last updated at.
         pub async fn poll_keyspace(
             &mut self,
-            request: impl tonic::IntoRequest<super::Empty>,
+            request: impl tonic::IntoRequest<super::PollPayload>,
         ) -> Result<tonic::Response<super::KeyspaceInfo>, tonic::Status> {
             self.inner
                 .ready()
@@ -384,6 +498,155 @@ pub mod replication_api_client {
             );
             self.inner.unary(request.into_request(), path, codec).await
         }
+    }
+}
+/// Generated server implementations.
+pub mod chitchat_transport_server {
+    #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
+    use tonic::codegen::*;
+    ///Generated trait containing gRPC methods that should be implemented for use with ChitchatTransportServer.
+    #[async_trait]
+    pub trait ChitchatTransport: Send + Sync + 'static {
+        async fn send_msg(
+            &self,
+            request: tonic::Request<super::ChitchatRpcMessage>,
+        ) -> Result<tonic::Response<super::Empty>, tonic::Status>;
+    }
+    #[derive(Debug)]
+    pub struct ChitchatTransportServer<T: ChitchatTransport> {
+        inner: _Inner<T>,
+        accept_compression_encodings: EnabledCompressionEncodings,
+        send_compression_encodings: EnabledCompressionEncodings,
+    }
+    struct _Inner<T>(Arc<T>);
+    impl<T: ChitchatTransport> ChitchatTransportServer<T> {
+        pub fn new(inner: T) -> Self {
+            Self::from_arc(Arc::new(inner))
+        }
+        pub fn from_arc(inner: Arc<T>) -> Self {
+            let inner = _Inner(inner);
+            Self {
+                inner,
+                accept_compression_encodings: Default::default(),
+                send_compression_encodings: Default::default(),
+            }
+        }
+        pub fn with_interceptor<F>(
+            inner: T,
+            interceptor: F,
+        ) -> InterceptedService<Self, F>
+        where
+            F: tonic::service::Interceptor,
+        {
+            InterceptedService::new(Self::new(inner), interceptor)
+        }
+        /// Enable decompressing requests with the given encoding.
+        #[must_use]
+        pub fn accept_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.accept_compression_encodings.enable(encoding);
+            self
+        }
+        /// Compress responses with the given encoding, if the client supports it.
+        #[must_use]
+        pub fn send_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.send_compression_encodings.enable(encoding);
+            self
+        }
+    }
+    impl<T, B> tonic::codegen::Service<http::Request<B>> for ChitchatTransportServer<T>
+    where
+        T: ChitchatTransport,
+        B: Body + Send + 'static,
+        B::Error: Into<StdError> + Send + 'static,
+    {
+        type Response = http::Response<tonic::body::BoxBody>;
+        type Error = std::convert::Infallible;
+        type Future = BoxFuture<Self::Response, Self::Error>;
+        fn poll_ready(
+            &mut self,
+            _cx: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+        fn call(&mut self, req: http::Request<B>) -> Self::Future {
+            let inner = self.inner.clone();
+            match req.uri().path() {
+                "/datacake_api.ChitchatTransport/send_msg" => {
+                    #[allow(non_camel_case_types)]
+                    struct send_msgSvc<T: ChitchatTransport>(pub Arc<T>);
+                    impl<
+                        T: ChitchatTransport,
+                    > tonic::server::UnaryService<super::ChitchatRpcMessage>
+                    for send_msgSvc<T> {
+                        type Response = super::Empty;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ChitchatRpcMessage>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).send_msg(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = send_msgSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                _ => {
+                    Box::pin(async move {
+                        Ok(
+                            http::Response::builder()
+                                .status(200)
+                                .header("grpc-status", "12")
+                                .header("content-type", "application/grpc")
+                                .body(empty_body())
+                                .unwrap(),
+                        )
+                    })
+                }
+            }
+        }
+    }
+    impl<T: ChitchatTransport> Clone for ChitchatTransportServer<T> {
+        fn clone(&self) -> Self {
+            let inner = self.inner.clone();
+            Self {
+                inner,
+                accept_compression_encodings: self.accept_compression_encodings,
+                send_compression_encodings: self.send_compression_encodings,
+            }
+        }
+    }
+    impl<T: ChitchatTransport> Clone for _Inner<T> {
+        fn clone(&self) -> Self {
+            Self(self.0.clone())
+        }
+    }
+    impl<T: std::fmt::Debug> std::fmt::Debug for _Inner<T> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{:?}", self.0)
+        }
+    }
+    impl<T: ChitchatTransport> tonic::server::NamedService
+    for ChitchatTransportServer<T> {
+        const NAME: &'static str = "datacake_api.ChitchatTransport";
     }
 }
 /// Generated server implementations.
@@ -677,7 +940,7 @@ pub mod replication_api_server {
         /// last updated at.
         async fn poll_keyspace(
             &self,
-            request: tonic::Request<super::Empty>,
+            request: tonic::Request<super::PollPayload>,
         ) -> Result<tonic::Response<super::KeyspaceInfo>, tonic::Status>;
         /// Fetches a given ORSWOT set for a given keyspace.
         async fn get_state(
@@ -752,7 +1015,9 @@ pub mod replication_api_server {
                 "/datacake_api.ReplicationApi/poll_keyspace" => {
                     #[allow(non_camel_case_types)]
                     struct poll_keyspaceSvc<T: ReplicationApi>(pub Arc<T>);
-                    impl<T: ReplicationApi> tonic::server::UnaryService<super::Empty>
+                    impl<
+                        T: ReplicationApi,
+                    > tonic::server::UnaryService<super::PollPayload>
                     for poll_keyspaceSvc<T> {
                         type Response = super::KeyspaceInfo;
                         type Future = BoxFuture<
@@ -761,7 +1026,7 @@ pub mod replication_api_server {
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::Empty>,
+                            request: tonic::Request<super::PollPayload>,
                         ) -> Self::Future {
                             let inner = self.0.clone();
                             let fut = async move {

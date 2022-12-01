@@ -2,10 +2,12 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::mem;
 use std::ops::AddAssign;
-use parking_lot::{Mutex, RwLock};
+
 use datacake_crdt::{HLCTimestamp, Key};
-use crate::{Document, PutContext, Storage};
+use parking_lot::{Mutex, RwLock};
+
 use crate::storage::BulkMutationError;
+use crate::{Document, PutContext, Storage};
 
 /// A wrapping type around another `Storage` implementation that
 /// logs all the activity going into and out of the store.
@@ -58,11 +60,7 @@ impl<S: Storage + Send + Sync + 'static> Storage for InstrumentedStorage<S> {
         self.0.put_with_ctx(keyspace, document, ctx).await
     }
 
-    async fn put(
-        &self,
-        keyspace: &str,
-        document: Document,
-    ) -> Result<(), Self::Error> {
+    async fn put(&self, keyspace: &str, document: Document) -> Result<(), Self::Error> {
         info!(keyspace = keyspace, document = ?document, "put");
         self.0.put(keyspace, document).await
     }
@@ -141,7 +139,6 @@ impl MockError {
     }
 }
 
-
 #[derive(Default)]
 struct MockCounters {
     expected_method_counts: HashMap<&'static str, usize>,
@@ -167,17 +164,13 @@ impl Drop for MockCounters {
             let actual_count = lock.get(name).copied().unwrap_or_default();
 
             assert_eq!(
-                actual_count,
-                count,
+                actual_count, count,
                 "Expected method {:?} to be called {} times, but was called {} times.",
-                name,
-                count,
-                actual_count,
+                name, count, actual_count,
             );
         }
     }
 }
-
 
 macro_rules! mock_storage_methods {
     ($name:ident { $($field_name:tt: params = ($($param:ty,)*) returns = $returntp:ty => $method_name:ident)* }) => {
@@ -305,11 +298,7 @@ impl Storage for MockStorage {
         panic!("put_with_ctx operation was not expected to be called.");
     }
 
-    async fn put(
-        &self,
-        keyspace: &str,
-        document: Document,
-    ) -> Result<(), Self::Error> {
+    async fn put(&self, keyspace: &str, document: Document) -> Result<(), Self::Error> {
         if let Some((expected, name)) = self.put.as_ref() {
             self.mock_counters.inc(name);
             return (*expected)(keyspace, document);
@@ -400,7 +389,6 @@ impl Storage for MockStorage {
     }
 }
 
-
 #[derive(Debug, Default)]
 /// A in-memory storage implementor.
 ///
@@ -454,11 +442,7 @@ impl Storage for MemStore {
         Ok(())
     }
 
-    async fn put(
-        &self,
-        keyspace: &str,
-        document: Document,
-    ) -> Result<(), Self::Error> {
+    async fn put(&self, keyspace: &str, document: Document) -> Result<(), Self::Error> {
         self.multi_put(keyspace, [document].into_iter())
             .await
             .map_err(|e| e.inner)

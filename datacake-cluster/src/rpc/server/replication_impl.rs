@@ -1,16 +1,17 @@
 use async_trait::async_trait;
+use datacake_crdt::HLCTimestamp;
 use tonic::{Request, Response, Status};
 
 use crate::keyspace::KeyspaceGroup;
 use crate::rpc::datacake_api;
 use crate::rpc::datacake_api::replication_api_server::ReplicationApi;
 use crate::rpc::datacake_api::{
-    Empty,
     FetchDocs,
     FetchedDocs,
     GetState,
     KeyspaceInfo,
     KeyspaceOrSwotSet,
+    PollPayload,
 };
 use crate::storage::Storage;
 
@@ -28,14 +29,22 @@ impl<S: Storage> ReplicationService<S> {
 impl<S: Storage + Send + Sync + 'static> ReplicationApi for ReplicationService<S> {
     async fn poll_keyspace(
         &self,
-        _request: Request<Empty>,
+        request: Request<PollPayload>,
     ) -> Result<Response<KeyspaceInfo>, Status> {
+        let inner = request.into_inner();
+        let clock = self.group.clock();
+
+        let ts = HLCTimestamp::from(inner.timestamp.unwrap());
+        clock.register_ts(ts).await;
+
         let keyspace_timestamps = self
             .group
             .serialize_keyspace_counters()
             .map_err(|e| Status::internal(e.to_string()))?;
 
+        let ts = self.group.clock().get_time().await;
         Ok(Response::new(KeyspaceInfo {
+            timestamp: Some(ts.into()),
             keyspace_timestamps,
         }))
     }
@@ -45,6 +54,10 @@ impl<S: Storage + Send + Sync + 'static> ReplicationApi for ReplicationService<S
         request: Request<GetState>,
     ) -> Result<Response<KeyspaceOrSwotSet>, Status> {
         let inner = request.into_inner();
+        let clock = self.group.clock();
+
+        let ts = HLCTimestamp::from(inner.timestamp.unwrap());
+        clock.register_ts(ts).await;
 
         let keyspace = self.group.get_or_create_keyspace(&inner.keyspace).await;
 
@@ -54,7 +67,9 @@ impl<S: Storage + Send + Sync + 'static> ReplicationApi for ReplicationService<S
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
 
+        let ts = self.group.clock().get_time().await;
         Ok(Response::new(KeyspaceOrSwotSet {
+            timestamp: Some(ts.into()),
             last_updated,
             set_data,
         }))
@@ -65,6 +80,11 @@ impl<S: Storage + Send + Sync + 'static> ReplicationApi for ReplicationService<S
         request: Request<FetchDocs>,
     ) -> Result<Response<FetchedDocs>, Status> {
         let inner = request.into_inner();
+        let clock = self.group.clock();
+
+        let ts = HLCTimestamp::from(inner.timestamp.unwrap());
+        clock.register_ts(ts).await;
+
         let storage = self.group.storage();
 
         if inner.doc_ids.len() == 1 {
@@ -76,7 +96,11 @@ impl<S: Storage + Send + Sync + 'static> ReplicationApi for ReplicationService<S
                 .map(|doc| vec![doc])
                 .unwrap_or_default();
 
-            return Ok(Response::new(FetchedDocs { documents }));
+            let ts = clock.get_time().await;
+            return Ok(Response::new(FetchedDocs {
+                timestamp: Some(ts.into()),
+                documents,
+            }));
         }
 
         let documents = self
@@ -88,7 +112,11 @@ impl<S: Storage + Send + Sync + 'static> ReplicationApi for ReplicationService<S
             .map(datacake_api::Document::from)
             .collect();
 
-        Ok(Response::new(FetchedDocs { documents }))
+        let ts = self.group.clock().get_time().await;
+        Ok(Response::new(FetchedDocs {
+            timestamp: Some(ts.into()),
+            documents,
+        }))
     }
 }
 
@@ -98,8 +126,8 @@ mod tests {
 
     use super::*;
     use crate::keyspace::{KeyspaceTimestamps, ReplicationSource};
-    use crate::Document;
     use crate::test_utils::MemStore;
+    use crate::Document;
 
     #[tokio::test]
     async fn test_poll_keyspace() {
@@ -108,7 +136,10 @@ mod tests {
         let clock = group.clock();
         let service = ReplicationService::new(group.clone());
 
-        let poll_req = Request::new(Empty {});
+        let ts = clock.get_time().await;
+        let poll_req = Request::new(PollPayload {
+            timestamp: Some(ts.into()),
+        });
         let resp = service
             .poll_keyspace(poll_req)
             .await
@@ -125,7 +156,10 @@ mod tests {
             .put::<ReplicationSource>(1, clock.get_time().await)
             .await;
 
-        let poll_req = Request::new(Empty {});
+        let ts = clock.get_time().await;
+        let poll_req = Request::new(PollPayload {
+            timestamp: Some(ts.into()),
+        });
         let resp = service
             .poll_keyspace(poll_req)
             .await
@@ -160,7 +194,9 @@ mod tests {
             .await
             .expect("Get serialized version of state");
 
+        let ts = clock.get_time().await;
         let state_req = Request::new(GetState {
+            timestamp: Some(ts.into()),
             keyspace: KEYSPACE.to_string(),
         });
 
@@ -196,7 +232,9 @@ mod tests {
             .put::<ReplicationSource>(doc.id, doc.last_updated)
             .await;
 
+        let ts = clock.get_time().await;
         let fetch_docs_req = Request::new(FetchDocs {
+            timestamp: Some(ts.into()),
             keyspace: KEYSPACE.to_string(),
             doc_ids: vec![1],
         });

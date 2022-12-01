@@ -910,6 +910,7 @@ async fn watch_membership_changes<S>(
             };
 
             let state = poller::NodePollerState::new(
+                keyspace_group.clock().clone(),
                 Cow::Owned(node_id.clone()),
                 *addr,
                 keyspace_group.clone(),

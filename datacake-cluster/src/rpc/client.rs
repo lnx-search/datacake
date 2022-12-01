@@ -12,14 +12,15 @@ use crate::rpc::datacake_api::replication_api_client::ReplicationApiClient;
 use crate::rpc::datacake_api::{
     Context,
     DocumentMetadata,
-    Empty,
     FetchDocs,
     GetState,
     MultiPutPayload,
     MultiRemovePayload,
+    PollPayload,
     PutPayload,
     RemovePayload,
 };
+use crate::Clock;
 
 /// A high level wrapper around the consistency GRPC service.
 pub struct ConsistencyClient {
@@ -119,12 +120,14 @@ impl ConsistencyClient {
 
 /// A high level wrapper around the replication GRPC service.
 pub struct ReplicationClient {
+    clock: Clock,
     inner: ReplicationApiClient<Channel>,
 }
 
-impl From<Channel> for ReplicationClient {
-    fn from(channel: Channel) -> Self {
+impl ReplicationClient {
+    pub fn new(clock: Clock, channel: Channel) -> Self {
         Self {
+            clock,
             inner: ReplicationApiClient::new(channel),
         }
     }
@@ -133,8 +136,17 @@ impl From<Channel> for ReplicationClient {
 impl ReplicationClient {
     /// Fetches the newest version of the node's keyspace timestamps.
     pub async fn poll_keyspace(&mut self) -> Result<KeyspaceTimestamps, Status> {
-        let resp = self.inner.poll_keyspace(Empty {}).await?;
-        let inner = resp.into_inner();
+        let ts = self.clock.get_time().await;
+        let inner = self
+            .inner
+            .poll_keyspace(PollPayload {
+                timestamp: Some(ts.into()),
+            })
+            .await?
+            .into_inner();
+
+        let ts = HLCTimestamp::from(inner.timestamp.unwrap());
+        self.clock.register_ts(ts).await;
 
         let mut aligned = AlignedVec::with_capacity(inner.keyspace_timestamps.len());
         aligned.extend_from_slice(&inner.keyspace_timestamps);
@@ -153,13 +165,18 @@ impl ReplicationClient {
         &mut self,
         keyspace: impl Into<String>,
     ) -> Result<(u64, OrSWotSet<{ crate::keyspace::NUM_SOURCES }>), Status> {
-        let resp = self
+        let ts = self.clock.get_time().await;
+        let inner = self
             .inner
             .get_state(GetState {
+                timestamp: Some(ts.into()),
                 keyspace: keyspace.into(),
             })
-            .await?;
-        let inner = resp.into_inner();
+            .await?
+            .into_inner();
+
+        let ts = HLCTimestamp::from(inner.timestamp.unwrap());
+        self.clock.register_ts(ts).await;
 
         let mut aligned = AlignedVec::with_capacity(inner.set_data.len());
         aligned.extend_from_slice(&inner.set_data);
@@ -176,14 +193,19 @@ impl ReplicationClient {
         keyspace: impl Into<String>,
         doc_ids: Vec<Key>,
     ) -> Result<impl Iterator<Item = Document>, Status> {
-        let resp = self
+        let ts = self.clock.get_time().await;
+        let inner = self
             .inner
             .fetch_docs(FetchDocs {
+                timestamp: Some(ts.into()),
                 keyspace: keyspace.into(),
                 doc_ids,
             })
-            .await?;
-        let inner = resp.into_inner();
+            .await?
+            .into_inner();
+
+        let ts = HLCTimestamp::from(inner.timestamp.unwrap());
+        self.clock.register_ts(ts).await;
 
         let documents = inner.documents.into_iter().map(Document::from);
 

@@ -10,7 +10,7 @@ use tonic::transport::server::Router;
 use tonic::transport::{Error, Server};
 
 use crate::keyspace::KeyspaceGroup;
-use crate::rpc::chitchat_transport_api::chitchat_transport_server::ChitchatTransportServer;
+use crate::rpc::datacake_api::chitchat_transport_server::ChitchatTransportServer;
 use crate::rpc::datacake_api::consistency_api_server::ConsistencyApiServer;
 use crate::rpc::datacake_api::replication_api_server::ReplicationApiServer;
 use crate::rpc::server::chitchat_impl::ChitchatService;
@@ -73,7 +73,8 @@ where
     let (shutdown_tx, shutdown_rx) = oneshot::channel();
     let (ready_tx, ready_rx) = oneshot::channel();
 
-    let chitchat_service = ChitchatService::new(ctx.chitchat_messages);
+    let chitchat_service =
+        ChitchatService::new(ctx.keyspace_group.clock().clone(), ctx.chitchat_messages);
     let consistency_service =
         ConsistencyService::new(ctx.keyspace_group.clone(), ctx.network.clone());
     let replication_service = ReplicationService::new(ctx.keyspace_group.clone());

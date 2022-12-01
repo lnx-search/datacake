@@ -306,7 +306,6 @@ pub mod test_suite {
     use crate::storage::Storage;
     use crate::test_utils::InstrumentedStorage;
 
-
     #[tokio::test]
     async fn test_suite_semantics() {
         use crate::test_utils::MemStore;

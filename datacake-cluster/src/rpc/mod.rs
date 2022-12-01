@@ -1,6 +1,4 @@
 mod chitchat_transport;
-#[rustfmt::skip]
-mod chitchat_transport_api;
 mod client;
 #[rustfmt::skip]
 pub(crate) mod datacake_api;

@@ -314,7 +314,13 @@ impl<S: Storage> KeyspaceState<S> {
     #[cfg(test)]
     /// Creates a new keyspace state for a test.
     pub async fn for_test(storage: Arc<S>) -> Self {
-        Self::spawn(storage, Cow::Borrowed("test-keyspace"),Default::default(),Default::default()).await
+        Self::spawn(
+            storage,
+            Cow::Borrowed("test-keyspace"),
+            Default::default(),
+            Default::default(),
+        )
+        .await
     }
 
     #[inline]
@@ -727,9 +733,9 @@ impl StateSource for ReplicationSource {
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
-    use crate::test_utils::MemStore;
 
     use super::*;
+    use crate::test_utils::MemStore;
 
     #[derive(Debug, Copy, Clone)]
     pub struct TestSource;

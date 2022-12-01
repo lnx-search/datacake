@@ -20,7 +20,7 @@ use crate::keyspace::{
 };
 use crate::rpc::ReplicationClient;
 use crate::storage::{ProgressTracker, PutContext};
-use crate::{ClusterStatistics, Storage};
+use crate::{Clock, ClusterStatistics, Storage};
 
 const KEYSPACE_SYNC_TIMEOUT: Duration = if cfg!(test) {
     Duration::from_secs(1)
@@ -35,6 +35,9 @@ pub(crate) struct NodePollerState<S>
 where
     S: Storage + Send + Sync + 'static,
 {
+    /// The cluster clock.
+    clock: Clock,
+
     /// The ID of the node being polled.
     target_node_id: Cow<'static, str>,
 
@@ -74,6 +77,7 @@ where
 {
     /// Creates a new poller state.
     pub(crate) fn new(
+        clock: Clock,
         target_node_id: Cow<'static, str>,
         target_rpc_addr: SocketAddr,
         keyspace_group: KeyspaceGroup<S>,
@@ -82,6 +86,7 @@ where
         statistics: ClusterStatistics,
     ) -> Self {
         Self {
+            clock,
             target_node_id,
             target_rpc_addr,
             statistics,
@@ -129,7 +134,7 @@ where
                 .cloned()
                 .unwrap_or_default(),
             channel: self.channel.clone(),
-            client: ReplicationClient::from(self.channel.clone()),
+            client: ReplicationClient::new(self.clock.clone(), self.channel.clone()),
             statistics: self.statistics.clone(),
             progress_tracker: ProgressTracker::default(),
         }
@@ -205,7 +210,7 @@ where
         "Polling for state changes..."
     );
 
-    let mut client = ReplicationClient::from(state.channel.clone());
+    let mut client = ReplicationClient::new(state.clock.clone(), state.channel.clone());
 
     let mut connected = true;
     loop {
@@ -511,9 +516,11 @@ impl KeyspacePollHandle {
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
+
     use datacake_crdt::{get_unix_timestamp_ms, HLCTimestamp, Key, OrSWotSet};
-    use crate::test_utils::MockStorage;
+
     use super::*;
+    use crate::test_utils::MockStorage;
 
     #[tokio::test]
     async fn test_keyspace_poll_handle_timeouts() {
@@ -527,36 +534,46 @@ mod tests {
         let mut handle = KeyspacePollHandle::new(task_handle, progress_clone);
 
         tokio::time::sleep(KEYSPACE_SYNC_TIMEOUT).await;
-        assert!(!handle.harvest_is_timeout(), "Task should not be timed out after making progress.");
+        assert!(
+            !handle.harvest_is_timeout(),
+            "Task should not be timed out after making progress."
+        );
 
         tokio::time::sleep(KEYSPACE_SYNC_TIMEOUT + Duration::from_millis(500)).await;
-        assert!(handle.harvest_is_timeout(), "Task should be timed out after making no progress.");
+        assert!(
+            handle.harvest_is_timeout(),
+            "Task should be timed out after making no progress."
+        );
     }
 
     #[tokio::test]
     async fn test_handle_removals() {
         let mut clock = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 0);
 
-        let mock = MockStorage::default()
-            .expect_mark_as_tombstone(1, |keyspace, doc_id, _ts| {
+        let mock = MockStorage::default().expect_mark_as_tombstone(
+            1,
+            |keyspace, doc_id, _ts| {
                 assert_eq!(keyspace, "test-keyspace");
                 assert_eq!(doc_id, 1);
                 Ok(())
-            });
+            },
+        );
         let keyspace = KeyspaceState::for_test(Arc::new(mock)).await;
-        let changes = vec![
-            (1, clock.send().unwrap()),
-        ];
-        handle_removals::<ReplicationSource, _>(keyspace.clone(),changes.clone())
+        let changes = vec![(1, clock.send().unwrap())];
+        handle_removals::<ReplicationSource, _>(keyspace.clone(), changes.clone())
             .await
             .expect("Handle removals.");
         let (updated, removals) = keyspace.symetrical_diff(OrSWotSet::default()).await;
         let removals = HashSet::<(Key, HLCTimestamp)>::from_iter(removals);
         assert_eq!(updated, Vec::new(), "Updated keys should be empty.");
-        assert_eq!(removals, HashSet::from_iter(changes), "Removals should match.");
+        assert_eq!(
+            removals,
+            HashSet::from_iter(changes),
+            "Removals should match."
+        );
 
-        let mock = MockStorage::default()
-            .expect_mark_many_as_tombstone(1, |keyspace, docs| {
+        let mock =
+            MockStorage::default().expect_mark_many_as_tombstone(1, |keyspace, docs| {
                 let doc_ids = docs.map(|(id, _)| id).collect::<Vec<_>>();
                 assert_eq!(keyspace, "test-keyspace");
                 assert_eq!(doc_ids, vec![1, 2, 3, 4, 5]);
@@ -570,28 +587,29 @@ mod tests {
             (4, clock.send().unwrap()),
             (5, clock.send().unwrap()),
         ];
-        handle_removals::<ReplicationSource, _>(keyspace.clone(),changes.clone())
+        handle_removals::<ReplicationSource, _>(keyspace.clone(), changes.clone())
             .await
             .expect("Handle removals.");
         let (updated, removals) = keyspace.symetrical_diff(OrSWotSet::default()).await;
         let removals = HashSet::<(Key, HLCTimestamp)>::from_iter(removals);
         assert_eq!(updated, Vec::new(), "Updated keys should be empty.");
-        assert_eq!(removals,  HashSet::from_iter(changes), "Removals should match.");
+        assert_eq!(
+            removals,
+            HashSet::from_iter(changes),
+            "Removals should match."
+        );
 
         let mock = MockStorage::default();
         let keyspace = KeyspaceState::for_test(Arc::new(mock)).await;
         let changes = Vec::new();
-        handle_removals::<ReplicationSource, _>(keyspace.clone(),changes)
+        handle_removals::<ReplicationSource, _>(keyspace.clone(), changes)
             .await
             .expect("Handle removals.");
         let (updated, removals) = keyspace.symetrical_diff(OrSWotSet::default()).await;
         assert_eq!(updated, Vec::new(), "Updated keys should be empty.");
-        assert_eq!(removals,  Vec::new(), "Removals should match.");
-
+        assert_eq!(removals, Vec::new(), "Removals should match.");
     }
 
     #[tokio::test]
-    async fn test_handle_modified() {
-
-    }
+    async fn test_handle_modified() {}
 }

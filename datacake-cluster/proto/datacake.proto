@@ -3,6 +3,16 @@ syntax = "proto3";
 
 package datacake_api;
 
+service ChitchatTransport {
+    rpc send_msg(ChitchatRpcMessage) returns (Empty);
+}
+
+message ChitchatRpcMessage {
+    bytes message = 1;
+    bytes source = 2;
+    Timestamp timestamp = 3;
+}
+
 service ConsistencyApi {
   // Adds a document to the state.
   rpc put(PutPayload) returns (Empty);
@@ -21,13 +31,17 @@ service ReplicationApi {
   // Fetches the live state of the keyspace states.
   // This is a set keyspace and the timestamps that they were
   // last updated at.
-  rpc poll_keyspace(Empty) returns (KeyspaceInfo);
+  rpc poll_keyspace(PollPayload) returns (KeyspaceInfo);
 
   // Fetches a given ORSWOT set for a given keyspace.
   rpc get_state(GetState) returns (KeyspaceOrSwotSet);
 
   // Fetches a given set of documents in order to bring itself up to speed.
   rpc fetch_docs(FetchDocs) returns (FetchedDocs);
+}
+
+message PollPayload {
+  Timestamp timestamp = 1;
 }
 
 message PutPayload {
@@ -58,13 +72,15 @@ message MultiRemovePayload {
 }
 
 message KeyspaceInfo {
+  Timestamp timestamp = 1;
   // A mapping of a given keyspace and the timestamp of when it was last updated.
-  bytes keyspace_timestamps = 1;
+  bytes keyspace_timestamps = 2;
 }
 
 message GetState {
   // The keyspace to fetch the CRDT set from.
   string keyspace = 1;
+  Timestamp timestamp = 2;
 }
 
 message KeyspaceOrSwotSet {
@@ -72,6 +88,7 @@ message KeyspaceOrSwotSet {
   uint64 last_updated = 1;
   // The serialized data form of the keyspace orswot set.
   bytes set_data = 2;
+  Timestamp timestamp = 3;
 }
 
 message FetchDocs {
@@ -79,11 +96,13 @@ message FetchDocs {
   string keyspace = 1;
   // The set of document ids to fetch.
   repeated uint64 doc_ids = 2;
+  Timestamp timestamp = 3;
 }
 
 message FetchedDocs {
   // The returning set of documents with their applicable data and metadata.
   repeated Document documents = 1;
+  Timestamp timestamp = 3;
 }
 
 message Empty {};
