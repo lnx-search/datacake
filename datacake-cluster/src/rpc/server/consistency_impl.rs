@@ -7,6 +7,7 @@ use tonic::{Request, Response, Status};
 
 use crate::core::Document;
 use crate::keyspace::{ConsistencySource, KeyspaceGroup};
+use crate::rpc::datacake_api;
 use crate::rpc::datacake_api::consistency_api_server::ConsistencyApi;
 use crate::rpc::datacake_api::{
     BatchPayload,
@@ -18,7 +19,6 @@ use crate::rpc::datacake_api::{
 };
 use crate::storage::Storage;
 use crate::{ProgressTracker, PutContext, RpcNetwork};
-use crate::rpc::datacake_api;
 
 pub struct ConsistencyService<S: Storage> {
     group: KeyspaceGroup<S>,

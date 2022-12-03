@@ -47,7 +47,14 @@ use crate::clock::Clock;
 use crate::core::Document;
 use crate::keyspace::{ConsistencySource, KeyspaceGroup};
 use crate::node::{ClusterMember, DatacakeNode};
-use crate::replication::{MembershipChanges, Mutation, ReplicationCycleContext, ReplicationHandle, TaskDistributor, TaskServiceContext};
+use crate::replication::{
+    MembershipChanges,
+    Mutation,
+    ReplicationCycleContext,
+    ReplicationHandle,
+    TaskDistributor,
+    TaskServiceContext,
+};
 use crate::rpc::{
     ConsistencyClient,
     Context,
@@ -486,8 +493,10 @@ where
         .await?;
 
         // Register mutation with the distributor service.
-        self.task_service
-            .mutation(Mutation::Put { keyspace: Cow::Owned(keyspace.to_string()), doc: document.clone() });
+        self.task_service.mutation(Mutation::Put {
+            keyspace: Cow::Owned(keyspace.to_string()),
+            doc: document.clone(),
+        });
 
         let factory = |node| {
             let clock = self.group.clock().clone();
@@ -550,8 +559,10 @@ where
         .await?;
 
         // Register mutation with the distributor service.
-        self.task_service
-            .mutation(Mutation::MultiPut { keyspace: Cow::Owned(keyspace.to_string()), docs: docs.clone() });
+        self.task_service.mutation(Mutation::MultiPut {
+            keyspace: Cow::Owned(keyspace.to_string()),
+            docs: docs.clone(),
+        });
 
         let factory = |node| {
             let clock = self.group.clock().clone();
@@ -604,8 +615,11 @@ where
         .await?;
 
         // Register mutation with the distributor service.
-        self.task_service
-            .mutation(Mutation::Del { keyspace: Cow::Owned(keyspace.to_string()), doc_id, ts: last_updated });
+        self.task_service.mutation(Mutation::Del {
+            keyspace: Cow::Owned(keyspace.to_string()),
+            doc_id,
+            ts: last_updated,
+        });
 
         let factory = |node| {
             let clock = self.group.clock().clone();
@@ -662,8 +676,10 @@ where
         .await?;
 
         // Register mutation with the distributor service.
-        self.task_service
-            .mutation(Mutation::MultiDel { keyspace: Cow::Owned(keyspace.to_string()), docs: docs.clone() });
+        self.task_service.mutation(Mutation::MultiDel {
+            keyspace: Cow::Owned(keyspace.to_string()),
+            docs: docs.clone(),
+        });
 
         let factory = |node| {
             let clock = self.group.clock().clone();

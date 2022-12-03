@@ -17,9 +17,9 @@ pub(crate) struct MembershipChanges {
 
 pub(crate) use distributor::{
     start_task_distributor_service,
+    Mutation,
     TaskDistributor,
     TaskServiceContext,
-    Mutation,
 };
 pub(crate) use poller::{
     start_replication_cycle,

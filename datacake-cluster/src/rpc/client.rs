@@ -47,7 +47,8 @@ impl ConsistencyClient {
         node_id: &str,
         node_addr: SocketAddr,
     ) -> Result<(), Status> {
-        let ts = self.inner
+        let ts = self
+            .inner
             .put(PutPayload {
                 keyspace: keyspace.into(),
                 document: Some(doc.into()),
@@ -71,7 +72,8 @@ impl ConsistencyClient {
         node_id: &str,
         node_addr: SocketAddr,
     ) -> Result<(), Status> {
-        let ts = self.inner
+        let ts = self
+            .inner
             .multi_put(MultiPutPayload {
                 keyspace: keyspace.into(),
                 documents: docs.map(|doc| doc.into()).collect(),
@@ -94,7 +96,8 @@ impl ConsistencyClient {
         id: Key,
         ts: HLCTimestamp,
     ) -> Result<(), Status> {
-        let ts = self.inner
+        let ts = self
+            .inner
             .remove(RemovePayload {
                 keyspace: keyspace.into(),
                 document: Some(DocumentMetadata {
@@ -115,7 +118,8 @@ impl ConsistencyClient {
         keyspace: impl Into<String>,
         pairs: impl Iterator<Item = (Key, HLCTimestamp)>,
     ) -> Result<(), Status> {
-        let ts = self.inner
+        let ts = self
+            .inner
             .multi_remove(MultiRemovePayload {
                 keyspace: keyspace.into(),
                 documents: pairs
@@ -136,11 +140,7 @@ impl ConsistencyClient {
         &mut self,
         batch: datacake_api::BatchPayload,
     ) -> Result<(), Status> {
-        let ts = self.inner
-            .apply_batch(batch)
-            .await?
-            .into_inner()
-            .into();
+        let ts = self.inner.apply_batch(batch).await?.into_inner().into();
         self.clock.register_ts(ts).await;
         Ok(())
     }
