@@ -47,13 +47,7 @@ use crate::clock::Clock;
 use crate::core::Document;
 use crate::keyspace::{ConsistencySource, KeyspaceGroup};
 use crate::node::{ClusterMember, DatacakeNode};
-use crate::replication::{
-    MembershipChanges,
-    ReplicationCycleContext,
-    ReplicationHandle,
-    TaskDistributor,
-    TaskServiceContext,
-};
+use crate::replication::{MembershipChanges, Mutation, ReplicationCycleContext, ReplicationHandle, TaskDistributor, TaskServiceContext};
 use crate::rpc::{
     ConsistencyClient,
     Context,
@@ -162,6 +156,7 @@ where
     group: KeyspaceGroup<S>,
     clock: Clock,
     node_selector: NodeSelectorHandle,
+    task_service: TaskDistributor,
     statistics: ClusterStatistics,
     _transport: Box<dyn Transport>,
 }
@@ -285,7 +280,7 @@ where
         let repair_service = replication::start_replication_cycle(replication_ctx).await;
 
         setup_poller(
-            task_service,
+            task_service.clone(),
             repair_service,
             network.clone(),
             &node,
@@ -307,8 +302,8 @@ where
             group,
             clock,
             statistics,
+            task_service,
             node_selector: selector,
-
             // Needs to live to run the network.
             _transport: transport,
         })
@@ -336,6 +331,7 @@ where
             group: self.group.clone(),
             clock: self.clock.clone(),
             node_selector: self.node_selector.clone(),
+            task_service: self.task_service.clone(),
             statistics: self.statistics.clone(),
         }
     }
@@ -386,6 +382,7 @@ where
     group: KeyspaceGroup<S>,
     clock: Clock,
     node_selector: NodeSelectorHandle,
+    task_service: TaskDistributor,
     statistics: ClusterStatistics,
 }
 
@@ -401,6 +398,7 @@ where
             group: self.group.clone(),
             clock: self.clock.clone(),
             node_selector: self.node_selector.clone(),
+            task_service: self.task_service.clone(),
             statistics: self.statistics.clone(),
         }
     }
@@ -487,11 +485,15 @@ where
         )
         .await?;
 
+        // Register mutation with the distributor service.
+        self.task_service
+            .mutation(Mutation::Put { keyspace: Cow::Owned(keyspace.to_string()), doc: document.clone() });
+
         let factory = |node| {
+            let clock = self.group.clock().clone();
             let keyspace = keyspace.to_string();
             let document = document.clone();
             let node_id = node_id.clone();
-            let node_addr = node_addr.clone();
             async move {
                 let channel = self
                     .network
@@ -499,7 +501,7 @@ where
                     .await
                     .map_err(|e| error::DatacakeError::TransportError(node, e))?;
 
-                let mut client = ConsistencyClient::from(channel);
+                let mut client = ConsistencyClient::new(clock, channel);
 
                 client
                     .put(keyspace, document, &node_id, node_addr)
@@ -547,7 +549,12 @@ where
         )
         .await?;
 
+        // Register mutation with the distributor service.
+        self.task_service
+            .mutation(Mutation::MultiPut { keyspace: Cow::Owned(keyspace.to_string()), docs: docs.clone() });
+
         let factory = |node| {
+            let clock = self.group.clock().clone();
             let keyspace = keyspace.to_string();
             let documents = docs.clone();
             let node_id = node_id.clone();
@@ -559,7 +566,7 @@ where
                     .await
                     .map_err(|e| error::DatacakeError::TransportError(node, e))?;
 
-                let mut client = ConsistencyClient::from(channel);
+                let mut client = ConsistencyClient::new(clock, channel);
 
                 client
                     .multi_put(keyspace, documents.into_iter(), &node_id, node_addr)
@@ -596,7 +603,12 @@ where
         )
         .await?;
 
+        // Register mutation with the distributor service.
+        self.task_service
+            .mutation(Mutation::Del { keyspace: Cow::Owned(keyspace.to_string()), doc_id, ts: last_updated });
+
         let factory = |node| {
+            let clock = self.group.clock().clone();
             let keyspace = keyspace.to_string();
             async move {
                 let channel = self
@@ -605,7 +617,7 @@ where
                     .await
                     .map_err(|e| error::DatacakeError::TransportError(node, e))?;
 
-                let mut client = ConsistencyClient::from(channel);
+                let mut client = ConsistencyClient::new(clock, channel);
 
                 client
                     .del(keyspace, doc_id, last_updated)
@@ -649,7 +661,12 @@ where
         )
         .await?;
 
+        // Register mutation with the distributor service.
+        self.task_service
+            .mutation(Mutation::MultiDel { keyspace: Cow::Owned(keyspace.to_string()), docs: docs.clone() });
+
         let factory = |node| {
+            let clock = self.group.clock().clone();
             let keyspace = keyspace.to_string();
             let docs = docs.clone();
             async move {
@@ -659,7 +676,7 @@ where
                     .await
                     .map_err(|e| error::DatacakeError::TransportError(node, e))?;
 
-                let mut client = ConsistencyClient::from(channel);
+                let mut client = ConsistencyClient::new(clock, channel);
 
                 client
                     .multi_del(keyspace, docs.into_iter())

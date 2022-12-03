@@ -115,13 +115,19 @@ where
 {
     let doc_id = document.id;
     let last_updated = document.last_updated;
+    let keyspace = group.get_or_create_keyspace(keyspace).await;
+
+    // Make sure the update is newer.
+    if let Some(timestamp) = keyspace.get(doc_id).await {
+        if last_updated <= timestamp {
+            return Ok(());
+        }
+    }
 
     group
         .storage()
-        .put_with_ctx(keyspace, document, ctx)
+        .put_with_ctx(keyspace.name(), document, ctx)
         .await?;
-
-    let keyspace = group.get_or_create_keyspace(keyspace).await;
 
     keyspace.put::<SS>(doc_id, last_updated).await;
 
@@ -132,7 +138,7 @@ where
 /// locally and updates the given keyspace state.
 pub(crate) async fn put_many_data<SS, S>(
     keyspace: &str,
-    documents: impl Iterator<Item = Document> + Send,
+    documents_iter: impl Iterator<Item = Document> + Send,
     group: &KeyspaceGroup<S>,
     ctx: Option<&PutContext>,
 ) -> Result<(), error::DatacakeError<S::Error>>
@@ -140,18 +146,26 @@ where
     SS: StateSource + Send + Sync + 'static,
     S: Storage + Send + Sync + 'static,
 {
+    let keyspace = group.get_or_create_keyspace(keyspace).await;
     let mut entries = Vec::new();
-    let documents = documents.map(|doc| {
+    let mut documents = Vec::new();
+    for doc in documents_iter {
+        // Filter out docs which are not the newest version.
+        if let Some(entry) = keyspace.get(doc.id).await {
+            if doc.last_updated < entry {
+                continue;
+            }
+        }
+
         entries.push((doc.id, doc.last_updated));
-        doc
-    });
+        documents.push(doc);
+    }
 
     let res = group
         .storage()
-        .multi_put_with_ctx(keyspace, documents, ctx)
+        .multi_put_with_ctx(keyspace.name(), documents.into_iter(), ctx)
         .await;
 
-    let keyspace = group.get_or_create_keyspace(keyspace).await;
     entries.sort_by_key(|entry| entry.1);
 
     if let Err(error) = res {
@@ -181,6 +195,8 @@ where
     S: Storage + Send + Sync + 'static,
 {
     let keyspace = group.get_or_create_keyspace(keyspace).await;
+
+    // Make sure the update is newer.
     if let Some(timestamp) = keyspace.get(doc_id).await {
         if last_updated <= timestamp {
             return Ok(());

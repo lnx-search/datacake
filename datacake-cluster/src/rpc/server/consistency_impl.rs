@@ -11,7 +11,6 @@ use crate::rpc::datacake_api::consistency_api_server::ConsistencyApi;
 use crate::rpc::datacake_api::{
     BatchPayload,
     Context,
-    Empty,
     MultiPutPayload,
     MultiRemovePayload,
     PutPayload,
@@ -19,6 +18,7 @@ use crate::rpc::datacake_api::{
 };
 use crate::storage::Storage;
 use crate::{ProgressTracker, PutContext, RpcNetwork};
+use crate::rpc::datacake_api;
 
 pub struct ConsistencyService<S: Storage> {
     group: KeyspaceGroup<S>,
@@ -60,7 +60,7 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
     async fn put(
         &self,
         request: Request<PutPayload>,
-    ) -> Result<Response<Empty>, Status> {
+    ) -> Result<Response<datacake_api::Timestamp>, Status> {
         let inner = request.into_inner();
         let document = Document::from(inner.document.unwrap());
         let ctx = self.get_put_ctx(inner.ctx)?;
@@ -76,13 +76,14 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
         .await
         .map_err(|e| Status::internal(e.to_string()))?;
 
-        Ok(Response::new(Empty {}))
+        let ts = self.group.clock().get_time().await;
+        Ok(Response::new(datacake_api::Timestamp::from(ts)))
     }
 
     async fn multi_put(
         &self,
         request: Request<MultiPutPayload>,
-    ) -> Result<Response<Empty>, Status> {
+    ) -> Result<Response<datacake_api::Timestamp>, Status> {
         let inner = request.into_inner();
         let mut newest_ts = HLCTimestamp::new(0, 0, 0);
         let documents = inner.documents.into_iter().map(Document::from).map(|doc| {
@@ -104,13 +105,14 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
 
         self.group.clock().register_ts(newest_ts).await;
 
-        Ok(Response::new(Empty {}))
+        let ts = self.group.clock().get_time().await;
+        Ok(Response::new(datacake_api::Timestamp::from(ts)))
     }
 
     async fn remove(
         &self,
         request: Request<RemovePayload>,
-    ) -> Result<Response<Empty>, Status> {
+    ) -> Result<Response<datacake_api::Timestamp>, Status> {
         let inner = request.into_inner();
         let document = inner.document.unwrap();
         let doc_id = document.id;
@@ -127,13 +129,14 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
         .await
         .map_err(|e| Status::internal(e.to_string()))?;
 
-        Ok(Response::new(Empty {}))
+        let ts = self.group.clock().get_time().await;
+        Ok(Response::new(datacake_api::Timestamp::from(ts)))
     }
 
     async fn multi_remove(
         &self,
         request: Request<MultiRemovePayload>,
-    ) -> Result<Response<Empty>, Status> {
+    ) -> Result<Response<datacake_api::Timestamp>, Status> {
         let inner = request.into_inner();
 
         let mut newest_ts = HLCTimestamp::new(0, 0, 0);
@@ -161,14 +164,28 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
 
         self.group.clock().register_ts(newest_ts).await;
 
-        Ok(Response::new(Empty {}))
+        let ts = self.group.clock().get_time().await;
+        Ok(Response::new(datacake_api::Timestamp::from(ts)))
     }
 
     async fn apply_batch(
         &self,
         request: Request<BatchPayload>,
-    ) -> Result<Response<Empty>, Status> {
-        todo!()
+    ) -> Result<Response<datacake_api::Timestamp>, Status> {
+        let inner = request.into_inner();
+        let ts = HLCTimestamp::from(inner.timestamp.unwrap());
+        self.group.clock().register_ts(ts).await;
+
+        for remove_payload in inner.removed {
+            self.multi_remove(Request::new(remove_payload)).await?;
+        }
+
+        for put_payload in inner.modified {
+            self.multi_put(Request::new(put_payload)).await?;
+        }
+
+        let ts = self.group.clock().get_time().await;
+        Ok(Response::new(datacake_api::Timestamp::from(ts)))
     }
 }
 

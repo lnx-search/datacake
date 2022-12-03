@@ -15,19 +15,19 @@ message ChitchatRpcMessage {
 
 service ConsistencyApi {
   // Adds a document to the state.
-  rpc put(PutPayload) returns (Empty);
+  rpc put(PutPayload) returns (Timestamp);
 
   // Adds a set of documents to the state.
-  rpc multi_put(MultiPutPayload) returns (Empty);
+  rpc multi_put(MultiPutPayload) returns (Timestamp);
 
   // Removes a document from the state.
-  rpc remove(RemovePayload) returns (Empty);
+  rpc remove(RemovePayload) returns (Timestamp);
 
   // Removes a set of documents from the state.
-  rpc multi_remove(MultiRemovePayload) returns (Empty);
+  rpc multi_remove(MultiRemovePayload) returns (Timestamp);
 
   // Applies a set of queued changed from a given node.
-  rpc apply_batch(BatchPayload) returns (Empty);
+  rpc apply_batch(BatchPayload) returns (Timestamp);
 }
 
 service ReplicationApi {

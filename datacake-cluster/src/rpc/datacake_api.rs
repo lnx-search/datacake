@@ -298,7 +298,7 @@ pub mod consistency_api_client {
         pub async fn put(
             &mut self,
             request: impl tonic::IntoRequest<super::PutPayload>,
-        ) -> Result<tonic::Response<super::Empty>, tonic::Status> {
+        ) -> Result<tonic::Response<super::Timestamp>, tonic::Status> {
             self.inner
                 .ready()
                 .await
@@ -318,7 +318,7 @@ pub mod consistency_api_client {
         pub async fn multi_put(
             &mut self,
             request: impl tonic::IntoRequest<super::MultiPutPayload>,
-        ) -> Result<tonic::Response<super::Empty>, tonic::Status> {
+        ) -> Result<tonic::Response<super::Timestamp>, tonic::Status> {
             self.inner
                 .ready()
                 .await
@@ -338,7 +338,7 @@ pub mod consistency_api_client {
         pub async fn remove(
             &mut self,
             request: impl tonic::IntoRequest<super::RemovePayload>,
-        ) -> Result<tonic::Response<super::Empty>, tonic::Status> {
+        ) -> Result<tonic::Response<super::Timestamp>, tonic::Status> {
             self.inner
                 .ready()
                 .await
@@ -358,7 +358,7 @@ pub mod consistency_api_client {
         pub async fn multi_remove(
             &mut self,
             request: impl tonic::IntoRequest<super::MultiRemovePayload>,
-        ) -> Result<tonic::Response<super::Empty>, tonic::Status> {
+        ) -> Result<tonic::Response<super::Timestamp>, tonic::Status> {
             self.inner
                 .ready()
                 .await
@@ -378,7 +378,7 @@ pub mod consistency_api_client {
         pub async fn apply_batch(
             &mut self,
             request: impl tonic::IntoRequest<super::BatchPayload>,
-        ) -> Result<tonic::Response<super::Empty>, tonic::Status> {
+        ) -> Result<tonic::Response<super::Timestamp>, tonic::Status> {
             self.inner
                 .ready()
                 .await
@@ -687,27 +687,27 @@ pub mod consistency_api_server {
         async fn put(
             &self,
             request: tonic::Request<super::PutPayload>,
-        ) -> Result<tonic::Response<super::Empty>, tonic::Status>;
+        ) -> Result<tonic::Response<super::Timestamp>, tonic::Status>;
         /// Adds a set of documents to the state.
         async fn multi_put(
             &self,
             request: tonic::Request<super::MultiPutPayload>,
-        ) -> Result<tonic::Response<super::Empty>, tonic::Status>;
+        ) -> Result<tonic::Response<super::Timestamp>, tonic::Status>;
         /// Removes a document from the state.
         async fn remove(
             &self,
             request: tonic::Request<super::RemovePayload>,
-        ) -> Result<tonic::Response<super::Empty>, tonic::Status>;
+        ) -> Result<tonic::Response<super::Timestamp>, tonic::Status>;
         /// Removes a set of documents from the state.
         async fn multi_remove(
             &self,
             request: tonic::Request<super::MultiRemovePayload>,
-        ) -> Result<tonic::Response<super::Empty>, tonic::Status>;
+        ) -> Result<tonic::Response<super::Timestamp>, tonic::Status>;
         /// Applies a set of queued changed from a given node.
         async fn apply_batch(
             &self,
             request: tonic::Request<super::BatchPayload>,
-        ) -> Result<tonic::Response<super::Empty>, tonic::Status>;
+        ) -> Result<tonic::Response<super::Timestamp>, tonic::Status>;
     }
     #[derive(Debug)]
     pub struct ConsistencyApiServer<T: ConsistencyApi> {
@@ -774,7 +774,7 @@ pub mod consistency_api_server {
                     impl<
                         T: ConsistencyApi,
                     > tonic::server::UnaryService<super::PutPayload> for putSvc<T> {
-                        type Response = super::Empty;
+                        type Response = super::Timestamp;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
@@ -812,7 +812,7 @@ pub mod consistency_api_server {
                         T: ConsistencyApi,
                     > tonic::server::UnaryService<super::MultiPutPayload>
                     for multi_putSvc<T> {
-                        type Response = super::Empty;
+                        type Response = super::Timestamp;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
@@ -850,7 +850,7 @@ pub mod consistency_api_server {
                         T: ConsistencyApi,
                     > tonic::server::UnaryService<super::RemovePayload>
                     for removeSvc<T> {
-                        type Response = super::Empty;
+                        type Response = super::Timestamp;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
@@ -888,7 +888,7 @@ pub mod consistency_api_server {
                         T: ConsistencyApi,
                     > tonic::server::UnaryService<super::MultiRemovePayload>
                     for multi_removeSvc<T> {
-                        type Response = super::Empty;
+                        type Response = super::Timestamp;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
@@ -928,7 +928,7 @@ pub mod consistency_api_server {
                         T: ConsistencyApi,
                     > tonic::server::UnaryService<super::BatchPayload>
                     for apply_batchSvc<T> {
-                        type Response = super::Empty;
+                        type Response = super::Timestamp;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,

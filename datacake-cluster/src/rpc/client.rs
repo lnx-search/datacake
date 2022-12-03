@@ -25,12 +25,14 @@ use crate::Clock;
 
 /// A high level wrapper around the consistency GRPC service.
 pub struct ConsistencyClient {
+    clock: Clock,
     inner: ConsistencyApiClient<Channel>,
 }
 
-impl From<Channel> for ConsistencyClient {
-    fn from(channel: Channel) -> Self {
+impl ConsistencyClient {
+    pub fn new(clock: Clock, channel: Channel) -> Self {
         Self {
+            clock,
             inner: ConsistencyApiClient::new(channel),
         }
     }
@@ -45,7 +47,7 @@ impl ConsistencyClient {
         node_id: &str,
         node_addr: SocketAddr,
     ) -> Result<(), Status> {
-        self.inner
+        let ts = self.inner
             .put(PutPayload {
                 keyspace: keyspace.into(),
                 document: Some(doc.into()),
@@ -54,7 +56,10 @@ impl ConsistencyClient {
                     node_addr: node_addr.to_string(),
                 }),
             })
-            .await?;
+            .await?
+            .into_inner()
+            .into();
+        self.clock.register_ts(ts).await;
         Ok(())
     }
 
@@ -66,7 +71,7 @@ impl ConsistencyClient {
         node_id: &str,
         node_addr: SocketAddr,
     ) -> Result<(), Status> {
-        self.inner
+        let ts = self.inner
             .multi_put(MultiPutPayload {
                 keyspace: keyspace.into(),
                 documents: docs.map(|doc| doc.into()).collect(),
@@ -75,7 +80,10 @@ impl ConsistencyClient {
                     node_addr: node_addr.to_string(),
                 }),
             })
-            .await?;
+            .await?
+            .into_inner()
+            .into();
+        self.clock.register_ts(ts).await;
         Ok(())
     }
 
@@ -86,7 +94,7 @@ impl ConsistencyClient {
         id: Key,
         ts: HLCTimestamp,
     ) -> Result<(), Status> {
-        self.inner
+        let ts = self.inner
             .remove(RemovePayload {
                 keyspace: keyspace.into(),
                 document: Some(DocumentMetadata {
@@ -94,7 +102,10 @@ impl ConsistencyClient {
                     last_updated: Some(ts.into()),
                 }),
             })
-            .await?;
+            .await?
+            .into_inner()
+            .into();
+        self.clock.register_ts(ts).await;
         Ok(())
     }
 
@@ -104,7 +115,7 @@ impl ConsistencyClient {
         keyspace: impl Into<String>,
         pairs: impl Iterator<Item = (Key, HLCTimestamp)>,
     ) -> Result<(), Status> {
-        self.inner
+        let ts = self.inner
             .multi_remove(MultiRemovePayload {
                 keyspace: keyspace.into(),
                 documents: pairs
@@ -114,7 +125,10 @@ impl ConsistencyClient {
                     })
                     .collect(),
             })
-            .await?;
+            .await?
+            .into_inner()
+            .into();
+        self.clock.register_ts(ts).await;
         Ok(())
     }
 
@@ -122,7 +136,12 @@ impl ConsistencyClient {
         &mut self,
         batch: datacake_api::BatchPayload,
     ) -> Result<(), Status> {
-        self.inner.apply_batch(batch).await?;
+        let ts = self.inner
+            .apply_batch(batch)
+            .await?
+            .into_inner()
+            .into();
+        self.clock.register_ts(ts).await;
         Ok(())
     }
 }

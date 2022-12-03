@@ -19,6 +19,7 @@ pub(crate) use distributor::{
     start_task_distributor_service,
     TaskDistributor,
     TaskServiceContext,
+    Mutation,
 };
 pub(crate) use poller::{
     start_replication_cycle,
