@@ -7,6 +7,7 @@ use tonic::Status;
 
 use crate::core::Document;
 use crate::keyspace::KeyspaceTimestamps;
+use crate::rpc::datacake_api;
 use crate::rpc::datacake_api::consistency_api_client::ConsistencyApiClient;
 use crate::rpc::datacake_api::replication_api_client::ReplicationApiClient;
 use crate::rpc::datacake_api::{
@@ -114,6 +115,14 @@ impl ConsistencyClient {
                     .collect(),
             })
             .await?;
+        Ok(())
+    }
+
+    pub async fn apply_batch(
+        &mut self,
+        batch: datacake_api::BatchPayload,
+    ) -> Result<(), Status> {
+        self.inner.apply_batch(batch).await?;
         Ok(())
     }
 }

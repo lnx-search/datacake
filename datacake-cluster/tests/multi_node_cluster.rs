@@ -2,8 +2,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use bytes::Bytes;
-use datacake_cluster::mem_store::MemStore;
-use datacake_cluster::test_suite::InstrumentedStorage;
+use datacake_cluster::test_utils::{InstrumentedStorage, MemStore};
 use datacake_cluster::{
     ClusterOptions,
     ConnectionConfig,
@@ -218,10 +217,12 @@ async fn test_async_operations() -> anyhow::Result<()> {
         .put(1, b"Hello, world from node-1".to_vec(), Consistency::None)
         .await
         .expect("Put value.");
+    tokio::time::sleep(Duration::from_millis(2)).await;
     node_2_handle
         .put(1, b"Hello, world from node-2".to_vec(), Consistency::None)
         .await
         .expect("Put value.");
+    tokio::time::sleep(Duration::from_millis(2)).await;
     node_3_handle
         .put(1, b"Hello, world from node-3".to_vec(), Consistency::None)
         .await
@@ -250,7 +251,6 @@ async fn test_async_operations() -> anyhow::Result<()> {
     assert_eq!(doc.id, 1);
     assert_eq!(doc.data, Bytes::from_static(b"Hello, world from node-3"));
 
-    // 5 seconds should be enough for this test to propagate state without becoming flaky.
     tokio::time::sleep(Duration::from_secs(5)).await;
 
     // Man I love CRDTs, look at how easy this was! They're all the same now.
@@ -292,6 +292,7 @@ async fn test_async_operations() -> anyhow::Result<()> {
         )
         .await
         .expect("Put value.");
+    tokio::time::sleep(Duration::from_millis(2)).await;
     node_2_handle
         .del(1, Consistency::None)
         .await
@@ -313,7 +314,6 @@ async fn test_async_operations() -> anyhow::Result<()> {
     let doc = node_2_handle.get(1).await.expect("Get value.");
     assert!(doc.is_none(), "Document should be deleted.");
 
-    // 5 seconds should be enough for this test to propagate state without becoming flaky.
     tokio::time::sleep(Duration::from_secs(5)).await;
 
     // And now everything is consistent.
@@ -334,6 +334,12 @@ async fn test_async_operations() -> anyhow::Result<()> {
 async fn connect_cluster(
     addrs: [SocketAddr; 3],
 ) -> [DatacakeCluster<InstrumentedStorage<MemStore>>; 3] {
+    dbg!(
+        crc32fast::hash("node-1".as_bytes()),
+        crc32fast::hash("node-2".as_bytes()),
+        crc32fast::hash("node-3".as_bytes())
+    );
+
     let node_1_connection_cfg = ConnectionConfig::new(
         addrs[0],
         addrs[0],

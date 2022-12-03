@@ -716,7 +716,7 @@ pub trait StateSource {
 pub struct ConsistencySource;
 
 #[derive(Debug, Copy, Clone)]
-pub struct ReplicationSource;
+pub struct ReadRepairSource;
 
 impl StateSource for ConsistencySource {
     fn source_id() -> usize {
@@ -724,7 +724,7 @@ impl StateSource for ConsistencySource {
     }
 }
 
-impl StateSource for ReplicationSource {
+impl StateSource for ReadRepairSource {
     fn source_id() -> usize {
         1
     }

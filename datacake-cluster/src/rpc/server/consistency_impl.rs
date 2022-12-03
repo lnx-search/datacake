@@ -9,6 +9,7 @@ use crate::core::Document;
 use crate::keyspace::{ConsistencySource, KeyspaceGroup};
 use crate::rpc::datacake_api::consistency_api_server::ConsistencyApi;
 use crate::rpc::datacake_api::{
+    BatchPayload,
     Context,
     Empty,
     MultiPutPayload,
@@ -38,7 +39,7 @@ impl<S: Storage> ConsistencyService<S> {
                 ))
             })?;
 
-            let remote_rpc_channel = self.network.connect_lazy(remote_addr);
+            let remote_rpc_channel = self.network.get_or_connect_lazy(remote_addr);
 
             Some(PutContext {
                 progress: ProgressTracker::default(),
@@ -161,6 +162,13 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
         self.group.clock().register_ts(newest_ts).await;
 
         Ok(Response::new(Empty {}))
+    }
+
+    async fn apply_batch(
+        &self,
+        request: Request<BatchPayload>,
+    ) -> Result<Response<Empty>, Status> {
+        todo!()
     }
 }
 

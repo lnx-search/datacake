@@ -7,7 +7,7 @@ pub mod error;
 mod keyspace;
 mod node;
 mod nodes_selector;
-mod poller;
+mod replication;
 mod rpc;
 mod statistics;
 mod storage;
@@ -15,7 +15,7 @@ mod storage;
 pub mod test_utils;
 
 use std::borrow::Cow;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::fmt::Display;
 use std::future::Future;
 use std::net::SocketAddr;
@@ -26,7 +26,7 @@ use std::time::Duration;
 use bytes::Bytes;
 use chitchat::transport::Transport;
 use chitchat::FailureDetectorConfig;
-use datacake_crdt::{get_unix_timestamp_ms, Key};
+use datacake_crdt::Key;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use itertools::Itertools;
@@ -47,7 +47,13 @@ use crate::clock::Clock;
 use crate::core::Document;
 use crate::keyspace::{ConsistencySource, KeyspaceGroup};
 use crate::node::{ClusterMember, DatacakeNode};
-use crate::poller::ShutdownHandle;
+use crate::replication::{
+    MembershipChanges,
+    ReplicationCycleContext,
+    ReplicationHandle,
+    TaskDistributor,
+    TaskServiceContext,
+};
 use crate::rpc::{
     ConsistencyClient,
     Context,
@@ -60,16 +66,13 @@ use crate::rpc::{
 
 pub static DEFAULT_DATA_CENTER: &str = "datacake-dc-unknown";
 pub static DEFAULT_CLUSTER_ID: &str = "datacake-cluster-unknown";
-
-#[cfg(any(test, feature = "test-utils"))]
-const POLLING_INTERVAL_DURATION: Duration = Duration::from_millis(250);
-#[cfg(not(any(test, feature = "test-utils")))]
-const POLLING_INTERVAL_DURATION: Duration = Duration::from_secs(1);
+const DEFAULT_REPAIR_INTERVAL: Duration = Duration::from_secs(60 * 60); // 1 Hour
 
 /// Non-required configurations for the datacake cluster node.
 pub struct ClusterOptions {
     cluster_id: String,
     data_center: Cow<'static, str>,
+    repair_interval: Duration,
 }
 
 impl Default for ClusterOptions {
@@ -77,6 +80,7 @@ impl Default for ClusterOptions {
         Self {
             cluster_id: DEFAULT_CLUSTER_ID.to_string(),
             data_center: Cow::Borrowed(DEFAULT_DATA_CENTER),
+            repair_interval: DEFAULT_REPAIR_INTERVAL,
         }
     }
 }
@@ -91,6 +95,11 @@ impl ClusterOptions {
     /// Set the data center the node belongs to.
     pub fn with_data_center(mut self, dc: impl Display) -> Self {
         self.data_center = Cow::Owned(dc.to_string());
+        self
+    }
+
+    pub fn with_repair_interval(mut self, interval: Duration) -> Self {
+        self.repair_interval = interval;
         self
     }
 }
@@ -261,15 +270,29 @@ where
         )
         .await?;
 
+        let task_ctx = TaskServiceContext {
+            clock: group.clock().clone(),
+            network: network.clone(),
+            local_node_id: Cow::Owned(node_id.clone()),
+            public_node_addr: node.public_addr,
+        };
+        let replication_ctx = ReplicationCycleContext {
+            repair_interval: options.repair_interval,
+            group: group.clone(),
+            network: network.clone(),
+        };
+        let task_service = replication::start_task_distributor_service(task_ctx).await;
+        let repair_service = replication::start_replication_cycle(replication_ctx).await;
+
         setup_poller(
-            Cow::Owned(node_id.clone()),
-            group.clone(),
+            task_service,
+            repair_service,
             network.clone(),
             &node,
             selector.clone(),
             statistics.clone(),
         )
-        .await?;
+        .await;
 
         info!(
             node_id = %node_id,
@@ -455,6 +478,7 @@ where
         let last_updated = self.clock.get_time().await;
         let document = Document::new(doc_id, last_updated, data);
 
+        info!(node_id = %self.node_id, doc_id = doc_id, ts = %last_updated, "Putting document");
         core::put_data::<ConsistencySource, _>(
             keyspace,
             document.clone(),
@@ -779,12 +803,8 @@ where
     };
     let transport = GrpcTransport::new(context, chitchat_rx);
 
-    let me = ClusterMember::new(
-        node_id,
-        get_unix_timestamp_ms(),
-        cluster_info.public_addr,
-        cluster_info.data_center,
-    );
+    let me =
+        ClusterMember::new(node_id, cluster_info.public_addr, cluster_info.data_center);
     let node = DatacakeNode::connect(
         me,
         cluster_info.listen_addr,
@@ -801,43 +821,39 @@ where
 
 /// Starts the background task which watches for membership changes
 /// intern starting and stopping polling services for each member.
-async fn setup_poller<S>(
-    node_id: Cow<'static, str>,
-    keyspace_group: KeyspaceGroup<S>,
+async fn setup_poller(
+    task_service: TaskDistributor,
+    repair_service: ReplicationHandle,
     network: RpcNetwork,
     node: &DatacakeNode,
     node_selector: NodeSelectorHandle,
     statistics: ClusterStatistics,
-) -> Result<(), error::DatacakeError<S::Error>>
-where
-    S: Storage + Send + Sync + 'static,
-{
+) {
     let changes = node.member_change_watcher();
+    let self_node_id = Cow::Owned(node.node_id.clone());
     tokio::spawn(watch_membership_changes(
-        node_id,
-        keyspace_group,
+        self_node_id,
+        task_service,
+        repair_service,
         network,
         node_selector,
         changes,
         statistics,
     ));
-    Ok(())
 }
 
 /// Watches for changes in the cluster membership.
 ///
 /// When nodes leave and join, pollers are stopped and started as required.
-async fn watch_membership_changes<S>(
+async fn watch_membership_changes(
     self_node_id: Cow<'static, str>,
-    keyspace_group: KeyspaceGroup<S>,
+    task_service: TaskDistributor,
+    repair_service: ReplicationHandle,
     network: RpcNetwork,
     node_selector: NodeSelectorHandle,
     mut changes: WatchStream<Vec<ClusterMember>>,
     statistics: ClusterStatistics,
-) where
-    S: Storage + Send + Sync + 'static,
-{
-    let mut poller_handles = HashMap::<SocketAddr, ShutdownHandle>::new();
+) {
     let mut last_network_set = HashSet::new();
     while let Some(members) = changes.next().await {
         info!(
@@ -865,6 +881,7 @@ async fn watch_membership_changes<S>(
             node_selector.set_nodes(data_centers).await;
         }
 
+        let mut membership_changes = MembershipChanges::default();
         // Remove client no longer apart of the network.
         for (node_id, addr) in last_network_set.difference(&new_network_set) {
             info!(
@@ -875,10 +892,7 @@ async fn watch_membership_changes<S>(
             );
 
             network.disconnect(*addr);
-
-            if let Some(handle) = poller_handles.remove(addr) {
-                handle.kill();
-            }
+            membership_changes.left.push(Cow::Owned(node_id.clone()));
         }
 
         // Add new clients for each new node.
@@ -890,41 +904,13 @@ async fn watch_membership_changes<S>(
                 "Node has connected to the cluster."
             );
 
-            let channel = match network.get_or_connect(*addr).await {
-                Ok(channel) => channel,
-                Err(e) => {
-                    error!(
-                        error = ?e,
-                        target_node_id = %node_id,
-                        target_addr = %addr,
-                        "Failed to establish network connection to node despite membership just changing. Is the system configured correctly?"
-                    );
-                    warn!(
-                        target_node_id = %node_id,
-                        target_addr = %addr,
-                        "Node poller is starting with lazy connection, this may continue to error if a connection cannot be re-established.",
-                    );
-
-                    network.connect_lazy(*addr)
-                },
-            };
-
-            let state = poller::NodePollerState::new(
-                keyspace_group.clock().clone(),
-                Cow::Owned(node_id.clone()),
-                *addr,
-                keyspace_group.clone(),
-                channel,
-                POLLING_INTERVAL_DURATION,
-                statistics.clone(),
-            );
-            let handle = state.shutdown_handle();
-            tokio::spawn(poller::node_poller(state));
-
-            if let Some(handle) = poller_handles.insert(*addr, handle) {
-                handle.kill();
-            };
+            membership_changes
+                .joined
+                .push((Cow::Owned(node_id.clone()), *addr));
         }
+
+        task_service.membership_change(membership_changes.clone());
+        repair_service.membership_change(membership_changes.clone());
 
         last_network_set = new_network_set;
     }

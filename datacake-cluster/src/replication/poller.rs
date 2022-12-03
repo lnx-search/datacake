@@ -1,0 +1,494 @@
+use std::borrow::Cow;
+use std::collections::BTreeMap;
+use std::net::SocketAddr;
+use std::sync::atomic::AtomicU64;
+use std::sync::Arc;
+use std::time::Duration;
+
+use anyhow::anyhow;
+use crossbeam_channel::{Receiver, Sender};
+use datacake_crdt::StateChanges;
+use tokio::sync::Semaphore;
+use tokio::time::{interval, MissedTickBehavior};
+
+use crate::keyspace::{
+    CounterKey,
+    KeyspaceGroup,
+    KeyspaceState,
+    KeyspaceTimestamps,
+    ReadRepairSource,
+    StateSource,
+};
+use crate::replication::{MembershipChanges, MAX_CONCURRENT_REQUESTS};
+use crate::rpc::ReplicationClient;
+use crate::storage::ProgressWatcher;
+use crate::{Clock, ProgressTracker, PutContext, RpcNetwork, Storage};
+
+const KEYSPACE_SYNC_TIMEOUT: Duration = if cfg!(test) {
+    Duration::from_secs(1)
+} else {
+    Duration::from_secs(5)
+};
+const MAX_NUMBER_OF_DOCS_PER_FETCH: usize = 50_000;
+
+/// The required context for the actor to run.
+pub struct ReplicationCycleContext<S>
+where
+    S: Storage + Send + Sync + 'static,
+{
+    /// The time interval which should elapse between each tick.
+    pub(crate) repair_interval: Duration,
+    /// The ID of the local node.
+    /// The cluster keyspace group.
+    pub(crate) group: KeyspaceGroup<S>,
+    /// The cluster RPC network.
+    pub(crate) network: RpcNetwork,
+}
+
+impl<S> ReplicationCycleContext<S>
+where
+    S: Storage + Send + Sync + 'static,
+{
+    /// Gets the cluster clock.
+    pub fn clock(&self) -> &Clock {
+        self.group.clock()
+    }
+}
+
+pub struct NodeChangeInfo {
+    changes: Vec<KeyspaceDiff>,
+}
+
+#[derive(Clone)]
+/// A handle for communicating with the replication cycle actor.
+///
+/// This handle is cheap to clone.
+pub(crate) struct ReplicationHandle {
+    tx: Sender<Op>,
+}
+
+impl ReplicationHandle {
+    /// Marks that the cluster has had a membership change.
+    pub(crate) fn membership_change(&self, changes: MembershipChanges) {
+        let _ = self.tx.send(Op::MembershipChange(changes));
+    }
+}
+
+/// A enqueued event/operation for the cycle to handle next tick.
+enum Op {
+    MembershipChange(MembershipChanges),
+}
+
+/// Starts the replication cycle task.
+///
+/// This task is an intermittent task which checks to make sure current node is up to date
+/// with what other nodes have seen.
+///
+/// In theory the difference should be minimal as the task distributor will create a higher
+/// consistency unless a node goes down.
+pub(crate) async fn start_replication_cycle<S>(
+    ctx: ReplicationCycleContext<S>,
+) -> ReplicationHandle
+where
+    S: Storage + Send + Sync + 'static,
+{
+    let (tx, rx) = crossbeam_channel::unbounded();
+
+    tokio::spawn(replication_cycle(ctx, rx));
+
+    ReplicationHandle { tx }
+}
+
+async fn replication_cycle<S>(ctx: ReplicationCycleContext<S>, rx: Receiver<Op>)
+where
+    S: Storage + Send + Sync + 'static,
+{
+    let mut live_members = BTreeMap::new();
+    let mut keyspace_tracker = KeyspaceTracker::default();
+
+    let mut interval = interval(ctx.repair_interval);
+    interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    loop {
+        interval.tick().await;
+
+        while let Ok(op) = rx.try_recv() {
+            match op {
+                Op::MembershipChange(changes) => {
+                    for node_id in changes.left {
+                        live_members.remove(node_id.as_ref());
+                        keyspace_tracker.remove_node(node_id.as_ref());
+                    }
+
+                    for (node_id, addr) in changes.joined {
+                        live_members.insert(node_id.to_string(), addr);
+                    }
+                },
+            }
+        }
+
+        read_repair_members(&ctx, &live_members, &mut keyspace_tracker).await;
+    }
+}
+
+#[derive(Default, Debug)]
+struct KeyspaceTracker {
+    inner: BTreeMap<String, KeyspaceTimestamps>,
+}
+
+impl KeyspaceTracker {
+    fn remove_node(&mut self, node_id: &str) {
+        self.inner.remove(node_id);
+    }
+
+    fn get_diff(
+        &mut self,
+        node_id: String,
+        other: &KeyspaceTimestamps,
+    ) -> impl Iterator<Item = Cow<'static, str>> {
+        self.inner.entry(node_id).or_default().diff(other)
+    }
+
+    fn set_keyspace(&mut self, node_id: String, ts: u64) {
+        self.inner.entry(node_id.clone()).or_default().insert(
+            CounterKey(Cow::Owned(node_id.clone())),
+            Arc::new(AtomicU64::new(ts)),
+        );
+    }
+}
+
+/// Polls all `live_members` and works out what entries are missing from the local node.
+///
+/// This will return a optimised plan of what nodes should have what documents retrieved.
+async fn read_repair_members<S>(
+    ctx: &ReplicationCycleContext<S>,
+    live_members: &BTreeMap<String, SocketAddr>,
+    keyspace_tracker: &mut KeyspaceTracker,
+) where
+    S: Storage + Send + Sync + 'static,
+{
+    for (node_id, addr) in live_members {
+        let res =
+            check_node_changes(ctx, node_id.clone(), *addr, keyspace_tracker).await;
+
+        let info = match res {
+            Err(e) => {
+                error!(
+                    error = ?e,
+                    target_node_id = %node_id,
+                    target_node_addr = %addr,
+                    "Failed to poll node changes due to error.",
+                );
+                continue;
+            },
+            Ok(info) => info,
+        };
+
+        for change in info.changes {
+            let res = begin_keyspace_sync(
+                ctx,
+                change.keyspace.clone(),
+                node_id.to_string(),
+                *addr,
+                change.removed,
+                change.modified,
+            )
+            .await;
+
+            if let Err(e) = res {
+                error!(
+                    error = ?e,
+                    keyspace = %change.keyspace,
+                    target_node_id = %node_id,
+                    target_node_addr = %addr,
+                    "Failed to sync with node."
+                );
+            } else {
+                keyspace_tracker.set_keyspace(node_id.to_string(), change.last_updated);
+            }
+        }
+    }
+}
+
+/// Polls the remote node's keyspace timestamps.
+///
+/// If any timestamps are different to when the node was last polled, a task is created
+/// for each keyspace which has changed.
+///
+/// If a task already exists for a given keyspace, it is checked to see if the task is complete
+/// or not, if the task is complete then a new task is created, otherwise, if the task is *not*
+/// complete but has taken longer than the allowed timeout period, the existing task is cancelled
+/// and restarted.
+async fn check_node_changes<S>(
+    ctx: &ReplicationCycleContext<S>,
+    target_node_id: String,
+    target_node_addr: SocketAddr,
+    keyspace_tracker: &mut KeyspaceTracker,
+) -> Result<NodeChangeInfo, anyhow::Error>
+where
+    S: Storage + Send + Sync + 'static,
+{
+    info!(
+        target_node_id = %target_node_id,
+        target_node_addr = %target_node_addr,
+        "Getting keyspace changes on remote node.",
+    );
+
+    let channel = ctx.network.get_or_connect(target_node_addr).await?;
+    let mut client = ReplicationClient::new(ctx.clock().clone(), channel.clone());
+    let keyspace_timestamps = client.poll_keyspace().await?;
+
+    let diff = keyspace_tracker
+        .get_diff(target_node_id.clone(), &keyspace_timestamps)
+        .map(|ks| ks.to_string())
+        .collect::<Vec<_>>();
+
+    let permits = Arc::new(Semaphore::new(MAX_CONCURRENT_REQUESTS));
+    let mut tasks = Vec::new();
+    for keyspace in diff {
+        let permits = permits.clone();
+        let target_node_id = target_node_id.clone();
+        let group = ctx.group.clone();
+        let client = ReplicationClient::new(ctx.clock().clone(), channel.clone());
+
+        let task = tokio::spawn(async move {
+            let _permit = permits.acquire();
+            get_keyspace_diff(
+                keyspace,
+                target_node_id.to_string(),
+                target_node_addr,
+                group,
+                client,
+            )
+            .await
+        });
+        tasks.push(task);
+    }
+
+    let mut changes = Vec::new();
+    for task in tasks {
+        let diff = task.await?;
+        match diff {
+            Err(e) => {
+                error!(
+                    error = ?e.cause,
+                    keyspace = %e.keyspace,
+                    target_node_id = %e.node_id,
+                    target_rpc_addr = %e.node_addr,
+                    "Failed to get keyspace diff.",
+                );
+            },
+            Ok(diff) => {
+                changes.push(diff);
+            },
+        }
+    }
+
+    Ok(NodeChangeInfo { changes })
+}
+
+pub struct KeyspaceDiff {
+    keyspace: String,
+    modified: StateChanges,
+    removed: StateChanges,
+    last_updated: u64,
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("RPC Error: {cause:?}")]
+pub struct GetDiffError {
+    cause: tonic::Status,
+    keyspace: String,
+    node_id: String,
+    node_addr: SocketAddr,
+}
+
+#[instrument(
+    name = "keyspace-diff",
+    skip_all,
+    fields(
+        keyspace = %keyspace_name,
+        target_node_id = %target_node_id,
+        target_rpc_addr = %target_rpc_addr,
+    )
+)]
+async fn get_keyspace_diff<S>(
+    keyspace_name: String,
+    target_node_id: String,
+    target_rpc_addr: SocketAddr,
+    group: KeyspaceGroup<S>,
+    mut client: ReplicationClient,
+) -> Result<KeyspaceDiff, GetDiffError>
+where
+    S: Storage + Send + Sync + 'static,
+{
+    let keyspace = group.get_or_create_keyspace(&keyspace_name).await;
+    let (last_updated, set) =
+        client
+            .get_state(keyspace.name())
+            .await
+            .map_err(|e| GetDiffError {
+                cause: e,
+                keyspace: keyspace_name.clone(),
+                node_id: target_node_id.clone(),
+                node_addr: target_rpc_addr,
+            })?;
+
+    let (modified, removed) = keyspace.diff(set).await;
+
+    Ok(KeyspaceDiff {
+        keyspace: keyspace_name.clone(),
+        modified,
+        removed,
+        last_updated,
+    })
+}
+
+#[instrument(name = "sync-removed-docs", skip_all)]
+/// Starts the synchronisation process of syncing the remote node's keyspace
+/// to the current node's keyspace.
+///
+/// The system begins by requesting the keyspace CRDT and gets the diff between
+/// the current CRDT and the remote CRDT.
+async fn begin_keyspace_sync<S>(
+    ctx: &ReplicationCycleContext<S>,
+    keyspace_name: String,
+    target_node_id: String,
+    target_rpc_addr: SocketAddr,
+    removed: StateChanges,
+    modified: StateChanges,
+) -> Result<(), anyhow::Error>
+where
+    S: Storage + Send + Sync + 'static,
+{
+    let channel = ctx.network.get_or_connect(target_rpc_addr).await?;
+    let keyspace = ctx.group.get_or_create_keyspace(&keyspace_name).await;
+    let client = ReplicationClient::new(ctx.clock().clone(), channel.clone());
+
+    let progress_tracker = ProgressTracker::default();
+    let ctx = PutContext {
+        progress: progress_tracker.clone(),
+        remote_node_id: Cow::Owned(target_node_id.clone()),
+        remote_addr: target_rpc_addr,
+        remote_rpc_channel: channel.clone(),
+    };
+
+    // The removal task can operate interdependently of the modified handler.
+    // If, in the process of handling removals, the modified handler errors,
+    // we simply let the removal task continue on as normal.
+    let removal_task = tokio::spawn(handle_removals::<ReadRepairSource, _>(
+        keyspace.clone(),
+        removed,
+    ));
+
+    let res = tokio::spawn(handle_modified(client, keyspace, modified, ctx));
+
+    let mut watcher = ProgressWatcher::new(progress_tracker, KEYSPACE_SYNC_TIMEOUT);
+    let mut interval = interval(Duration::from_millis(250));
+    loop {
+        interval.tick().await;
+
+        if watcher.has_expired() {
+            res.abort();
+            removal_task.await??;
+            return Err(anyhow!("Task timed out and could not be completed."));
+        }
+
+        if watcher.is_done() {
+            break;
+        }
+    }
+
+    removal_task.await??;
+
+    Ok(())
+}
+
+#[instrument(name = "sync-modified-docs", skip_all)]
+/// Fetches all the documents which have changed since the last state fetch.
+///
+/// These documents are then persisted and the metadata marked accordingly.
+async fn handle_modified<S>(
+    mut client: ReplicationClient,
+    keyspace: KeyspaceState<S>,
+    modified: StateChanges,
+    ctx: PutContext,
+) -> Result<(), anyhow::Error>
+where
+    S: Storage + Send + Sync + 'static,
+{
+    let doc_id_chunks = modified
+        .chunks(MAX_NUMBER_OF_DOCS_PER_FETCH)
+        .map(|entries| entries.iter().map(|(k, _)| *k).collect::<Vec<_>>());
+
+    let storage = keyspace.storage();
+    for doc_ids in doc_id_chunks {
+        let mut doc_timestamps = Vec::new();
+        let docs = client
+            .fetch_docs(keyspace.name(), doc_ids)
+            .await?
+            .map(|doc| {
+                doc_timestamps.push((doc.id, doc.last_updated));
+                doc
+            });
+
+        storage
+            .multi_put_with_ctx(keyspace.name(), docs, Some(&ctx))
+            .await?;
+
+        // We only update the metadata if the persistence has passed.
+        // If we were to do this the other way around, we could potentially
+        // end up being in a situation where the state *thinks* it's up to date
+        // but in reality it's not.
+        keyspace.multi_put::<ReadRepairSource>(doc_timestamps).await;
+    }
+
+    Ok(())
+}
+
+#[instrument(name = "sync-removed-docs", skip_all)]
+/// Removes the marked documents from the persisted storage and then
+/// marks the document metadata as a tombstone.
+///
+/// This does not remove the metadata of the document entirely, instead the document is marked
+/// as deleted along with the main data itself, but we keep a history of the deletes we've made.
+async fn handle_removals<SS, S>(
+    keyspace: KeyspaceState<S>,
+    mut removed: StateChanges,
+) -> Result<(), S::Error>
+where
+    SS: StateSource + Send + Sync + 'static,
+    S: Storage + Send + Sync + 'static,
+{
+    if removed.is_empty() {
+        return Ok(());
+    }
+
+    let storage = keyspace.storage();
+
+    if removed.len() == 1 {
+        let (key, ts) = removed.pop().expect("get element");
+
+        storage.mark_as_tombstone(keyspace.name(), key, ts).await?;
+        keyspace.del::<SS>(key, ts).await;
+        return Ok::<_, S::Error>(());
+    }
+
+    let res = storage
+        .mark_many_as_tombstone(keyspace.name(), removed.iter().copied())
+        .await;
+
+    if let Err(error) = res {
+        let removed = removed
+            .into_iter()
+            .filter(|(key, _)| error.successful_doc_ids.contains(key))
+            .collect();
+
+        keyspace.multi_del::<SS>(removed).await;
+
+        return Err(error.inner);
+    }
+
+    keyspace.multi_del::<SS>(removed).await;
+
+    Ok(())
+}

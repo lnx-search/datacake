@@ -125,7 +125,7 @@ mod tests {
     use std::borrow::Cow;
 
     use super::*;
-    use crate::keyspace::{KeyspaceTimestamps, ReplicationSource};
+    use crate::keyspace::{KeyspaceTimestamps, ReadRepairSource};
     use crate::test_utils::MemStore;
     use crate::Document;
 
@@ -153,7 +153,7 @@ mod tests {
         // Add a new keyspace which is effectively changed.
         let keyspace = group.get_or_create_keyspace(KEYSPACE).await;
         keyspace
-            .put::<ReplicationSource>(1, clock.get_time().await)
+            .put::<ReadRepairSource>(1, clock.get_time().await)
             .await;
 
         let ts = clock.get_time().await;
@@ -186,7 +186,7 @@ mod tests {
 
         let keyspace = group.get_or_create_keyspace(KEYSPACE).await;
         keyspace
-            .put::<ReplicationSource>(1, clock.get_time().await)
+            .put::<ReadRepairSource>(1, clock.get_time().await)
             .await;
         let last_updated = keyspace.last_updated();
         let state = keyspace
@@ -229,7 +229,7 @@ mod tests {
             .await
             .expect("Store entry");
         keyspace
-            .put::<ReplicationSource>(doc.id, doc.last_updated)
+            .put::<ReadRepairSource>(doc.id, doc.last_updated)
             .await;
 
         let ts = clock.get_time().await;

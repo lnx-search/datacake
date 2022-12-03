@@ -32,8 +32,6 @@ const GOSSIP_INTERVAL: Duration = if cfg!(test) {
 pub struct ClusterMember {
     /// A unique ID for the given node in the cluster.
     pub node_id: String,
-    /// The timestamp(ms) of when the node starts.
-    pub generation: u64,
     /// The public address of the nod.
     pub public_addr: SocketAddr,
     /// The data center / availability zone the node is in.
@@ -45,20 +43,18 @@ pub struct ClusterMember {
 impl ClusterMember {
     pub fn new(
         node_id: String,
-        generation: u64,
         public_addr: SocketAddr,
         data_center: impl Into<String>,
     ) -> Self {
         Self {
             node_id,
-            generation,
             public_addr,
             data_center: data_center.into(),
         }
     }
 
     pub fn chitchat_id(&self) -> String {
-        format!("{}/{}", self.node_id, self.generation)
+        self.node_id.clone()
     }
 }
 
@@ -236,27 +232,16 @@ fn build_cluster_member<'a>(
     node_id: &'a NodeId,
     state: &'a ClusterStateSnapshot,
 ) -> Result<ClusterMember, String> {
-    let (node_unique_id, generation_str) =
-        node_id.id.split_once('/').ok_or_else(|| {
-            format!(
-                "Failed to create cluster member instance from NodeId {:?}.",
-                node_id
-            )
-        })?;
-
     let node_state = state.node_states.get(&node_id.id).ok_or_else(|| {
-        format!("Could not find node ID `{}` in ChitChat state.", node_id.id,)
+        format!("Could not find node ID `{}` in ChitChat state.", node_id.id)
     })?;
 
     let data_center = node_state
         .get(DATA_CENTER_KEY)
         .unwrap_or(DEFAULT_DATA_CENTER);
 
-    let generation = generation_str.parse::<u64>().map_err(|e| e.to_string())?;
-
     Ok(ClusterMember::new(
-        node_unique_id.to_string(),
-        generation,
+        node_id.id.to_string(),
         node_id.gossip_public_address,
         data_center,
     ))
@@ -337,7 +322,7 @@ mod tests {
         let node_id = format!("node_{node_id}");
         let failure_detector_config = create_failure_detector_config_for_test();
         let node = DatacakeNode::connect::<TestError>(
-            ClusterMember::new(node_id, 1, public_addr, DATA_CENTER_KEY),
+            ClusterMember::new(node_id, public_addr, DATA_CENTER_KEY),
             public_addr,
             cluster_id,
             seeds,

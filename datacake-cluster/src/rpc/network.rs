@@ -47,6 +47,17 @@ impl RpcNetwork {
 
         Ok(channel)
     }
+    /// Attempts to get an already existing connection or creates a new connection.
+    pub fn get_or_connect_lazy(&self, addr: SocketAddr) -> Channel {
+        {
+            let guard = self.clients.read();
+            if let Some(channel) = guard.get(&addr) {
+                return channel.clone();
+            }
+        }
+
+        self.connect_lazy(addr)
+    }
 
     /// Creates a new endpoint channel which connects lazily to the node.
     pub fn connect_lazy(&self, addr: SocketAddr) -> Channel {

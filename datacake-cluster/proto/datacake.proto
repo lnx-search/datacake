@@ -25,12 +25,13 @@ service ConsistencyApi {
 
   // Removes a set of documents from the state.
   rpc multi_remove(MultiRemovePayload) returns (Empty);
+
+  // Applies a set of queued changed from a given node.
+  rpc apply_batch(BatchPayload) returns (Empty);
 }
 
 service ReplicationApi {
   // Fetches the live state of the keyspace states.
-  // This is a set keyspace and the timestamps that they were
-  // last updated at.
   rpc poll_keyspace(PollPayload) returns (KeyspaceInfo);
 
   // Fetches a given ORSWOT set for a given keyspace.
@@ -38,6 +39,12 @@ service ReplicationApi {
 
   // Fetches a given set of documents in order to bring itself up to speed.
   rpc fetch_docs(FetchDocs) returns (FetchedDocs);
+}
+
+message BatchPayload {
+  Timestamp timestamp = 1;
+  repeated MultiPutPayload modified = 2;
+  repeated MultiRemovePayload removed = 3;
 }
 
 message PollPayload {

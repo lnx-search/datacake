@@ -8,6 +8,15 @@ pub struct ChitchatRpcMessage {
     pub timestamp: ::core::option::Option<Timestamp>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BatchPayload {
+    #[prost(message, optional, tag = "1")]
+    pub timestamp: ::core::option::Option<Timestamp>,
+    #[prost(message, repeated, tag = "2")]
+    pub modified: ::prost::alloc::vec::Vec<MultiPutPayload>,
+    #[prost(message, repeated, tag = "3")]
+    pub removed: ::prost::alloc::vec::Vec<MultiRemovePayload>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct PollPayload {
     #[prost(message, optional, tag = "1")]
     pub timestamp: ::core::option::Option<Timestamp>,
@@ -365,6 +374,26 @@ pub mod consistency_api_client {
             );
             self.inner.unary(request.into_request(), path, codec).await
         }
+        /// Applies a set of queued changed from a given node.
+        pub async fn apply_batch(
+            &mut self,
+            request: impl tonic::IntoRequest<super::BatchPayload>,
+        ) -> Result<tonic::Response<super::Empty>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/datacake_api.ConsistencyApi/apply_batch",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
     }
 }
 /// Generated client implementations.
@@ -437,8 +466,6 @@ pub mod replication_api_client {
             self
         }
         /// Fetches the live state of the keyspace states.
-        /// This is a set keyspace and the timestamps that they were
-        /// last updated at.
         pub async fn poll_keyspace(
             &mut self,
             request: impl tonic::IntoRequest<super::PollPayload>,
@@ -676,6 +703,11 @@ pub mod consistency_api_server {
             &self,
             request: tonic::Request<super::MultiRemovePayload>,
         ) -> Result<tonic::Response<super::Empty>, tonic::Status>;
+        /// Applies a set of queued changed from a given node.
+        async fn apply_batch(
+            &self,
+            request: tonic::Request<super::BatchPayload>,
+        ) -> Result<tonic::Response<super::Empty>, tonic::Status>;
     }
     #[derive(Debug)]
     pub struct ConsistencyApiServer<T: ConsistencyApi> {
@@ -889,6 +921,44 @@ pub mod consistency_api_server {
                     };
                     Box::pin(fut)
                 }
+                "/datacake_api.ConsistencyApi/apply_batch" => {
+                    #[allow(non_camel_case_types)]
+                    struct apply_batchSvc<T: ConsistencyApi>(pub Arc<T>);
+                    impl<
+                        T: ConsistencyApi,
+                    > tonic::server::UnaryService<super::BatchPayload>
+                    for apply_batchSvc<T> {
+                        type Response = super::Empty;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::BatchPayload>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).apply_batch(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = apply_batchSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
                 _ => {
                     Box::pin(async move {
                         Ok(
@@ -936,8 +1006,6 @@ pub mod replication_api_server {
     #[async_trait]
     pub trait ReplicationApi: Send + Sync + 'static {
         /// Fetches the live state of the keyspace states.
-        /// This is a set keyspace and the timestamps that they were
-        /// last updated at.
         async fn poll_keyspace(
             &self,
             request: tonic::Request<super::PollPayload>,

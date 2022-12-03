@@ -1,8 +1,7 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use datacake_cluster::mem_store::MemStore;
-use datacake_cluster::test_suite::InstrumentedStorage;
+use datacake_cluster::test_utils::{InstrumentedStorage, MemStore};
 use datacake_cluster::{
     ClusterOptions,
     ConnectionConfig,

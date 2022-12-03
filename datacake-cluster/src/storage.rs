@@ -3,12 +3,54 @@ use std::error::Error;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use datacake_crdt::{HLCTimestamp, Key};
 use tonic::transport::Channel;
 
 use crate::core::Document;
+
+/// A utility for tracking the progress a task has made.
+pub struct ProgressWatcher {
+    inner: ProgressTracker,
+    timeout: Duration,
+    last_tick: Instant,
+    last_observed_counter: u64,
+}
+
+impl ProgressWatcher {
+    pub fn new(inner: ProgressTracker, timeout: Duration) -> Self {
+        Self {
+            inner,
+            timeout,
+            last_tick: Instant::now(),
+            last_observed_counter: 0,
+        }
+    }
+
+    /// Checks if the task has expired or made progress.
+    pub fn has_expired(&mut self) -> bool {
+        if self.is_done() {
+            return false;
+        }
+
+        let counter = self.inner.progress_counter.load(Ordering::Relaxed);
+
+        if counter > self.last_observed_counter {
+            self.last_tick = Instant::now();
+            self.last_observed_counter = counter;
+            return false;
+        }
+
+        self.last_tick.elapsed() > self.timeout
+    }
+
+    /// Returns if the task is complete or not.
+    pub fn is_done(&self) -> bool {
+        self.inner.done.load(Ordering::Relaxed)
+    }
+}
 
 #[derive(Default, Debug, Clone)]
 /// A simple atomic counter to indicate to supervisors that the given
@@ -26,12 +68,12 @@ impl ProgressTracker {
     ///
     /// This is so any supervisors don't accidentally cancel or abort a task if it's
     /// taking longer than it expected.
-    pub(crate) fn register_progress(&self) {
+    pub fn register_progress(&self) {
         self.progress_counter.fetch_add(1, Ordering::Relaxed);
     }
 
     /// Marks the task as complete.
-    pub(crate) fn set_done(&self) {
+    pub fn set_done(&self) {
         self.done.store(true, Ordering::Relaxed);
     }
 }
