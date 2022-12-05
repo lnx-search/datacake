@@ -1,9 +1,10 @@
 use std::marker::PhantomData;
+
 use datacake_crdt::{HLCTimestamp, Key, OrSWotSet, StateChanges};
 use puppet::{derive_message, Message};
 
-use crate::{Document, PutContext, Storage};
 use crate::storage::BulkMutationError;
+use crate::{Document, PutContext, Storage};
 
 #[derive(Debug, thiserror::Error)]
 #[error("Failed to (de)serialize state.")]
@@ -75,4 +76,3 @@ pub struct PurgeDeletes<S>(pub PhantomData<S>);
 impl<S: Storage> Message for PurgeDeletes<S> {
     type Output = Result<(), S::Error>;
 }
-

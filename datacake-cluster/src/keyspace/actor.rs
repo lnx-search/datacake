@@ -1,23 +1,16 @@
 use std::borrow::Cow;
 use std::collections::HashSet;
 use std::sync::Arc;
-use crossbeam_utils::atomic::AtomicCell;
-use puppet::{ActorMailbox, puppet_actor};
-use datacake_crdt::{HLCTimestamp, OrSWotSet, StateChanges};
 
-use crate::keyspace::messages::{CorruptedState, Serialize, NUM_SOURCES, PurgeDeletes};
-use crate::{Clock, Storage};
+use crossbeam_utils::atomic::AtomicCell;
+use datacake_crdt::{HLCTimestamp, OrSWotSet, StateChanges};
+use puppet::{puppet_actor, ActorMailbox};
+
+use super::messages::{Del, Diff, MultiDel, MultiSet, Set, SymDiff};
+use crate::keyspace::messages::{CorruptedState, PurgeDeletes, Serialize, NUM_SOURCES};
 use crate::keyspace::LastUpdated;
 use crate::storage::BulkMutationError;
-use super::messages::{
-    Set,
-    MultiSet,
-    Del,
-    MultiDel,
-    Diff,
-    SymDiff,
-};
-
+use crate::{Clock, Storage};
 
 /// Spawns a new keyspace actor, returning the actor's mailbox.
 pub async fn spawn_keyspace<S>(
@@ -28,7 +21,7 @@ pub async fn spawn_keyspace<S>(
     change_timestamp: Arc<AtomicCell<HLCTimestamp>>,
 ) -> ActorMailbox<KeyspaceActor<S>>
 where
-    S: Storage + Send + Sync + 'static
+    S: Storage + Send + Sync + 'static,
 {
     let ks = KeyspaceActor {
         name: name.clone(),
@@ -43,7 +36,7 @@ where
 
 pub struct KeyspaceActor<S>
 where
-    S: Storage + Send + Sync + 'static
+    S: Storage + Send + Sync + 'static,
 {
     name: Cow<'static, str>,
     clock: Clock,
@@ -55,7 +48,7 @@ where
 #[puppet_actor]
 impl<S> KeyspaceActor<S>
 where
-    S: Storage + Send + Sync + 'static
+    S: Storage + Send + Sync + 'static,
 {
     async fn inc_change_timestamp(&self) {
         let ts = self.clock.get_time().await;
@@ -69,7 +62,7 @@ where
     async fn on_set(&mut self, msg: Set<S>) -> Result<(), S::Error> {
         // We have something newer.
         if !self.state.will_apply(msg.doc.id, msg.doc.last_updated) {
-            return Ok(())
+            return Ok(());
         }
 
         let doc_id = msg.doc.id;
@@ -89,11 +82,15 @@ where
     /// Sets several documents value in the store.
     ///
     /// If a document is not the newest the store has seen thus far, it is a no-op.
-    async fn on_multi_set(&mut self, msg: MultiSet<S>) -> Result<(), BulkMutationError<S::Error>> {
+    async fn on_multi_set(
+        &mut self,
+        msg: MultiSet<S>,
+    ) -> Result<(), BulkMutationError<S::Error>> {
         let mut valid_entries = Vec::with_capacity(msg.docs.len());
 
         // Only select docs to be inserted if they're able to be applied.
-        let docs = msg.docs
+        let docs = msg
+            .docs
             .into_iter()
             .filter(|doc| self.state.will_apply(doc.id, doc.last_updated))
             .map(|doc| {
@@ -101,7 +98,8 @@ where
                 doc
             });
 
-        let res = self.storage
+        let res = self
+            .storage
             .multi_put_with_ctx(&self.name, docs, msg.ctx.as_ref())
             .await;
 
@@ -134,7 +132,7 @@ where
     async fn on_del(&mut self, msg: Del<S>) -> Result<(), S::Error> {
         // We have something newer.
         if !self.state.will_apply(msg.doc_id, msg.ts) {
-            return Ok(())
+            return Ok(());
         }
 
         self.storage
@@ -142,7 +140,8 @@ where
             .await?;
 
         // The change has gone through, let's apply our memory state.
-        self.state.delete_with_source(msg.source, msg.doc_id, msg.ts);
+        self.state
+            .delete_with_source(msg.source, msg.doc_id, msg.ts);
         self.inc_change_timestamp().await;
         Ok(())
     }
@@ -151,11 +150,15 @@ where
     /// Removes several documents value in the store.
     ///
     /// If a document is not the newest the store has seen thus far, it is a no-op.
-    async fn on_multi_del(&mut self, msg: MultiDel<S>) -> Result<(), BulkMutationError<S::Error>> {
+    async fn on_multi_del(
+        &mut self,
+        msg: MultiDel<S>,
+    ) -> Result<(), BulkMutationError<S::Error>> {
         let mut valid_entries = Vec::with_capacity(msg.key_ts_pairs.len());
 
         // Only select docs to be inserted if they're able to be applied.
-        let docs = msg.key_ts_pairs
+        let docs = msg
+            .key_ts_pairs
             .into_iter()
             .filter(|doc| self.state.will_apply(doc.0, doc.1))
             .map(|doc| {
@@ -163,9 +166,7 @@ where
                 doc
             });
 
-        let res = self.storage
-            .mark_many_as_tombstone(&self.name, docs)
-            .await;
+        let res = self.storage.mark_many_as_tombstone(&self.name, docs).await;
 
         // Ensure the insertion order into the set is correct.
         valid_entries.sort_by_key(|entry| entry.1);
@@ -190,14 +191,15 @@ where
     }
 
     #[puppet]
-    async fn on_purge_tombstones(&mut self, _msg: PurgeDeletes<S>) -> Result<(), S::Error> {
+    async fn on_purge_tombstones(
+        &mut self,
+        _msg: PurgeDeletes<S>,
+    ) -> Result<(), S::Error> {
         let changes = self.state.purge_old_deletes();
 
-        let res = self.storage
-            .remove_tombstones(
-                &self.name,
-                changes.iter().map(|(key, _)| *key),
-            )
+        let res = self
+            .storage
+            .remove_tombstones(&self.name, changes.iter().map(|(key, _)| *key))
             .await;
 
         // The operation may have been partially successful. We should re-mark
@@ -245,15 +247,18 @@ where
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use datacake_crdt::get_unix_timestamp_ms;
-    use crate::Document;
-    use crate::test_utils::MockStorage;
-    use super::*;
 
-    async fn make_actor(clock: Clock, storage: MockStorage) -> KeyspaceActor<MockStorage> {
+    use super::*;
+    use crate::test_utils::MockStorage;
+    use crate::Document;
+
+    async fn make_actor(
+        clock: Clock,
+        storage: MockStorage,
+    ) -> KeyspaceActor<MockStorage> {
         let ts = clock.get_time().await;
         KeyspaceActor {
             name: Cow::Borrowed("my-keyspace"),
@@ -274,8 +279,8 @@ mod tests {
 
         let docs = [doc_1.clone(), doc_2.clone(), doc_3.clone()];
 
-        let mock_store = MockStorage::default()
-            .expect_put_with_ctx(3, move |keyspace, doc, ctx| {
+        let mock_store =
+            MockStorage::default().expect_put_with_ctx(3, move |keyspace, doc, ctx| {
                 assert_eq!(keyspace, "my-keyspace");
                 assert!(ctx.is_none());
                 assert!(docs.contains(&doc));
@@ -290,7 +295,7 @@ mod tests {
                 source: 0,
                 doc: doc_1,
                 ctx: None,
-                _marker: Default::default()
+                _marker: Default::default(),
             })
             .await
             .expect("Put operation should be successful.");
@@ -299,7 +304,7 @@ mod tests {
                 source: 1,
                 doc: doc_2,
                 ctx: None,
-                _marker: Default::default()
+                _marker: Default::default(),
             })
             .await
             .expect("Put operation should be successful.");
@@ -308,7 +313,7 @@ mod tests {
                 source: 0,
                 doc: doc_3,
                 ctx: None,
-                _marker: Default::default()
+                _marker: Default::default(),
             })
             .await
             .expect("Put operation should be successful.");
@@ -325,8 +330,8 @@ mod tests {
 
         let docs = [doc_1.clone(), doc_2.clone()];
 
-        let mock_store = MockStorage::default()
-            .expect_put_with_ctx(2, move |keyspace, doc, ctx| {
+        let mock_store =
+            MockStorage::default().expect_put_with_ctx(2, move |keyspace, doc, ctx| {
                 assert_eq!(keyspace, "my-keyspace");
                 assert!(ctx.is_none());
                 assert!(docs.contains(&doc));
@@ -341,7 +346,7 @@ mod tests {
                 source: 0,
                 doc: doc_1,
                 ctx: None,
-                _marker: Default::default()
+                _marker: Default::default(),
             })
             .await
             .expect("Put operation should be successful.");
@@ -352,7 +357,7 @@ mod tests {
                 source: 1,
                 doc: doc_2,
                 ctx: None,
-                _marker: Default::default()
+                _marker: Default::default(),
             })
             .await
             .expect("Put operation should be successful.");
@@ -363,7 +368,7 @@ mod tests {
                 source: 0,
                 doc: doc_3,
                 ctx: None,
-                _marker: Default::default()
+                _marker: Default::default(),
             })
             .await
             .expect("Put operation should be successful.");
@@ -379,14 +384,16 @@ mod tests {
 
         let docs = [doc_1.clone(), doc_2.clone(), doc_3.clone()];
 
-        let mock_store = MockStorage::default()
-            .expect_multi_put_with_ctx(1, move |keyspace, mut docs_iter, ctx| {
+        let mock_store = MockStorage::default().expect_multi_put_with_ctx(
+            1,
+            move |keyspace, mut docs_iter, ctx| {
                 assert_eq!(keyspace, "my-keyspace");
                 assert!(ctx.is_none());
                 assert!(docs_iter.all(|doc| docs.contains(&doc)));
 
                 Ok(())
-            });
+            },
+        );
 
         let mut keyspace = make_actor(clock, mock_store).await;
         keyspace
@@ -394,7 +401,7 @@ mod tests {
                 source: 0,
                 docs: vec![doc_1.clone(), doc_2.clone(), doc_3.clone()],
                 ctx: None,
-                _marker: Default::default()
+                _marker: Default::default(),
             })
             .await
             .expect("Put operation should be successful.");
@@ -423,10 +430,7 @@ mod tests {
             .expect_put_with_ctx(2, move |keyspace, doc, ctx| {
                 assert_eq!(keyspace, "my-keyspace");
                 assert!(ctx.is_none());
-                assert!(
-                    doc.id == doc_3.id
-                        || doc.id == doc_1.id
-                );
+                assert!(doc.id == doc_3.id || doc.id == doc_1.id);
 
                 Ok(())
             });
@@ -437,7 +441,7 @@ mod tests {
                 source: 1,
                 doc: doc_3,
                 ctx: None,
-                _marker: Default::default()
+                _marker: Default::default(),
             })
             .await
             .expect("Put operation should be successful.");
@@ -446,7 +450,7 @@ mod tests {
                 source: 0,
                 doc: doc_1,
                 ctx: None,
-                _marker: Default::default()
+                _marker: Default::default(),
             })
             .await
             .expect("Put operation should be successful.");
@@ -457,7 +461,7 @@ mod tests {
                 source: 0,
                 docs: vec![doc_2.clone(), doc_4.clone()],
                 ctx: None,
-                _marker: Default::default()
+                _marker: Default::default(),
             })
             .await
             .expect("Put operation should be successful.");
@@ -497,7 +501,7 @@ mod tests {
                 source: 0,
                 docs: vec![doc_1.clone(), doc_2.clone(), doc_3.clone()],
                 ctx: None,
-                _marker: Default::default()
+                _marker: Default::default(),
             })
             .await
             .expect("Put operation should be successful.");
@@ -506,7 +510,7 @@ mod tests {
                 source: 0,
                 doc_id: doc_1.id,
                 ts: delete_ts,
-                _marker: Default::default()
+                _marker: Default::default(),
             })
             .await
             .expect("Put operation should be successful.");
@@ -522,7 +526,6 @@ mod tests {
 
         let doc_ids = [doc_1.id, doc_2.id];
         let docs = [doc_1.clone(), doc_2.clone(), doc_3.clone()];
-
 
         let mock_store = MockStorage::default()
             .expect_multi_put_with_ctx(1, move |keyspace, mut docs_iter, ctx| {
@@ -546,7 +549,7 @@ mod tests {
                 source: 0,
                 docs: vec![doc_1.clone(), doc_2.clone(), doc_3.clone()],
                 ctx: None,
-                _marker: Default::default()
+                _marker: Default::default(),
             })
             .await
             .expect("Put operation should be successful.");
@@ -557,14 +560,9 @@ mod tests {
                     (doc_1.id, clock.get_time().await),
                     (doc_2.id, clock.get_time().await),
                 ],
-                _marker: Default::default()
+                _marker: Default::default(),
             })
             .await
             .expect("Put operation should be successful.");
-
-
     }
 }
-
-
-

@@ -7,7 +7,7 @@ use datacake_crdt::HLCTimestamp;
 use tonic::{Request, Response, Status};
 
 use crate::core::Document;
-use crate::keyspace::{CONSISTENCY_SOURCE_ID, KeyspaceGroup};
+use crate::keyspace::{KeyspaceGroup, CONSISTENCY_SOURCE_ID};
 use crate::rpc::datacake_api;
 use crate::rpc::datacake_api::consistency_api_server::ConsistencyApi;
 use crate::rpc::datacake_api::{
@@ -77,9 +77,7 @@ where
 
         self.group.clock().register_ts(doc.last_updated).await;
 
-        let keyspace = self.group
-            .get_or_create_keyspace(&inner.keyspace)
-            .await;
+        let keyspace = self.group.get_or_create_keyspace(&inner.keyspace).await;
         let msg = crate::keyspace::Set {
             source: CONSISTENCY_SOURCE_ID,
             doc,
@@ -102,7 +100,8 @@ where
     ) -> Result<Response<datacake_api::Timestamp>, Status> {
         let inner = request.into_inner();
         let mut newest_ts = HLCTimestamp::new(0, 0, 0);
-        let docs = inner.documents
+        let docs = inner
+            .documents
             .into_iter()
             .map(Document::from)
             .map(|doc| {
@@ -116,9 +115,7 @@ where
 
         self.group.clock().register_ts(newest_ts).await;
 
-        let keyspace = self.group
-            .get_or_create_keyspace(&inner.keyspace)
-            .await;
+        let keyspace = self.group.get_or_create_keyspace(&inner.keyspace).await;
         let msg = crate::keyspace::MultiSet {
             source: CONSISTENCY_SOURCE_ID,
             docs,
@@ -146,9 +143,7 @@ where
 
         self.group.clock().register_ts(last_updated).await;
 
-        let keyspace = self.group
-            .get_or_create_keyspace(&inner.keyspace)
-            .await;
+        let keyspace = self.group.get_or_create_keyspace(&inner.keyspace).await;
         let msg = crate::keyspace::Del {
             source: CONSISTENCY_SOURCE_ID,
             doc_id,
@@ -189,9 +184,7 @@ where
 
         self.group.clock().register_ts(newest_ts).await;
 
-        let keyspace = self.group
-            .get_or_create_keyspace(&inner.keyspace)
-            .await;
+        let keyspace = self.group.get_or_create_keyspace(&inner.keyspace).await;
         let msg = crate::keyspace::MultiDel {
             source: CONSISTENCY_SOURCE_ID,
             key_ts_pairs,

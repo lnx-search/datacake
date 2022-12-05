@@ -9,11 +9,20 @@ use anyhow::anyhow;
 use crossbeam_channel::{Receiver, Sender};
 use crossbeam_utils::atomic::AtomicCell;
 use datacake_crdt::{HLCTimestamp, StateChanges};
+use puppet::ActorMailbox;
 use tokio::sync::Semaphore;
 use tokio::time::{interval, MissedTickBehavior};
-use puppet::ActorMailbox;
 
-use crate::keyspace::{KeyspaceGroup, KeyspaceActor, KeyspaceTimestamps, READ_REPAIR_SOURCE_ID, Diff, Del, MultiDel, MultiSet};
+use crate::keyspace::{
+    Del,
+    Diff,
+    KeyspaceActor,
+    KeyspaceGroup,
+    KeyspaceTimestamps,
+    MultiDel,
+    MultiSet,
+    READ_REPAIR_SOURCE_ID,
+};
 use crate::replication::{MembershipChanges, MAX_CONCURRENT_REQUESTS};
 use crate::rpc::ReplicationClient;
 use crate::storage::ProgressWatcher;
@@ -140,20 +149,14 @@ impl KeyspaceTracker {
         node_id: String,
         other: &KeyspaceTimestamps,
     ) -> impl Iterator<Item = Cow<'static, str>> {
-        self.inner
-            .entry(node_id)
-            .or_default()
-            .diff(other)
+        self.inner.entry(node_id).or_default().diff(other)
     }
 
     fn set_keyspace(&mut self, node_id: String, ts: HLCTimestamp) {
         self.inner
             .entry(node_id.clone())
             .or_default()
-            .insert(
-            Cow::Owned(node_id.clone()),
-            Arc::new(AtomicCell::new(ts)),
-            );
+            .insert(Cow::Owned(node_id.clone()), Arc::new(AtomicCell::new(ts)));
     }
 }
 
@@ -376,10 +379,7 @@ where
     // The removal task can operate interdependently of the modified handler.
     // If, in the process of handling removals, the modified handler errors,
     // we simply let the removal task continue on as normal.
-    let removal_task = tokio::spawn(handle_removals(
-        keyspace.clone(),
-        removed,
-    ));
+    let removal_task = tokio::spawn(handle_removals(keyspace.clone(), removed));
 
     let res = tokio::spawn(handle_modified(client, keyspace, modified, ctx));
 

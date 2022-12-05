@@ -17,14 +17,14 @@ use crate::storage::Storage;
 
 pub struct ReplicationService<S>
 where
-    S: Storage + Send + Sync + 'static
+    S: Storage + Send + Sync + 'static,
 {
     group: KeyspaceGroup<S>,
 }
 
 impl<S> ReplicationService<S>
 where
-    S: Storage + Send + Sync + 'static
+    S: Storage + Send + Sync + 'static,
 {
     pub fn new(group: KeyspaceGroup<S>) -> Self {
         Self { group }
@@ -43,10 +43,7 @@ impl<S: Storage + Send + Sync + 'static> ReplicationApi for ReplicationService<S
         let ts = HLCTimestamp::from(inner.timestamp.unwrap());
         clock.register_ts(ts).await;
 
-        let payload = self
-            .group
-            .get_keyspace_info()
-            .await;
+        let payload = self.group.get_keyspace_info().await;
 
         Ok(Response::new(payload))
     }
@@ -128,7 +125,7 @@ mod tests {
     use std::marker::PhantomData;
 
     use super::*;
-    use crate::keyspace::{KeyspaceTimestamps, READ_REPAIR_SOURCE_ID, Set};
+    use crate::keyspace::{KeyspaceTimestamps, Set, READ_REPAIR_SOURCE_ID};
     use crate::test_utils::MemStore;
     use crate::Document;
 
@@ -186,7 +183,7 @@ mod tests {
                 source: READ_REPAIR_SOURCE_ID,
                 doc: Document::new(1, clock.get_time().await, Vec::new()),
                 ctx: None,
-                _marker: PhantomData::<MemStore>::default()
+                _marker: PhantomData::<MemStore>::default(),
             })
             .await
             .expect("Set value in store.");
@@ -211,7 +208,8 @@ mod tests {
             .into_inner();
 
         assert_eq!(
-            HLCTimestamp::from(resp.last_updated.unwrap()), last_updated,
+            HLCTimestamp::from(resp.last_updated.unwrap()),
+            last_updated,
             "Last updated timestamps should match."
         );
         assert_eq!(resp.set_data, set_data, "State data should match.");
@@ -232,7 +230,7 @@ mod tests {
                 source: READ_REPAIR_SOURCE_ID,
                 doc: doc.clone(),
                 ctx: None,
-                _marker: PhantomData::<MemStore>::default()
+                _marker: PhantomData::<MemStore>::default(),
             })
             .await
             .expect("Set value in store.");

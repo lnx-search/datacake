@@ -1,8 +1,8 @@
 use std::borrow::Cow;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use crossbeam_utils::atomic::AtomicCell;
 
+use crossbeam_utils::atomic::AtomicCell;
 use datacake_crdt::{HLCTimestamp, Key, OrSWotSet};
 use rkyv::AlignedVec;
 use tonic::transport::Channel;
@@ -197,7 +197,8 @@ impl ReplicationClient {
     pub async fn get_state(
         &mut self,
         keyspace: impl Into<String>,
-    ) -> Result<(HLCTimestamp, OrSWotSet<{ crate::keyspace::NUM_SOURCES }>), Status> {
+    ) -> Result<(HLCTimestamp, OrSWotSet<{ crate::keyspace::NUM_SOURCES }>), Status>
+    {
         let ts = self.clock.get_time().await;
         let inner = self
             .inner

@@ -46,7 +46,14 @@ use tokio_stream::wrappers::WatchStream;
 
 use crate::clock::Clock;
 use crate::core::Document;
-use crate::keyspace::{CONSISTENCY_SOURCE_ID, Del, KeyspaceGroup, MultiDel, MultiSet, Set};
+use crate::keyspace::{
+    Del,
+    KeyspaceGroup,
+    MultiDel,
+    MultiSet,
+    Set,
+    CONSISTENCY_SOURCE_ID,
+};
 use crate::node::{ClusterMember, DatacakeNode};
 use crate::replication::{
     MembershipChanges,

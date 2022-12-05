@@ -6,27 +6,27 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crossbeam_utils::atomic::AtomicCell;
+use datacake_crdt::{HLCTimestamp, Key, OrSWotSet};
 use parking_lot::RwLock;
 use puppet::ActorMailbox;
 use tokio::time::interval;
-use datacake_crdt::{HLCTimestamp, Key, OrSWotSet};
 
 use super::NUM_SOURCES;
-use crate::{Clock, Storage};
-use crate::keyspace::KeyspaceActor;
 use crate::keyspace::messages::PurgeDeletes;
+use crate::keyspace::KeyspaceActor;
 use crate::rpc::datacake_api;
+use crate::{Clock, Storage};
 
 const PURGE_DELETES_INTERVAL: Duration = if cfg!(test) {
     Duration::from_secs(1)
 } else {
-    Duration::from_secs(60 * 60)  // 1 Hour
+    Duration::from_secs(60 * 60) // 1 Hour
 };
 type KeyspaceMap<S> = BTreeMap<Cow<'static, str>, ActorMailbox<KeyspaceActor<S>>>;
 
 pub struct KeyspaceGroup<S>
 where
-    S: Storage + Send + Sync + 'static
+    S: Storage + Send + Sync + 'static,
 {
     clock: Clock,
     storage: Arc<S>,
@@ -36,7 +36,7 @@ where
 
 impl<S> Clone for KeyspaceGroup<S>
 where
-    S: Storage + Send + Sync + 'static
+    S: Storage + Send + Sync + 'static,
 {
     fn clone(&self) -> Self {
         Self {
@@ -66,7 +66,7 @@ impl<S> KeyspaceGroup<S>
 where
     S: Storage + Send + Sync + 'static,
 {
-        /// Creates a new, empty keyspace group with a given storage implementation.
+    /// Creates a new, empty keyspace group with a given storage implementation.
     pub async fn new(storage: Arc<S>, clock: Clock) -> Self {
         let slf = Self {
             clock,
@@ -102,7 +102,8 @@ where
 
         let mut timestamps = HashMap::with_capacity(lock.len());
         for (name, ts) in lock.iter() {
-            timestamps.insert(name.to_string(), datacake_api::Timestamp::from(ts.load()));
+            timestamps
+                .insert(name.to_string(), datacake_api::Timestamp::from(ts.load()));
         }
 
         datacake_api::KeyspaceInfo {
@@ -114,7 +115,10 @@ where
     /// Get a handle to a given keyspace.
     ///
     /// If the keyspace does not exist, it is created.
-    pub async fn get_or_create_keyspace(&self, name: &str) -> ActorMailbox<KeyspaceActor<S>> {
+    pub async fn get_or_create_keyspace(
+        &self,
+        name: &str,
+    ) -> ActorMailbox<KeyspaceActor<S>> {
         {
             let guard = self.group.read();
             if let Some(state) = guard.get(name) {
@@ -238,7 +242,6 @@ where
     }
 }
 
-
 async fn keyspace_purge_task<S>(handle: KeyspaceGroup<S>)
 where
     S: Storage + Send + Sync + 'static,
@@ -261,9 +264,10 @@ where
     }
 }
 
-
 #[derive(Clone, Default, Debug)]
-pub struct KeyspaceTimestamps(pub BTreeMap<Cow<'static, str>, Arc<AtomicCell<HLCTimestamp>>>);
+pub struct KeyspaceTimestamps(
+    pub BTreeMap<Cow<'static, str>, Arc<AtomicCell<HLCTimestamp>>>,
+);
 
 impl KeyspaceTimestamps {
     pub fn diff(&self, other: &Self) -> impl Iterator<Item = Cow<'static, str>> {
