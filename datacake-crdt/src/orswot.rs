@@ -100,6 +100,14 @@ impl<const N: usize> NodeVersions<N> {
         true
     }
 
+    /// Checks if the timestamp for a given source lies after the last registered ts.
+    fn is_after_last_ts(&self, source: usize, ts: HLCTimestamp) -> bool {
+        self.nodes_max_stamps[source]
+            .get(&ts.node())
+            .map(|existing| existing < &ts)
+            .unwrap_or_default()
+    }
+
     /// Computes the safe observed timestamp based off all known sources.
     fn compute_safe_last_stamp(&mut self, node: u32) {
         let min = self
@@ -398,6 +406,11 @@ impl<const N: usize> OrSWotSet<N> {
         for (key, stamp) in tombstones {
             self.dead.insert(key, stamp);
         }
+    }
+
+    /// Checks if the given operation will be applied if it is in fact carried out.
+    pub fn will_apply(&self, source: usize, ts: HLCTimestamp) -> bool {
+        self.versions.is_after_last_ts(source, ts)
     }
 
     /// Insert a key into the set with a given timestamp.
