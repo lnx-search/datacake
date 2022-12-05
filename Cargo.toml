@@ -2,8 +2,7 @@
 members = [
     "datacake-cluster",
     "datacake-crdt",
-    # "examples/sled-cluster"
+    "datacake-sqlite",
 ]
 exclude = [
-    "examples/sled-cluster"
 ]

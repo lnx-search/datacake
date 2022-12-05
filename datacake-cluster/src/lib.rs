@@ -41,11 +41,11 @@ pub use nodes_selector::{
 pub use statistics::ClusterStatistics;
 #[cfg(feature = "test-utils")]
 pub use storage::test_suite;
-pub use storage::{ProgressTracker, PutContext, Storage};
+pub use storage::{ProgressTracker, PutContext, Storage, BulkMutationError};
+pub use core::Document;
 use tokio_stream::wrappers::WatchStream;
 
 use crate::clock::Clock;
-use crate::core::Document;
 use crate::keyspace::{
     Del,
     KeyspaceGroup,
