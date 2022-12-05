@@ -1,0 +1,28 @@
+[package]
+name = "datacake-sqlite"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+futures = "0.3.25"
+flume = "0.10.14"
+rusqlite = "0.28.0"
+async-trait = "0.1.59"
+thiserror = "1"
+
+tokio = { version = "1", default-features = false, features = ["rt"] }
+
+datacake-crdt = { version = "0.3", path = "../datacake-crdt" }
+datacake-cluster = { version = "0.1", path = "../datacake-cluster" }
+
+serde = { verson = "1", features = ["derive"], optional = true }
+rkyv = { verson = "0.7", features = ["validation"], optional = true }
+bytecheck = { version = "0.6.9", optional = true }
+
+[features]
+rkyv-support = ["rkyv", "bytecheck"]
+
+[dev-dependencies]
+datacake-cluster = { version = "0.1", path = "../datacake-cluster", features = ["test-utils"] }
