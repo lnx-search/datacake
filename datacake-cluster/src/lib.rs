@@ -75,7 +75,11 @@ use crate::rpc::{
 
 pub static DEFAULT_DATA_CENTER: &str = "datacake-dc-unknown";
 pub static DEFAULT_CLUSTER_ID: &str = "datacake-cluster-unknown";
-const DEFAULT_REPAIR_INTERVAL: Duration = Duration::from_secs(60 * 60); // 1 Hour
+const DEFAULT_REPAIR_INTERVAL: Duration = if cfg!(any(test, feature = "test-utils")) {
+    Duration::from_secs(1)
+} else {
+    Duration::from_secs(60 * 60) // 1 Hour
+};
 
 /// Non-required configurations for the datacake cluster node.
 pub struct ClusterOptions {
