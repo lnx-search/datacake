@@ -156,7 +156,7 @@ impl KeyspaceTracker {
         self.inner
             .entry(node_id.clone())
             .or_default()
-            .insert(Cow::Owned(node_id.clone()), Arc::new(AtomicCell::new(ts)));
+            .insert(Cow::Owned(node_id), Arc::new(AtomicCell::new(ts)));
     }
 }
 
