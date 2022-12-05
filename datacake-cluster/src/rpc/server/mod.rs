@@ -21,7 +21,7 @@ use crate::RpcNetwork;
 
 pub struct Context<S, R>
 where
-    S: Storage,
+    S: Storage + Send + Sync + 'static,
     R: ServiceRegistry + Clone,
 {
     pub chitchat_messages: flume::Sender<(SocketAddr, ChitchatMessage)>,
@@ -32,7 +32,7 @@ where
 
 impl<S, R> Clone for Context<S, R>
 where
-    S: Storage,
+    S: Storage + Send + Sync + 'static,
     R: ServiceRegistry + Clone,
 {
     fn clone(&self) -> Self {

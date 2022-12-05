@@ -24,12 +24,12 @@ use crate::Clock;
 /// This allows us to maintain a single connection rather than both a UDP and TCP connection.
 pub struct GrpcTransport<S, R>(Arc<GrpcTransportInner<S, R>>)
 where
-    S: Storage,
+    S: Storage + Send + Sync + 'static,
     R: ServiceRegistry + Clone;
 
 impl<S, R> GrpcTransport<S, R>
 where
-    S: Storage,
+    S: Storage + Send + Sync + 'static,
     R: ServiceRegistry + Clone,
 {
     /// Creates a new GRPC transport instances.
@@ -47,7 +47,7 @@ where
 
 impl<S, R> Deref for GrpcTransport<S, R>
 where
-    S: Storage,
+    S: Storage + Send + Sync + 'static,
     R: ServiceRegistry + Clone,
 {
     type Target = GrpcTransportInner<S, R>;
@@ -87,7 +87,7 @@ where
 
 pub struct GrpcTransportInner<S, R>
 where
-    S: Storage,
+    S: Storage + Send + Sync + 'static,
     R: ServiceRegistry + Clone,
 {
     /// Context to be passed when binding a new RPC server instance.

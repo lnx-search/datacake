@@ -1,4 +1,7 @@
+use std::borrow::Cow;
 use std::net::SocketAddr;
+use std::sync::Arc;
+use crossbeam_utils::atomic::AtomicCell;
 
 use datacake_crdt::{HLCTimestamp, Key, OrSWotSet};
 use rkyv::AlignedVec;
@@ -176,11 +179,13 @@ impl ReplicationClient {
         let ts = HLCTimestamp::from(inner.timestamp.unwrap());
         self.clock.register_ts(ts).await;
 
-        let mut aligned = AlignedVec::with_capacity(inner.keyspace_timestamps.len());
-        aligned.extend_from_slice(&inner.keyspace_timestamps);
+        let mut timestamps = KeyspaceTimestamps::default();
+        for (keyspace, ts) in inner.keyspace_timestamps {
+            let ts = HLCTimestamp::from(ts);
+            timestamps.insert(Cow::Owned(keyspace), Arc::new(AtomicCell::new(ts)));
+        }
 
-        rkyv::from_bytes(&aligned)
-            .map_err(|_| Status::data_loss("Returned buffer is corrupted."))
+        Ok(timestamps)
     }
 
     /// Fetches the node's current state for a given keyspace and returns
@@ -192,7 +197,7 @@ impl ReplicationClient {
     pub async fn get_state(
         &mut self,
         keyspace: impl Into<String>,
-    ) -> Result<(u64, OrSWotSet<{ crate::keyspace::NUM_SOURCES }>), Status> {
+    ) -> Result<(HLCTimestamp, OrSWotSet<{ crate::keyspace::NUM_SOURCES }>), Status> {
         let ts = self.clock.get_time().await;
         let inner = self
             .inner
@@ -212,7 +217,7 @@ impl ReplicationClient {
         let state = rkyv::from_bytes(&aligned)
             .map_err(|_| Status::data_loss("Returned buffer is corrupted."))?;
 
-        Ok((inner.last_updated, state))
+        Ok((inner.last_updated.unwrap().into(), state))
     }
 
     /// Fetches a set of documents with the provided IDs belonging to the given keyspace.

@@ -18,6 +18,7 @@ use std::borrow::Cow;
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::Display;
 use std::future::Future;
+use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -45,7 +46,7 @@ use tokio_stream::wrappers::WatchStream;
 
 use crate::clock::Clock;
 use crate::core::Document;
-use crate::keyspace::{ConsistencySource, KeyspaceGroup};
+use crate::keyspace::{CONSISTENCY_SOURCE_ID, Del, KeyspaceGroup, MultiDel, MultiSet, Set};
 use crate::node::{ClusterMember, DatacakeNode};
 use crate::replication::{
     MembershipChanges,
@@ -484,23 +485,25 @@ where
         let document = Document::new(doc_id, last_updated, data);
 
         info!(node_id = %self.node_id, doc_id = doc_id, ts = %last_updated, "Putting document");
-        core::put_data::<ConsistencySource, _>(
-            keyspace,
-            document.clone(),
-            &self.group,
-            None,
-        )
-        .await?;
+
+        let keyspace = self.group.get_or_create_keyspace(keyspace).await;
+        let msg = Set {
+            source: CONSISTENCY_SOURCE_ID,
+            doc: document.clone(),
+            ctx: None,
+            _marker: PhantomData::<S>::default(),
+        };
+        keyspace.send(msg).await?;
 
         // Register mutation with the distributor service.
         self.task_service.mutation(Mutation::Put {
-            keyspace: Cow::Owned(keyspace.to_string()),
+            keyspace: Cow::Owned(keyspace.name().to_string()),
             doc: document.clone(),
         });
 
         let factory = |node| {
             let clock = self.group.clock().clone();
-            let keyspace = keyspace.to_string();
+            let keyspace = keyspace.name().to_string();
             let document = document.clone();
             let node_id = node_id.clone();
             async move {
@@ -550,23 +553,24 @@ where
             .map(|(id, data)| Document::new(id, last_updated, data))
             .collect::<Vec<_>>();
 
-        core::put_many_data::<ConsistencySource, _>(
-            keyspace,
-            docs.clone().into_iter(),
-            &self.group,
-            None,
-        )
-        .await?;
+        let keyspace = self.group.get_or_create_keyspace(keyspace).await;
+        let msg = MultiSet {
+            source: CONSISTENCY_SOURCE_ID,
+            docs: docs.clone(),
+            ctx: None,
+            _marker: PhantomData::<S>::default(),
+        };
+        keyspace.send(msg).await?;
 
         // Register mutation with the distributor service.
         self.task_service.mutation(Mutation::MultiPut {
-            keyspace: Cow::Owned(keyspace.to_string()),
+            keyspace: Cow::Owned(keyspace.name().to_string()),
             docs: docs.clone(),
         });
 
         let factory = |node| {
             let clock = self.group.clock().clone();
-            let keyspace = keyspace.to_string();
+            let keyspace = keyspace.name().to_string();
             let documents = docs.clone();
             let node_id = node_id.clone();
             let node_addr = node_addr;
@@ -606,24 +610,25 @@ where
 
         let last_updated = self.clock.get_time().await;
 
-        core::del_data::<ConsistencySource, _>(
-            keyspace,
+        let keyspace = self.group.get_or_create_keyspace(keyspace).await;
+        let msg = Del {
+            source: CONSISTENCY_SOURCE_ID,
             doc_id,
-            last_updated,
-            &self.group,
-        )
-        .await?;
+            ts: last_updated,
+            _marker: PhantomData::<S>::default(),
+        };
+        keyspace.send(msg).await?;
 
         // Register mutation with the distributor service.
         self.task_service.mutation(Mutation::Del {
-            keyspace: Cow::Owned(keyspace.to_string()),
+            keyspace: Cow::Owned(keyspace.name().to_string()),
             doc_id,
             ts: last_updated,
         });
 
         let factory = |node| {
             let clock = self.group.clock().clone();
-            let keyspace = keyspace.to_string();
+            let keyspace = keyspace.name().to_string();
             async move {
                 let channel = self
                     .network
@@ -668,22 +673,23 @@ where
             .map(|id| (id, last_updated))
             .collect::<Vec<_>>();
 
-        core::del_many_data::<ConsistencySource, _>(
-            keyspace,
-            docs.clone().into_iter(),
-            &self.group,
-        )
-        .await?;
+        let keyspace = self.group.get_or_create_keyspace(keyspace).await;
+        let msg = MultiDel {
+            source: CONSISTENCY_SOURCE_ID,
+            key_ts_pairs: docs.clone(),
+            _marker: PhantomData::<S>::default(),
+        };
+        keyspace.send(msg).await?;
 
         // Register mutation with the distributor service.
         self.task_service.mutation(Mutation::MultiDel {
-            keyspace: Cow::Owned(keyspace.to_string()),
+            keyspace: Cow::Owned(keyspace.name().to_string()),
             docs: docs.clone(),
         });
 
         let factory = |node| {
             let clock = self.group.clock().clone();
-            let keyspace = keyspace.to_string();
+            let keyspace = keyspace.name().to_string();
             let docs = docs.clone();
             async move {
                 let channel = self

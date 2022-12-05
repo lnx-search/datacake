@@ -65,8 +65,11 @@ pub struct KeyspaceInfo {
     #[prost(message, optional, tag = "1")]
     pub timestamp: ::core::option::Option<Timestamp>,
     /// A mapping of a given keyspace and the timestamp of when it was last updated.
-    #[prost(bytes = "vec", tag = "2")]
-    pub keyspace_timestamps: ::prost::alloc::vec::Vec<u8>,
+    #[prost(map = "string, message", tag = "2")]
+    pub keyspace_timestamps: ::std::collections::HashMap<
+        ::prost::alloc::string::String,
+        Timestamp,
+    >,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetState {
@@ -79,8 +82,8 @@ pub struct GetState {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct KeyspaceOrSwotSet {
     /// The timestamp in which the keyspace was last updated.
-    #[prost(uint64, tag = "1")]
-    pub last_updated: u64,
+    #[prost(message, optional, tag = "1")]
+    pub last_updated: ::core::option::Option<Timestamp>,
     /// The serialized data form of the keyspace orswot set.
     #[prost(bytes = "vec", tag = "2")]
     pub set_data: ::prost::alloc::vec::Vec<u8>,

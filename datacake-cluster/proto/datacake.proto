@@ -81,7 +81,7 @@ message MultiRemovePayload {
 message KeyspaceInfo {
   Timestamp timestamp = 1;
   // A mapping of a given keyspace and the timestamp of when it was last updated.
-  bytes keyspace_timestamps = 2;
+  map<string, Timestamp> keyspace_timestamps = 2;
 }
 
 message GetState {
@@ -92,7 +92,7 @@ message GetState {
 
 message KeyspaceOrSwotSet {
   // The timestamp in which the keyspace was last updated.
-  uint64 last_updated = 1;
+  Timestamp last_updated = 1;
   // The serialized data form of the keyspace orswot set.
   bytes set_data = 2;
   Timestamp timestamp = 3;

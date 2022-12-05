@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use datacake_crdt::HLCTimestamp;
 use tonic::{Request, Response, Status};
 
-use crate::keyspace::KeyspaceGroup;
+use crate::keyspace::{KeyspaceGroup, LastUpdated, Serialize};
 use crate::rpc::datacake_api;
 use crate::rpc::datacake_api::replication_api_server::ReplicationApi;
 use crate::rpc::datacake_api::{
@@ -15,11 +15,17 @@ use crate::rpc::datacake_api::{
 };
 use crate::storage::Storage;
 
-pub struct ReplicationService<S: Storage> {
+pub struct ReplicationService<S>
+where
+    S: Storage + Send + Sync + 'static
+{
     group: KeyspaceGroup<S>,
 }
 
-impl<S: Storage> ReplicationService<S> {
+impl<S> ReplicationService<S>
+where
+    S: Storage + Send + Sync + 'static
+{
     pub fn new(group: KeyspaceGroup<S>) -> Self {
         Self { group }
     }
@@ -37,16 +43,12 @@ impl<S: Storage + Send + Sync + 'static> ReplicationApi for ReplicationService<S
         let ts = HLCTimestamp::from(inner.timestamp.unwrap());
         clock.register_ts(ts).await;
 
-        let keyspace_timestamps = self
+        let payload = self
             .group
-            .serialize_keyspace_counters()
-            .map_err(|e| Status::internal(e.to_string()))?;
+            .get_keyspace_info()
+            .await;
 
-        let ts = self.group.clock().get_time().await;
-        Ok(Response::new(KeyspaceInfo {
-            timestamp: Some(ts.into()),
-            keyspace_timestamps,
-        }))
+        Ok(Response::new(payload))
     }
 
     async fn get_state(
@@ -61,16 +63,16 @@ impl<S: Storage + Send + Sync + 'static> ReplicationApi for ReplicationService<S
 
         let keyspace = self.group.get_or_create_keyspace(&inner.keyspace).await;
 
-        let last_updated = keyspace.last_updated();
+        let last_updated = keyspace.send(LastUpdated).await;
         let set_data = keyspace
-            .serialize()
+            .send(Serialize)
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
 
         let ts = self.group.clock().get_time().await;
         Ok(Response::new(KeyspaceOrSwotSet {
             timestamp: Some(ts.into()),
-            last_updated,
+            last_updated: Some(last_updated.into()),
             set_data,
         }))
     }
@@ -123,9 +125,10 @@ impl<S: Storage + Send + Sync + 'static> ReplicationApi for ReplicationService<S
 #[cfg(test)]
 mod tests {
     use std::borrow::Cow;
+    use std::marker::PhantomData;
 
     use super::*;
-    use crate::keyspace::{KeyspaceTimestamps, ReadRepairSource};
+    use crate::keyspace::{KeyspaceTimestamps, READ_REPAIR_SOURCE_ID, Set};
     use crate::test_utils::MemStore;
     use crate::Document;
 
@@ -146,15 +149,10 @@ mod tests {
             .expect("Get keyspace info")
             .into_inner();
 
-        let counters: KeyspaceTimestamps =
-            rkyv::from_bytes(&resp.keyspace_timestamps).expect("Deserialize timestamps");
-        assert!(counters.is_empty(), "No keyspace should exist initially.");
+        assert!(resp.keyspace_timestamps.is_empty());
 
         // Add a new keyspace which is effectively changed.
-        let keyspace = group.get_or_create_keyspace(KEYSPACE).await;
-        keyspace
-            .put::<ReadRepairSource>(1, clock.get_time().await)
-            .await;
+        let _keyspace = group.get_or_create_keyspace(KEYSPACE).await;
 
         let ts = clock.get_time().await;
         let poll_req = Request::new(PollPayload {
@@ -167,9 +165,7 @@ mod tests {
             .into_inner();
 
         let blank_timestamps = KeyspaceTimestamps::default();
-        let counters: KeyspaceTimestamps =
-            rkyv::from_bytes(&resp.keyspace_timestamps).expect("Deserialize timestamps");
-        let diff = blank_timestamps.diff(&counters).collect::<Vec<_>>();
+        let diff = blank_timestamps.diff(&resp.into()).collect::<Vec<_>>();
         assert_eq!(
             diff,
             vec![Cow::Borrowed(KEYSPACE)],
@@ -186,13 +182,21 @@ mod tests {
 
         let keyspace = group.get_or_create_keyspace(KEYSPACE).await;
         keyspace
-            .put::<ReadRepairSource>(1, clock.get_time().await)
-            .await;
-        let last_updated = keyspace.last_updated();
-        let state = keyspace
-            .serialize()
+            .send(Set {
+                source: READ_REPAIR_SOURCE_ID,
+                doc: Document::new(1, clock.get_time().await, Vec::new()),
+                ctx: None,
+                _marker: PhantomData::<MemStore>::default()
+            })
             .await
-            .expect("Get serialized version of state");
+            .expect("Set value in store.");
+
+        let last_updated = keyspace.send(LastUpdated).await;
+        let set_data = keyspace
+            .send(Serialize)
+            .await
+            .map_err(|e| Status::internal(e.to_string()))
+            .expect("Get serialized state.");
 
         let ts = clock.get_time().await;
         let state_req = Request::new(GetState {
@@ -207,10 +211,10 @@ mod tests {
             .into_inner();
 
         assert_eq!(
-            resp.last_updated, last_updated,
+            HLCTimestamp::from(resp.last_updated.unwrap()), last_updated,
             "Last updated timestamps should match."
         );
-        assert_eq!(resp.set_data, state, "State data should match.");
+        assert_eq!(resp.set_data, set_data, "State data should match.");
     }
 
     #[tokio::test]
@@ -218,19 +222,20 @@ mod tests {
         static KEYSPACE: &str = "fetch-keyspace";
         let group = KeyspaceGroup::<MemStore>::new_for_test().await;
         let clock = group.clock();
-        let storage = group.storage();
         let service = ReplicationService::new(group.clone());
 
         let keyspace = group.get_or_create_keyspace(KEYSPACE).await;
 
         let doc = Document::new(1, clock.get_time().await, b"Hello, world".to_vec());
-        storage
-            .put_with_ctx(KEYSPACE, doc.clone(), None)
-            .await
-            .expect("Store entry");
         keyspace
-            .put::<ReadRepairSource>(doc.id, doc.last_updated)
-            .await;
+            .send(Set {
+                source: READ_REPAIR_SOURCE_ID,
+                doc: doc.clone(),
+                ctx: None,
+                _marker: PhantomData::<MemStore>::default()
+            })
+            .await
+            .expect("Set value in store.");
 
         let ts = clock.get_time().await;
         let fetch_docs_req = Request::new(FetchDocs {

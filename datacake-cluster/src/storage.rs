@@ -132,7 +132,7 @@ impl PutContext {
 /// to proceed any further but also having some part of the operation complete.
 pub struct BulkMutationError<E>
 where
-    E: Error + Send + Sync + 'static,
+    E: Error + Send + 'static,
 {
     pub(crate) inner: E,
     pub(crate) successful_doc_ids: Vec<Key>,
@@ -140,7 +140,7 @@ where
 
 impl<E> BulkMutationError<E>
 where
-    E: Error + Send + Sync + 'static,
+    E: Error + Send + 'static,
 {
     /// Creates a new mutation error from the provided inner error.
     ///

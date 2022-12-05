@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::marker::PhantomData;
 use std::net::SocketAddr;
 
 use async_trait::async_trait;
@@ -6,7 +7,7 @@ use datacake_crdt::HLCTimestamp;
 use tonic::{Request, Response, Status};
 
 use crate::core::Document;
-use crate::keyspace::{ConsistencySource, KeyspaceGroup};
+use crate::keyspace::{CONSISTENCY_SOURCE_ID, KeyspaceGroup};
 use crate::rpc::datacake_api;
 use crate::rpc::datacake_api::consistency_api_server::ConsistencyApi;
 use crate::rpc::datacake_api::{
@@ -20,12 +21,18 @@ use crate::rpc::datacake_api::{
 use crate::storage::Storage;
 use crate::{ProgressTracker, PutContext, RpcNetwork};
 
-pub struct ConsistencyService<S: Storage> {
+pub struct ConsistencyService<S>
+where
+    S: Storage + Send + Sync + 'static,
+{
     group: KeyspaceGroup<S>,
     network: RpcNetwork,
 }
 
-impl<S: Storage> ConsistencyService<S> {
+impl<S> ConsistencyService<S>
+where
+    S: Storage + Send + Sync + 'static,
+{
     pub fn new(group: KeyspaceGroup<S>, network: RpcNetwork) -> Self {
         Self { group, network }
     }
@@ -56,25 +63,34 @@ impl<S: Storage> ConsistencyService<S> {
 }
 
 #[async_trait]
-impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S> {
+impl<S> ConsistencyApi for ConsistencyService<S>
+where
+    S: Storage + Send + Sync + 'static,
+{
     async fn put(
         &self,
         request: Request<PutPayload>,
     ) -> Result<Response<datacake_api::Timestamp>, Status> {
         let inner = request.into_inner();
-        let document = Document::from(inner.document.unwrap());
+        let doc = Document::from(inner.document.unwrap());
         let ctx = self.get_put_ctx(inner.ctx)?;
 
-        self.group.clock().register_ts(document.last_updated).await;
+        self.group.clock().register_ts(doc.last_updated).await;
 
-        crate::core::put_data::<ConsistencySource, _>(
-            &inner.keyspace,
-            document,
-            &self.group,
-            ctx.as_ref(),
-        )
-        .await
-        .map_err(|e| Status::internal(e.to_string()))?;
+        let keyspace = self.group
+            .get_or_create_keyspace(&inner.keyspace)
+            .await;
+        let msg = crate::keyspace::Set {
+            source: CONSISTENCY_SOURCE_ID,
+            doc,
+            ctx,
+            _marker: PhantomData::<S>::default(),
+        };
+
+        if let Err(e) = keyspace.send(msg).await {
+            error!(error = ?e, keyspace = keyspace.name(), "Failed to handle storage request on consistency API.");
+            return Err(Status::internal(e.to_string()));
+        };
 
         let ts = self.group.clock().get_time().await;
         Ok(Response::new(datacake_api::Timestamp::from(ts)))
@@ -86,24 +102,34 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
     ) -> Result<Response<datacake_api::Timestamp>, Status> {
         let inner = request.into_inner();
         let mut newest_ts = HLCTimestamp::new(0, 0, 0);
-        let documents = inner.documents.into_iter().map(Document::from).map(|doc| {
-            if doc.last_updated > newest_ts {
-                newest_ts = doc.last_updated;
-            }
-            doc
-        });
+        let docs = inner.documents
+            .into_iter()
+            .map(Document::from)
+            .map(|doc| {
+                if doc.last_updated > newest_ts {
+                    newest_ts = doc.last_updated;
+                }
+                doc
+            })
+            .collect::<Vec<_>>();
         let ctx = self.get_put_ctx(inner.ctx)?;
 
-        crate::core::put_many_data::<ConsistencySource, _>(
-            &inner.keyspace,
-            documents,
-            &self.group,
-            ctx.as_ref(),
-        )
-        .await
-        .map_err(|e| Status::internal(e.to_string()))?;
-
         self.group.clock().register_ts(newest_ts).await;
+
+        let keyspace = self.group
+            .get_or_create_keyspace(&inner.keyspace)
+            .await;
+        let msg = crate::keyspace::MultiSet {
+            source: CONSISTENCY_SOURCE_ID,
+            docs,
+            ctx,
+            _marker: PhantomData::<S>::default(),
+        };
+
+        if let Err(e) = keyspace.send(msg).await {
+            error!(error = ?e, keyspace = keyspace.name(), "Failed to handle storage request on consistency API.");
+            return Err(Status::internal(e.to_string()));
+        };
 
         let ts = self.group.clock().get_time().await;
         Ok(Response::new(datacake_api::Timestamp::from(ts)))
@@ -120,14 +146,20 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
 
         self.group.clock().register_ts(last_updated).await;
 
-        crate::core::del_data::<ConsistencySource, _>(
-            &inner.keyspace,
+        let keyspace = self.group
+            .get_or_create_keyspace(&inner.keyspace)
+            .await;
+        let msg = crate::keyspace::Del {
+            source: CONSISTENCY_SOURCE_ID,
             doc_id,
-            last_updated,
-            &self.group,
-        )
-        .await
-        .map_err(|e| Status::internal(e.to_string()))?;
+            ts: last_updated,
+            _marker: PhantomData::<S>::default(),
+        };
+
+        if let Err(e) = keyspace.send(msg).await {
+            error!(error = ?e, keyspace = keyspace.name(), "Failed to handle storage request on consistency API.");
+            return Err(Status::internal(e.to_string()));
+        };
 
         let ts = self.group.clock().get_time().await;
         Ok(Response::new(datacake_api::Timestamp::from(ts)))
@@ -140,7 +172,7 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
         let inner = request.into_inner();
 
         let mut newest_ts = HLCTimestamp::new(0, 0, 0);
-        let documents = inner
+        let key_ts_pairs = inner
             .documents
             .into_iter()
             .map(|doc| {
@@ -152,17 +184,24 @@ impl<S: Storage + Send + Sync + 'static> ConsistencyApi for ConsistencyService<S
                     newest_ts = ts;
                 }
                 (id, ts)
-            });
-
-        crate::core::del_many_data::<ConsistencySource, _>(
-            &inner.keyspace,
-            documents,
-            &self.group,
-        )
-        .await
-        .map_err(|e| Status::internal(e.to_string()))?;
+            })
+            .collect::<Vec<_>>();
 
         self.group.clock().register_ts(newest_ts).await;
+
+        let keyspace = self.group
+            .get_or_create_keyspace(&inner.keyspace)
+            .await;
+        let msg = crate::keyspace::MultiDel {
+            source: CONSISTENCY_SOURCE_ID,
+            key_ts_pairs,
+            _marker: PhantomData::<S>::default(),
+        };
+
+        if let Err(e) = keyspace.send(msg).await {
+            error!(error = ?e, keyspace = keyspace.name(), "Failed to handle storage request on consistency API.");
+            return Err(Status::internal(e.to_string()));
+        };
 
         let ts = self.group.clock().get_time().await;
         Ok(Response::new(datacake_api::Timestamp::from(ts)))

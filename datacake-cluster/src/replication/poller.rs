@@ -1,24 +1,19 @@
 use std::borrow::Cow;
 use std::collections::BTreeMap;
+use std::marker::PhantomData;
 use std::net::SocketAddr;
-use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::anyhow;
 use crossbeam_channel::{Receiver, Sender};
-use datacake_crdt::StateChanges;
+use crossbeam_utils::atomic::AtomicCell;
+use datacake_crdt::{HLCTimestamp, StateChanges};
 use tokio::sync::Semaphore;
 use tokio::time::{interval, MissedTickBehavior};
+use puppet::ActorMailbox;
 
-use crate::keyspace::{
-    CounterKey,
-    KeyspaceGroup,
-    KeyspaceState,
-    KeyspaceTimestamps,
-    ReadRepairSource,
-    StateSource,
-};
+use crate::keyspace::{KeyspaceGroup, KeyspaceActor, KeyspaceTimestamps, READ_REPAIR_SOURCE_ID, Diff, Del, MultiDel, MultiSet};
 use crate::replication::{MembershipChanges, MAX_CONCURRENT_REQUESTS};
 use crate::rpc::ReplicationClient;
 use crate::storage::ProgressWatcher;
@@ -145,14 +140,20 @@ impl KeyspaceTracker {
         node_id: String,
         other: &KeyspaceTimestamps,
     ) -> impl Iterator<Item = Cow<'static, str>> {
-        self.inner.entry(node_id).or_default().diff(other)
+        self.inner
+            .entry(node_id)
+            .or_default()
+            .diff(other)
     }
 
-    fn set_keyspace(&mut self, node_id: String, ts: u64) {
-        self.inner.entry(node_id.clone()).or_default().insert(
-            CounterKey(Cow::Owned(node_id.clone())),
-            Arc::new(AtomicU64::new(ts)),
-        );
+    fn set_keyspace(&mut self, node_id: String, ts: HLCTimestamp) {
+        self.inner
+            .entry(node_id.clone())
+            .or_default()
+            .insert(
+            Cow::Owned(node_id.clone()),
+            Arc::new(AtomicCell::new(ts)),
+            );
     }
 }
 
@@ -290,7 +291,7 @@ pub struct KeyspaceDiff {
     keyspace: String,
     modified: StateChanges,
     removed: StateChanges,
-    last_updated: u64,
+    last_updated: HLCTimestamp,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -333,7 +334,7 @@ where
                 node_addr: target_rpc_addr,
             })?;
 
-    let (modified, removed) = keyspace.diff(set).await;
+    let (modified, removed) = keyspace.send(Diff(set)).await;
 
     Ok(KeyspaceDiff {
         keyspace: keyspace_name.clone(),
@@ -375,7 +376,7 @@ where
     // The removal task can operate interdependently of the modified handler.
     // If, in the process of handling removals, the modified handler errors,
     // we simply let the removal task continue on as normal.
-    let removal_task = tokio::spawn(handle_removals::<ReadRepairSource, _>(
+    let removal_task = tokio::spawn(handle_removals(
         keyspace.clone(),
         removed,
     ));
@@ -409,7 +410,7 @@ where
 /// These documents are then persisted and the metadata marked accordingly.
 async fn handle_modified<S>(
     mut client: ReplicationClient,
-    keyspace: KeyspaceState<S>,
+    keyspace: ActorMailbox<KeyspaceActor<S>>,
     modified: StateChanges,
     ctx: PutContext,
 ) -> Result<(), anyhow::Error>
@@ -420,26 +421,19 @@ where
         .chunks(MAX_NUMBER_OF_DOCS_PER_FETCH)
         .map(|entries| entries.iter().map(|(k, _)| *k).collect::<Vec<_>>());
 
-    let storage = keyspace.storage();
     for doc_ids in doc_id_chunks {
-        let mut doc_timestamps = Vec::new();
         let docs = client
             .fetch_docs(keyspace.name(), doc_ids)
             .await?
-            .map(|doc| {
-                doc_timestamps.push((doc.id, doc.last_updated));
-                doc
-            });
+            .collect::<Vec<_>>();
 
-        storage
-            .multi_put_with_ctx(keyspace.name(), docs, Some(&ctx))
-            .await?;
-
-        // We only update the metadata if the persistence has passed.
-        // If we were to do this the other way around, we could potentially
-        // end up being in a situation where the state *thinks* it's up to date
-        // but in reality it's not.
-        keyspace.multi_put::<ReadRepairSource>(doc_timestamps).await;
+        let msg = MultiSet {
+            source: READ_REPAIR_SOURCE_ID,
+            docs,
+            ctx: Some(ctx.clone()),
+            _marker: PhantomData::<S>::default(),
+        };
+        keyspace.send(msg).await?;
     }
 
     Ok(())
@@ -451,44 +445,34 @@ where
 ///
 /// This does not remove the metadata of the document entirely, instead the document is marked
 /// as deleted along with the main data itself, but we keep a history of the deletes we've made.
-async fn handle_removals<SS, S>(
-    keyspace: KeyspaceState<S>,
+async fn handle_removals<S>(
+    keyspace: ActorMailbox<KeyspaceActor<S>>,
     mut removed: StateChanges,
-) -> Result<(), S::Error>
+) -> Result<(), anyhow::Error>
 where
-    SS: StateSource + Send + Sync + 'static,
     S: Storage + Send + Sync + 'static,
 {
     if removed.is_empty() {
         return Ok(());
     }
 
-    let storage = keyspace.storage();
-
     if removed.len() == 1 {
-        let (key, ts) = removed.pop().expect("get element");
-
-        storage.mark_as_tombstone(keyspace.name(), key, ts).await?;
-        keyspace.del::<SS>(key, ts).await;
-        return Ok::<_, S::Error>(());
+        let (doc_id, ts) = removed.remove(0);
+        let msg = Del {
+            source: READ_REPAIR_SOURCE_ID,
+            doc_id,
+            ts,
+            _marker: PhantomData::<S>::default(),
+        };
+        keyspace.send(msg).await?;
+        return Ok(());
     }
 
-    let res = storage
-        .mark_many_as_tombstone(keyspace.name(), removed.iter().copied())
-        .await;
-
-    if let Err(error) = res {
-        let removed = removed
-            .into_iter()
-            .filter(|(key, _)| error.successful_doc_ids.contains(key))
-            .collect();
-
-        keyspace.multi_del::<SS>(removed).await;
-
-        return Err(error.inner);
-    }
-
-    keyspace.multi_del::<SS>(removed).await;
-
+    let msg = MultiDel {
+        source: READ_REPAIR_SOURCE_ID,
+        key_ts_pairs: removed,
+        _marker: PhantomData::<S>::default(),
+    };
+    keyspace.send(msg).await?;
     Ok(())
 }
