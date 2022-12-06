@@ -251,7 +251,7 @@ async fn test_async_operations() -> anyhow::Result<()> {
     assert_eq!(doc.id, 1);
     assert_eq!(doc.data, Bytes::from_static(b"Hello, world from node-3"));
 
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    tokio::time::sleep(Duration::from_secs(10)).await;
 
     // Man I love CRDTs, look at how easy this was! They're all the same now.
     let doc = node_1_handle
@@ -314,7 +314,7 @@ async fn test_async_operations() -> anyhow::Result<()> {
     let doc = node_2_handle.get(1).await.expect("Get value.");
     assert!(doc.is_none(), "Document should be deleted.");
 
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    tokio::time::sleep(Duration::from_secs(10)).await;
 
     // And now everything is consistent.
     let doc = node_1_handle.get(1).await.expect("Get value.");
