@@ -1,7 +1,7 @@
 use std::path::Path;
 
-use futures::channel::oneshot;
 use flume::{self, Receiver, Sender};
+use futures::channel::oneshot;
 use rusqlite::{Connection, OptionalExtension, Params, Row};
 
 type Task = Box<dyn FnOnce(&mut Connection) + Send + 'static>;
@@ -156,7 +156,6 @@ pub trait FromRow: Sized {
     fn from_row(row: &Row) -> rusqlite::Result<Self>;
 }
 
-
 async fn setup_database(path: impl AsRef<Path>) -> rusqlite::Result<Sender<Task>> {
     let path = path.as_ref().to_path_buf();
     let (tx, rx) = flume::bounded(CAPACITY);
@@ -186,7 +185,6 @@ fn run_tasks(mut conn: Connection, tasks: Receiver<Task>) {
         (task)(&mut conn);
     }
 }
-
 
 #[cfg(test)]
 mod tests {

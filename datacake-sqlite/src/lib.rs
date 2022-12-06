@@ -1,12 +1,13 @@
-mod from_row_impl;
 mod db;
-
+mod from_row_impl;
 
 use std::path::Path;
+
 use async_trait::async_trait;
 use datacake_cluster::{BulkMutationError, Document, Storage};
 use datacake_crdt::{HLCTimestamp, Key};
 pub use db::FromRow;
+
 use crate::db::StorageHandle;
 
 /// A [datacake_cluster::Storage] implementation based on an SQLite database.
@@ -50,7 +51,6 @@ impl SqliteStorage {
         setup_db(inner.clone()).await?;
         Ok(Self { inner })
     }
-
 }
 
 #[async_trait]
@@ -60,7 +60,8 @@ impl Storage for SqliteStorage {
     type MetadataIter = Box<dyn Iterator<Item = (Key, HLCTimestamp, bool)>>;
 
     async fn get_keyspace_list(&self) -> Result<Vec<String>, Self::Error> {
-        let list = self.inner
+        let list = self
+            .inner
             .fetch_all::<_, (String,)>(queries::SELECT_KEYSPACE_LIST, ())
             .await?
             .into_iter()
@@ -69,71 +70,125 @@ impl Storage for SqliteStorage {
         Ok(list)
     }
 
-    async fn iter_metadata(&self, keyspace: &str) -> Result<Self::MetadataIter, Self::Error> {
-        let list = self.inner
-            .fetch_all::<_, models::Metadata>(queries::SELECT_METADATA_LIST, (keyspace.to_string(),))
+    async fn iter_metadata(
+        &self,
+        keyspace: &str,
+    ) -> Result<Self::MetadataIter, Self::Error> {
+        let list = self
+            .inner
+            .fetch_all::<_, models::Metadata>(
+                queries::SELECT_METADATA_LIST,
+                (keyspace.to_string(),),
+            )
             .await?
             .into_iter()
             .map(|metadata| (metadata.0, metadata.1, metadata.2));
         Ok(Box::new(list))
     }
 
-    async fn remove_tombstones(&self, keyspace: &str, keys: impl Iterator<Item=Key> + Send) -> Result<(), BulkMutationError<Self::Error>> {
+    async fn remove_tombstones(
+        &self,
+        keyspace: &str,
+        keys: impl Iterator<Item = Key> + Send,
+    ) -> Result<(), BulkMutationError<Self::Error>> {
         let params = keys
             .map(|doc_id| (keyspace.to_string(), doc_id as i64))
             .collect::<Vec<_>>();
         self.inner
             .execute_many(queries::DELETE_TOMBSTONE, params)
-            .await  // Safe as we're in a transaction.
+            .await // Safe as we're in a transaction.
             .map_err(BulkMutationError::empty_with_error)?;
         Ok(())
     }
 
     async fn put(&self, keyspace: &str, doc: Document) -> Result<(), Self::Error> {
         self.inner
-            .execute(queries::INSERT, (keyspace.to_string(), doc.id as i64, doc.last_updated.to_string(), doc.data.to_vec()))
+            .execute(
+                queries::INSERT,
+                (
+                    keyspace.to_string(),
+                    doc.id as i64,
+                    doc.last_updated.to_string(),
+                    doc.data.to_vec(),
+                ),
+            )
             .await?;
         Ok(())
     }
 
-    async fn multi_put(&self, keyspace: &str, documents: impl Iterator<Item=Document> + Send) -> Result<(), BulkMutationError<Self::Error>> {
+    async fn multi_put(
+        &self,
+        keyspace: &str,
+        documents: impl Iterator<Item = Document> + Send,
+    ) -> Result<(), BulkMutationError<Self::Error>> {
         let params = documents
-            .map(|doc| (keyspace.to_string(), doc.id as i64, doc.last_updated.to_string(), doc.data.to_vec()))
+            .map(|doc| {
+                (
+                    keyspace.to_string(),
+                    doc.id as i64,
+                    doc.last_updated.to_string(),
+                    doc.data.to_vec(),
+                )
+            })
             .collect::<Vec<_>>();
         self.inner
             .execute_many(queries::INSERT, params)
-            .await  // Safe as we're in a transaction.
+            .await // Safe as we're in a transaction.
             .map_err(BulkMutationError::empty_with_error)?;
         Ok(())
     }
 
-    async fn mark_as_tombstone(&self, keyspace: &str, doc_id: Key, timestamp: HLCTimestamp) -> Result<(), Self::Error> {
+    async fn mark_as_tombstone(
+        &self,
+        keyspace: &str,
+        doc_id: Key,
+        timestamp: HLCTimestamp,
+    ) -> Result<(), Self::Error> {
         self.inner
-            .execute(queries::SET_TOMBSTONE, (keyspace.to_string(), doc_id as i64, timestamp.to_string()))
+            .execute(
+                queries::SET_TOMBSTONE,
+                (keyspace.to_string(), doc_id as i64, timestamp.to_string()),
+            )
             .await?;
         Ok(())
     }
 
-    async fn mark_many_as_tombstone(&self, keyspace: &str, documents: impl Iterator<Item=(Key, HLCTimestamp)> + Send) -> Result<(), BulkMutationError<Self::Error>> {
+    async fn mark_many_as_tombstone(
+        &self,
+        keyspace: &str,
+        documents: impl Iterator<Item = (Key, HLCTimestamp)> + Send,
+    ) -> Result<(), BulkMutationError<Self::Error>> {
         let params = documents
             .map(|(doc_id, ts)| (keyspace.to_string(), doc_id as i64, ts.to_string()))
             .collect::<Vec<_>>();
         self.inner
             .execute_many(queries::SET_TOMBSTONE, params)
-            .await  // Safe as we're in a transaction.
+            .await // Safe as we're in a transaction.
             .map_err(BulkMutationError::empty_with_error)?;
         Ok(())
     }
 
-    async fn get(&self, keyspace: &str, doc_id: Key) -> Result<Option<Document>, Self::Error> {
-        let entry = self.inner
-            .fetch_one::<_, models::Doc>(queries::SELECT_DOC, (keyspace.to_string(), doc_id as i64))
+    async fn get(
+        &self,
+        keyspace: &str,
+        doc_id: Key,
+    ) -> Result<Option<Document>, Self::Error> {
+        let entry = self
+            .inner
+            .fetch_one::<_, models::Doc>(
+                queries::SELECT_DOC,
+                (keyspace.to_string(), doc_id as i64),
+            )
             .await?;
 
         Ok(entry.map(|d| d.0))
     }
 
-    async fn multi_get(&self, keyspace: &str, doc_ids: impl Iterator<Item=Key> + Send) -> Result<Self::DocsIter, Self::Error> {
+    async fn multi_get(
+        &self,
+        keyspace: &str,
+        doc_ids: impl Iterator<Item = Key> + Send,
+    ) -> Result<Self::DocsIter, Self::Error> {
         let mut docs = Vec::new();
         for doc_id in doc_ids {
             if let Some(doc) = self.get(keyspace, doc_id).await? {
@@ -144,7 +199,6 @@ impl Storage for SqliteStorage {
         Ok(docs.into_iter())
     }
 }
-
 
 mod queries {
     pub static INSERT: &str = r#"
@@ -171,9 +225,10 @@ mod queries {
 
 mod models {
     use std::str::FromStr;
-    use rusqlite::Row;
+
     use datacake_cluster::Document;
     use datacake_crdt::{HLCTimestamp, Key};
+    use rusqlite::Row;
 
     use crate::FromRow;
 
@@ -206,7 +261,6 @@ mod models {
             Ok(Self(id, ts, is_tombstone))
         }
     }
-
 }
 
 async fn setup_db(handle: StorageHandle) -> rusqlite::Result<()> {
@@ -227,6 +281,7 @@ async fn setup_db(handle: StorageHandle) -> rusqlite::Result<()> {
 #[cfg(test)]
 mod tests {
     use datacake_cluster::test_suite;
+
     use crate::SqliteStorage;
 
     #[tokio::test]
