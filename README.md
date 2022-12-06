@@ -20,6 +20,49 @@ Datacake provides several utility libraries as well as some pre-made data store 
 - `datacake-sqlite` - A pre-built and tested implementation of the datacake `Storage` trait built 
   upon SQLite.
 
+### Examples
+Check out some pre-built apps we have in the 
+[example folder](https://github.com/lnx-search/datacake/tree/main/examples)
+
+You can also look at some heavier integration tests 
+[here](https://github.com/lnx-search/datacake/tree/main/datacake-cluster/tests)
+
+#### Single Node Cluster
+Here's an example of a basic cluster with one node that runs on your local network:
+
+```rust
+use datacake::cluster::test_utils::MemStore;
+use datacake::cluster::{
+    ClusterOptions,
+    ConnectionConfig,
+    DCAwareSelector,
+    DatacakeCluster,
+};
+
+
+#[tokio::main]
+async fn main() -> Result<()> {
+  let _ = tracing_subscriber::fmt::try_init();
+
+  let addr = "127.0.0.1:8000".parse::<SocketAddr>().unwrap();
+  let connection_cfg = ConnectionConfig::new(addr, addr, Vec::<String>::new());
+
+  let cluster = DatacakeCluster::connect(
+    "node-1",
+    connection_cfg,
+    MemStore::default(),
+    DCAwareSelector::default(),
+    ClusterOptions::default(),
+  )
+          .await?;
+
+  tokio::time::sleep(Duration::from_secs(1)).await;
+
+  cluster.shutdown().await;
+}
+```
+
+
 ### Why does Datacake exist?
 
 Datacake is the result of my attempts at bringing high-availability to [lnx](https://github.com/lnx-search/lnx) 
