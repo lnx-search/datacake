@@ -467,6 +467,47 @@ mod tests {
             .expect("Put operation should be successful.");
     }
 
+
+    #[tokio::test]
+    async fn test_on_multi_set_unordered_events() {
+        let clock = Clock::new(0);
+
+        let old_ts = HLCTimestamp::new(get_unix_timestamp_ms() - 3_700_000, 0, 0);
+        let doc_1 = Document::new(1, clock.get_time().await, b"Hello, world 1".to_vec());
+        let doc_2 = Document::new(2, clock.get_time().await, b"Hello, world 2".to_vec());
+        let doc_3 = Document::new(3, clock.get_time().await, b"Hello, world 3".to_vec());
+        let doc_4 = Document::new(4, old_ts, b"Hello, world 4".to_vec());
+
+        let docs = [doc_4.clone(), doc_2.clone(), doc_1.clone(), doc_3.clone()];
+
+        let mock_store = MockStorage::default()
+            .expect_multi_put_with_ctx(1, move |keyspace, mut docs_iter, ctx| {
+                assert_eq!(keyspace, "my-keyspace");
+                assert!(ctx.is_none());
+                assert!(docs_iter.all(|doc| docs.contains(&doc)));
+
+                Ok(())
+            });
+
+        let mut keyspace = make_actor(clock, mock_store).await;
+
+        // All docs should be stored as their timestamps should be re-ordered.
+        keyspace
+            .on_multi_set(MultiSet {
+                source: 0,
+                docs: vec![doc_4.clone(), doc_2.clone(), doc_1.clone(), doc_3.clone()],
+                ctx: None,
+                _marker: Default::default(),
+            })
+            .await
+            .expect("Put operation should be successful.");
+
+        assert!(keyspace.state.get(&doc_1.id).is_some());
+        assert!(keyspace.state.get(&doc_2.id).is_some());
+        assert!(keyspace.state.get(&doc_3.id).is_some());
+        assert!(keyspace.state.get(&doc_4.id).is_some());
+    }
+
     #[tokio::test]
     async fn test_on_del() {
         let clock = Clock::new(0);
@@ -564,5 +605,66 @@ mod tests {
             })
             .await
             .expect("Put operation should be successful.");
+    }
+
+    #[tokio::test]
+    async fn test_on_del_unordered_events() {
+        let clock = Clock::new(0);
+
+        let doc_1 = Document::new(1, clock.get_time().await, b"Hello, world 1".to_vec());
+        let doc_2 = Document::new(2, clock.get_time().await, b"Hello, world 2".to_vec());
+        let doc_3 = Document::new(3, clock.get_time().await, b"Hello, world 3".to_vec());
+
+        let docs = [doc_1.clone(), doc_2.clone(), doc_3.clone()];
+
+        let deletes_expected = vec![
+            (doc_3.id, clock.get_time().await),
+            (doc_1.id, clock.get_time().await),
+        ];
+
+        let deletes_expected_clone = deletes_expected.clone();
+        let mock_store = MockStorage::default()
+            .expect_multi_put_with_ctx(1, move |keyspace, mut docs_iter, ctx| {
+                assert_eq!(keyspace, "my-keyspace");
+                assert!(ctx.is_none());
+                assert!(docs_iter.all(|doc| docs.contains(&doc)));
+
+                Ok(())
+            })
+            .expect_mark_many_as_tombstone(1, move |keyspace, mut docs_iter| {
+                assert_eq!(keyspace, "my-keyspace");
+                assert!(docs_iter.all(|doc| deletes_expected_clone.contains(&doc)));
+
+                Ok(())
+            });
+
+        let mut keyspace = make_actor(clock, mock_store).await;
+
+        keyspace
+            .on_multi_set(MultiSet {
+                source: 0,
+                docs: vec![doc_1.clone(), doc_2.clone(), doc_3.clone()],
+                ctx: None,
+                _marker: Default::default(),
+            })
+            .await
+            .expect("Put operation should be successful.");
+        keyspace
+            .on_multi_del(MultiDel {
+                source: 0,
+                key_ts_pairs: deletes_expected,
+                _marker: Default::default(),
+            })
+            .await
+            .expect("Put operation should be successful.");
+
+        assert!(keyspace.state.get(&doc_2.id).is_some());
+        assert!(!keyspace.state.delete(doc_1.id, doc_1.last_updated));
+        assert!(!keyspace.state.delete(doc_3.id, doc_3.last_updated));
+
+        // Push the safe timestamp forwards.
+        keyspace.state.insert_with_source(1, 5, HLCTimestamp::new(get_unix_timestamp_ms() + 3_700_000, 0, 0));
+        keyspace.state.insert_with_source(0, 2, HLCTimestamp::new(get_unix_timestamp_ms() + 3_700_000, 1, 0));
+        assert!(keyspace.state.purge_old_deletes().is_empty());
     }
 }
