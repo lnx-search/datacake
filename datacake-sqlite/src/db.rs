@@ -33,11 +33,6 @@ impl StorageHandle {
         Self::open(":memory:").await
     }
 
-    /// Creates a storage handle from a existing tasks TX.
-    fn from_tasks(tx: Sender<Task>) -> Self {
-        Self { tx }
-    }
-
     /// Execute a SQL statement with some provided parameters.
     pub async fn execute<P>(
         &self,
@@ -51,6 +46,34 @@ impl StorageHandle {
         self.submit_task(move |conn| {
             let mut prepared = conn.prepare_cached(&sql)?;
             prepared.execute(params)
+        })
+        .await
+    }
+
+    /// Execute a SQL statement several times with some provided parameters.
+    pub async fn execute_many<P>(
+        &self,
+        sql: impl AsRef<str>,
+        param_set: Vec<P>,
+    ) -> rusqlite::Result<usize>
+    where
+        P: Params + Clone + Send + 'static,
+    {
+        let sql = sql.as_ref().to_string();
+        self.submit_task(move |conn| {
+            let tx = conn.transaction()?;
+
+            let mut total = 0;
+            {
+                let mut prepared = tx.prepare_cached(&sql)?;
+
+                for params in param_set {
+                    total += prepared.execute(params)?;
+                }
+            }
+
+            tx.commit()?;
+            Ok(total)
         })
         .await
     }
@@ -147,6 +170,11 @@ async fn setup_database(path: impl AsRef<Path>) -> rusqlite::Result<Sender<Task>
 
 fn setup_disk_handle(path: &Path, tasks: Receiver<Task>) -> rusqlite::Result<()> {
     let disk = Connection::open(path)?;
+
+    disk.query_row("pragma journal_mode = WAL;", (), |_r| Ok(()))?;
+    disk.execute("pragma synchronous = normal;", ())?;
+    disk.execute("pragma temp_store = memory;", ())?;
+
     std::thread::spawn(move || run_tasks(disk, tasks));
 
     Ok(())

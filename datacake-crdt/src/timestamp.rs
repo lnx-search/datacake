@@ -196,7 +196,8 @@ impl FromStr for HLCTimestamp {
     type Err = InvalidFormat;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut splits = s.splitn(2, '-');
+        let mut splits = s.splitn(3, '-');
+
         let millis = splits
             .next()
             .and_then(|v| v.parse::<u64>().ok())
@@ -237,4 +238,17 @@ pub fn get_unix_timestamp_ms() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_millis() as u64
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse() {
+        let ts = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 0);
+
+        let str_ts = ts.to_string();
+        HLCTimestamp::from_str(&str_ts).expect("Parse timestamp");
+    }
 }

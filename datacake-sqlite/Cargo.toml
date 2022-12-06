@@ -17,12 +17,7 @@ tokio = { version = "1", default-features = false, features = ["rt"] }
 datacake-crdt = { version = "0.3", path = "../datacake-crdt" }
 datacake-cluster = { version = "0.1", path = "../datacake-cluster" }
 
-serde = { verson = "1", features = ["derive"], optional = true }
-rkyv = { verson = "0.7", features = ["validation"], optional = true }
-bytecheck = { version = "0.6.9", optional = true }
-
-[features]
-rkyv-support = ["rkyv", "bytecheck"]
-
 [dev-dependencies]
+rusqlite = { verson = "0.28.0", features = ["bundled"] }
+uuid = { version = "1", features = ["v4"] }
 datacake-cluster = { version = "0.1", path = "../datacake-cluster", features = ["test-utils"] }

@@ -42,7 +42,7 @@ pub use statistics::ClusterStatistics;
 #[cfg(feature = "test-utils")]
 pub use storage::test_suite;
 pub use storage::{ProgressTracker, PutContext, Storage, BulkMutationError};
-pub use core::Document;
+pub use self::core::Document;
 use tokio_stream::wrappers::WatchStream;
 
 use crate::clock::Clock;
