@@ -105,6 +105,8 @@ async fn get_value(
     Path(params): Path<Params>,
     State(handle): State<DatacakeHandle<ShardedStorage>>,
 ) -> Result<Bytes, StatusCode> {
+    info!(doc_id = params.key, keyspace = params.keyspace, "Getting document!");
+
     let doc = handle
         .get(&params.keyspace, params.key)
         .await
@@ -124,6 +126,8 @@ async fn set_value(
     State(handle): State<DatacakeHandle<ShardedStorage>>,
     data: Bytes,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
+    info!(doc_id = params.key, keyspace = params.keyspace, "Storing document!");
+
     handle
         .put(&params.keyspace, params.key, data, Consistency::EachQuorum)
         .await
