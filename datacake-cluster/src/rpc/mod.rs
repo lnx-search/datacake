@@ -1,5 +1,7 @@
+#[allow(clippy::all)]
 mod chitchat_transport;
 mod client;
+#[allow(clippy::all)]
 #[rustfmt::skip]
 pub(crate) mod datacake_api;
 mod network;
