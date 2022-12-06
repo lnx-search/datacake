@@ -2,6 +2,12 @@
 name = "datacake-sqlite"
 version = "0.1.0"
 edition = "2021"
+description = "A pre-built implementation of datacake's Storage trait using SQLite."
+license = "MIT"
+keywords = ["databases", "distributed"]
+categories = ["concurrency", "data-structures"]
+repository = "https://github.com/lnx-search/datacake"
+readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
