@@ -79,7 +79,7 @@ Because of the above, I built Datacake with the aim of building a reliable, well
 akin to how Cassandra or more specifically how ScyllaDB behave with eventual consistent replication, but with a few
 core differences:
 
-- Datacake does not require an extern source or read repair to clear tombstones.
+- Datacake does not require an external source or read repair to clear tombstones.
 - The underlying CRDTs which are what actually power Datacake are kept purely in memory.
 - Partitioning and sharding is not (currently) supported.
 
