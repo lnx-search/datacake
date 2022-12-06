@@ -73,7 +73,7 @@ impl SqliteStorage {
 #[async_trait]
 impl Storage for SqliteStorage {
     type Error = rusqlite::Error;
-    type DocsIter = std::vec::IntoIter<Document>;
+    type DocsIter = Box<dyn Iterator<Item = Document>>;
     type MetadataIter = Box<dyn Iterator<Item = (Key, HLCTimestamp, bool)>>;
 
     async fn get_keyspace_list(&self) -> Result<Vec<String>, Self::Error> {
@@ -206,14 +206,14 @@ impl Storage for SqliteStorage {
         keyspace: &str,
         doc_ids: impl Iterator<Item = Key> + Send,
     ) -> Result<Self::DocsIter, Self::Error> {
-        let mut docs = Vec::new();
-        for doc_id in doc_ids {
-            if let Some(doc) = self.get(keyspace, doc_id).await? {
-                docs.push(doc);
-            }
-        }
+        let doc_ids = doc_ids.map(|id| (keyspace.to_string(), id)).collect::<Vec<_>>();
+        let docs = self.inner
+            .fetch_many::<_, models::Doc>(queries::SELECT_DOC, doc_ids)
+            .await?
+            .into_iter()
+            .map(|d| d.0);
 
-        Ok(docs.into_iter())
+        Ok(Box::new(docs))
     }
 }
 

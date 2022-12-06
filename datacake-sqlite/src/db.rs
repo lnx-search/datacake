@@ -99,6 +99,33 @@ impl StorageHandle {
         .await
     }
 
+    /// Fetch a many rows by executing the same statement on several sets of parameters.
+    pub async fn fetch_many<P, T>(
+        &self,
+        sql: impl AsRef<str>,
+        param_sets: Vec<P>,
+    ) -> rusqlite::Result<Vec<T>>
+    where
+        P: Params + Send + 'static,
+        T: FromRow + Send + 'static,
+    {
+        let sql = sql.as_ref().to_string();
+
+        self.submit_task(move |conn| {
+            let mut prepared = conn.prepare_cached(&sql)?;
+            let mut rows = Vec::with_capacity(param_sets.len());
+
+            for params in param_sets {
+                if let Some(row) = prepared.query_row(params, T::from_row).optional()? {
+                    rows.push(row);
+                }
+            }
+
+            Ok(rows)
+        })
+        .await
+    }
+
     /// Fetch a all rows from a given SQL statement with some provided parameters.
     pub async fn fetch_all<P, T>(
         &self,
