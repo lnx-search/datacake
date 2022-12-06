@@ -3,10 +3,9 @@ import time
 
 import requests
 
-session = requests.session()
-
 
 def upload():
+    session = requests.session()
     for i in range(100_000):
         r = session.post(f"http://127.0.0.1:8000/my-keyspace/{i}", data=b'{"name": "tod"}')
         r.raise_for_status()
