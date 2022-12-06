@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use chitchat::serialize::Serializable;
-use chitchat::transport::{Socket, Transport, TransportError};
+use chitchat::transport::{Socket, Transport};
 use chitchat::ChitchatMessage;
 use futures::io;
 use parking_lot::Mutex;
@@ -66,11 +66,10 @@ where
     async fn open(
         &self,
         listen_addr: SocketAddr,
-    ) -> Result<Box<dyn Socket>, TransportError> {
+    ) -> Result<Box<dyn Socket>, anyhow::Error> {
         info!(listen_addr = %listen_addr, "Starting RPC server.");
-        let shutdown = super::server::connect_server(listen_addr, self.ctx.clone())
-            .await
-            .map_err(|e| TransportError::Other(e.into()))?;
+        let shutdown =
+            super::server::connect_server(listen_addr, self.ctx.clone()).await?;
 
         {
             self.shutdown_handles.lock().push(shutdown);
@@ -113,7 +112,7 @@ impl Socket for GrpcConnection {
         &mut self,
         to: SocketAddr,
         msg: ChitchatMessage,
-    ) -> Result<(), TransportError> {
+    ) -> Result<(), anyhow::Error> {
         trace!(to = %to, msg = ?msg, "Gossip send");
         let message = msg.serialize_to_vec();
         let source = self.self_addr.serialize_to_vec();
@@ -137,12 +136,8 @@ impl Socket for GrpcConnection {
         Ok(())
     }
 
-    async fn recv(&mut self) -> Result<(SocketAddr, ChitchatMessage), TransportError> {
-        let msg = self
-            .messages
-            .recv_async()
-            .await
-            .map_err(|e| io::Error::new(ErrorKind::NotConnected, e.to_string()))?;
+    async fn recv(&mut self) -> Result<(SocketAddr, ChitchatMessage), anyhow::Error> {
+        let msg = self.messages.recv_async().await?;
         Ok(msg)
     }
 }
