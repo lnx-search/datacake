@@ -120,7 +120,7 @@ impl PutContext {
     /// to communicate with services ran by the Datacake server.
     ///
     /// Additional services can be registered to the server ran by Datacake
-    /// using the [ServiceRegistry] trait.
+    /// using the `ServiceRegistry` trait.
     pub fn remote_channel(&self) -> &Channel {
         &self.remote_rpc_channel
     }
