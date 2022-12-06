@@ -224,7 +224,7 @@ pub trait Storage {
     /// Inserts or updates a document in the persistent store.
     ///
     /// This is the base call for any `put` operation, and is passed the additional
-    /// [StoreContext] parameter which can provided additional information.
+    /// [PutContext] parameter which can provided additional information.
     ///
     /// In the case the context is `None`, this indicates that the operation originates
     /// from the local node itself. If context is `Some(ctx)` then it has originated from
@@ -262,7 +262,7 @@ pub trait Storage {
     /// Inserts or updates a set of documents in the persistent store.
     ///
     /// This is the base call for any `multi_put` operation, and is passed the additional
-    /// [StoreContext] parameter which can provided additional information.
+    /// [PutContext] parameter which can provided additional information.
     ///
     /// In the case the context is `None`, this indicates that the operation originates
     /// from the local node itself. If context is `Some(ctx)` then it has originated from

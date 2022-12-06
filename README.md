@@ -37,10 +37,6 @@ akin to how Cassandra or more specifically how ScyllaDB behave with eventual con
 core differences:
 
 - Datacake does not require an extern source or read repair to clear tombstones.
-- A node continuously polls its peers for changes rather than more heavily relying on
-  peers to send updates to the node. Peers may still send updates to the node before it gets them 
-  via polling, but this is strictly to reduce how long 'eventually' actually is, and to ensure
-  durability across node failures.
 - The underlying CRDTs which are what actually power Datacake are kept purely in memory.
 - Partitioning and sharding is not (currently) supported.
 
@@ -54,6 +50,7 @@ implementation of the scuttlebutt algorithm.
 - ["CRDTs Illustrated" by Arnout Engelen](https://www.youtube.com/watch?v=9xFfOhasiOE)
 - ["Practical data synchronization with CRDTs" by Dmitry Ivanov](https://www.youtube.com/watch?v=veeWamWy8dk)
 - [CRDTs and the Quest for Distributed Consistency](https://www.youtube.com/watch?v=B5NULPSiOGw)
+- [Logical Physical Clocks and Consistent Snapshots in Globally Distributed Databases](https://cse.buffalo.edu/tech-reports/2014-04.pdf)
 
 ### Contributing
 Contributions are always welcome, although please open an issue for an idea about extending the main cluster system

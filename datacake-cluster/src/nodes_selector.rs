@@ -206,6 +206,13 @@ pub trait NodeSelector {
 }
 
 #[derive(Debug, Copy, Clone, Default)]
+/// A data-center aware node selector.
+///
+/// This will prioritise sending replication data to nodes which are part
+/// of a different availability zone or data center center as it's referred to.
+///
+/// If this is not possible or can distribute the load evenly, it may also
+/// choose nodes apart of the same data center.
 pub struct DCAwareSelector;
 
 impl NodeSelector for DCAwareSelector {

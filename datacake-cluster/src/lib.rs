@@ -38,6 +38,7 @@ pub use nodes_selector::{
     NodeSelector,
     NodeSelectorHandle,
 };
+pub use rpc::ServiceRegistry;
 pub use statistics::ClusterStatistics;
 #[cfg(feature = "test-utils")]
 pub use storage::test_suite;
@@ -69,7 +70,6 @@ use crate::rpc::{
     DefaultRegistry,
     GrpcTransport,
     RpcNetwork,
-    ServiceRegistry,
     TIMEOUT_LIMIT,
 };
 

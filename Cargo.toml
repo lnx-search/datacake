@@ -2,6 +2,12 @@
 name = "datacake"
 version = "0.1.0"
 edition = "2021"
+description = "A batteries included framework for building fault-tolerance distributed data systems."
+license = "MIT"
+keywords = ["crdt", "databases", "distributed", "tokio", "async"]
+categories = ["concurrency", "data-structures", "asynchronous"]
+repository = "https://github.com/lnx-search/datacake"
+readme = "./README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
