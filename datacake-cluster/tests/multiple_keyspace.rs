@@ -120,15 +120,15 @@ async fn test_multi_node() -> anyhow::Result<()> {
     .expect("Connect node.");
 
     node_1
-        .wait_for_nodes(&["node-2", "node-3"], Duration::from_secs(5))
+        .wait_for_nodes(&["node-2", "node-3"], Duration::from_secs(30))
         .await
         .expect("Nodes should connect within timeout.");
     node_2
-        .wait_for_nodes(&["node-3", "node-1"], Duration::from_secs(5))
+        .wait_for_nodes(&["node-3", "node-1"], Duration::from_secs(30))
         .await
         .expect("Nodes should connect within timeout.");
     node_3
-        .wait_for_nodes(&["node-2", "node-1"], Duration::from_secs(5))
+        .wait_for_nodes(&["node-2", "node-1"], Duration::from_secs(30))
         .await
         .expect("Nodes should connect within timeout.");
 

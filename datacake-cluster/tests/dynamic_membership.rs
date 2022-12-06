@@ -54,11 +54,11 @@ pub async fn test_member_join() -> anyhow::Result<()> {
     .expect("Connect node.");
 
     node_1
-        .wait_for_nodes(&["node-2"], Duration::from_secs(10))
+        .wait_for_nodes(&["node-2"], Duration::from_secs(30))
         .await
         .expect("Nodes should connect within timeout.");
     node_2
-        .wait_for_nodes(&["node-1"], Duration::from_secs(10))
+        .wait_for_nodes(&["node-1"], Duration::from_secs(30))
         .await
         .expect("Nodes should connect within timeout.");
 
@@ -114,7 +114,7 @@ pub async fn test_member_join() -> anyhow::Result<()> {
     .await
     .expect("Connect node.");
     node_3
-        .wait_for_nodes(&["node-1", "node-2"], Duration::from_secs(5))
+        .wait_for_nodes(&["node-1", "node-2"], Duration::from_secs(30))
         .await
         .expect("Nodes should connect within timeout.");
     let node_3_handle = node_3.handle_with_keyspace("my-keyspace");
@@ -218,15 +218,15 @@ pub async fn test_member_leave() -> anyhow::Result<()> {
     .expect("Connect node.");
 
     node_1
-        .wait_for_nodes(&["node-2", "node-3"], Duration::from_secs(5))
+        .wait_for_nodes(&["node-2", "node-3"], Duration::from_secs(30))
         .await
         .expect("Nodes should connect within timeout.");
     node_2
-        .wait_for_nodes(&["node-3", "node-1"], Duration::from_secs(5))
+        .wait_for_nodes(&["node-3", "node-1"], Duration::from_secs(30))
         .await
         .expect("Nodes should connect within timeout.");
     node_3
-        .wait_for_nodes(&["node-2", "node-1"], Duration::from_secs(5))
+        .wait_for_nodes(&["node-2", "node-1"], Duration::from_secs(30))
         .await
         .expect("Nodes should connect within timeout.");
 
