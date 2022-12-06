@@ -9,7 +9,6 @@ use datacake_cluster::{
     DatacakeCluster,
 };
 use datacake_sqlite::SqliteStorage;
-use tokio::time::Instant;
 
 static KEYSPACE: &str = "sqlite-store";
 
@@ -59,50 +58,6 @@ async fn test_basic_sqlite_cluster() -> Result<()> {
         .expect("Del value which doesnt exist locally.");
     let doc = handle.get(KEYSPACE, 2).await.expect("Get value.");
     assert!(doc.is_none(), "No document should not exist!");
-
-    cluster.shutdown().await;
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_insert_many_entries() -> Result<()> {
-    let _ = tracing_subscriber::fmt::try_init();
-
-    let store = SqliteStorage::open("my-demo.db").await?;
-
-    let addr = "127.0.0.1:9000".parse::<SocketAddr>().unwrap();
-    let connection_cfg = ConnectionConfig::new(addr, addr, Vec::<String>::new());
-
-    let cluster = DatacakeCluster::connect(
-        "node-1",
-        connection_cfg,
-        store,
-        DCAwareSelector::default(),
-        ClusterOptions::default(),
-    )
-    .await?;
-
-    let handle = cluster.handle();
-
-    let mut docs = Vec::new();
-    for i in 0..1_000_000 {
-        docs.push((i, b"Hello world, this is a message!" as &'static [u8]));
-    }
-
-    let start = Instant::now();
-    handle
-        .put_many("my-demo-ks", docs, Consistency::None)
-        .await?;
-    tracing::info!("Took: {:?}", start.elapsed());
-
-    let keys = 0..1_000_000;
-    let start = Instant::now();
-    let _docs = handle
-        .get_many("my-demo-ks", keys)
-        .await?
-        .collect::<Vec<_>>();
-    tracing::info!("Took: {:?}", start.elapsed());
 
     cluster.shutdown().await;
 
