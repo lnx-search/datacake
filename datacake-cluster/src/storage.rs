@@ -178,6 +178,12 @@ where
     }
 
     #[inline]
+    /// Consumes the error returning the inner error.
+    pub fn into_inner(self) -> E {
+        self.inner
+    }
+
+    #[inline]
     /// The document ids which the operation was successful on.
     pub fn successful_doc_ids(&self) -> &[Key] {
         &self.successful_doc_ids

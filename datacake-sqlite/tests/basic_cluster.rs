@@ -1,8 +1,15 @@
 use std::net::SocketAddr;
+
 use anyhow::Result;
-use tokio::time::Instant;
-use datacake_cluster::{ClusterOptions, ConnectionConfig, Consistency, DatacakeCluster, DCAwareSelector};
+use datacake_cluster::{
+    ClusterOptions,
+    ConnectionConfig,
+    Consistency,
+    DCAwareSelector,
+    DatacakeCluster,
+};
 use datacake_sqlite::SqliteStorage;
+use tokio::time::Instant;
 
 static KEYSPACE: &str = "sqlite-store";
 
@@ -58,7 +65,6 @@ async fn test_basic_sqlite_cluster() -> Result<()> {
     Ok(())
 }
 
-
 #[tokio::test]
 async fn test_insert_many_entries() -> Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
@@ -85,7 +91,9 @@ async fn test_insert_many_entries() -> Result<()> {
     }
 
     let start = Instant::now();
-    handle.put_many("my-demo-ks", docs, Consistency::None).await?;
+    handle
+        .put_many("my-demo-ks", docs, Consistency::None)
+        .await?;
     tracing::info!("Took: {:?}", start.elapsed());
 
     let keys = 0..1_000_000;

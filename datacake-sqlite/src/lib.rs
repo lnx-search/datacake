@@ -6,8 +6,8 @@ use std::path::Path;
 use async_trait::async_trait;
 use datacake_cluster::{BulkMutationError, Document, Storage};
 use datacake_crdt::{HLCTimestamp, Key};
-
 pub use db::FromRow;
+
 pub use crate::db::StorageHandle;
 
 /// A [datacake_cluster::Storage] implementation based on an SQLite database.
@@ -206,8 +206,11 @@ impl Storage for SqliteStorage {
         keyspace: &str,
         doc_ids: impl Iterator<Item = Key> + Send,
     ) -> Result<Self::DocsIter, Self::Error> {
-        let doc_ids = doc_ids.map(|id| (keyspace.to_string(), id)).collect::<Vec<_>>();
-        let docs = self.inner
+        let doc_ids = doc_ids
+            .map(|id| (keyspace.to_string(), id))
+            .collect::<Vec<_>>();
+        let docs = self
+            .inner
             .fetch_many::<_, models::Doc>(queries::SELECT_DOC, doc_ids)
             .await?
             .into_iter()

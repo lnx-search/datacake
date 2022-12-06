@@ -10,9 +10,17 @@ datacake-crdt = { version = "0.3", path = "datacake-crdt" }
 datacake-cluster = { version = "0.1", path = "datacake-cluster" }
 datacake-sqlite = { version = "0.1", path = "datacake-sqlite" }
 
+[features]
+test-utils = ["datacake-cluster/test-utils"]
+rkyv = ["datacake-crdt/rkyv-support"]
+
 [workspace]
 members = [
     "datacake-cluster",
     "datacake-crdt",
     "datacake-sqlite",
+
+    # Example set
+    "examples/replicated-fs",
+    "examples/replicated-kv",
 ]

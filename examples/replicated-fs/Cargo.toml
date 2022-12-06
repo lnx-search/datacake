@@ -1,0 +1,18 @@
+[package]
+name = "replicated-fs"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1"
+notify = "5.0.0"
+tracing = "0.1.37"
+tracing-subscriber = "0.3.16"
+axum = "0.6.1"
+
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
+rusqlite = { version = "0.28.0", features = ["bundled"] }
+datacake = { version = "0.1", path = "../.." }

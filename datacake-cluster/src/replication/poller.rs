@@ -2,8 +2,8 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::anyhow;
@@ -112,11 +112,10 @@ where
 }
 
 async fn replication_cycle<S>(
-    ctx: ReplicationCycleContext<S>, 
+    ctx: ReplicationCycleContext<S>,
     rx: Receiver<Op>,
     kill_switch: Arc<AtomicBool>,
-)
-where
+) where
     S: Storage + Send + Sync + 'static,
 {
     let mut live_members = BTreeMap::new();
@@ -130,7 +129,7 @@ where
         if kill_switch.load(Ordering::Relaxed) {
             break;
         }
-        
+
         while let Ok(op) = rx.try_recv() {
             match op {
                 Op::MembershipChange(changes) => {
