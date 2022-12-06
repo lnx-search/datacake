@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use anyhow::anyhow;
@@ -69,12 +70,18 @@ pub struct NodeChangeInfo {
 /// This handle is cheap to clone.
 pub(crate) struct ReplicationHandle {
     tx: Sender<Op>,
+    kill_switch: Arc<AtomicBool>,
 }
 
 impl ReplicationHandle {
     /// Marks that the cluster has had a membership change.
     pub(crate) fn membership_change(&self, changes: MembershipChanges) {
         let _ = self.tx.send(Op::MembershipChange(changes));
+    }
+
+    /// Kills the replication service.
+    pub(crate) fn kill(&self) {
+        self.kill_switch.store(true, Ordering::Relaxed);
     }
 }
 
@@ -96,14 +103,19 @@ pub(crate) async fn start_replication_cycle<S>(
 where
     S: Storage + Send + Sync + 'static,
 {
+    let kill_switch = Arc::new(AtomicBool::new(false));
     let (tx, rx) = crossbeam_channel::unbounded();
 
-    tokio::spawn(replication_cycle(ctx, rx));
+    tokio::spawn(replication_cycle(ctx, rx, kill_switch.clone()));
 
-    ReplicationHandle { tx }
+    ReplicationHandle { tx, kill_switch }
 }
 
-async fn replication_cycle<S>(ctx: ReplicationCycleContext<S>, rx: Receiver<Op>)
+async fn replication_cycle<S>(
+    ctx: ReplicationCycleContext<S>, 
+    rx: Receiver<Op>,
+    kill_switch: Arc<AtomicBool>,
+)
 where
     S: Storage + Send + Sync + 'static,
 {
@@ -115,6 +127,10 @@ where
     loop {
         interval.tick().await;
 
+        if kill_switch.load(Ordering::Relaxed) {
+            break;
+        }
+        
         while let Ok(op) = rx.try_recv() {
             match op {
                 Op::MembershipChange(changes) => {

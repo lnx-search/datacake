@@ -51,6 +51,8 @@ impl StorageHandle {
     }
 
     /// Execute a SQL statement several times with some provided parameters.
+    ///
+    /// The statement is executed within the same transaction.
     pub async fn execute_many<P>(
         &self,
         sql: impl AsRef<str>,

@@ -6,10 +6,11 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = "1"
+async-trait = "0.1.59"
 futures = "0.3.25"
 flume = "0.10.14"
 rusqlite = "0.28.0"
-async-trait = "0.1.59"
 thiserror = "1"
 
 tokio = { version = "1", default-features = false, features = ["rt"] }
@@ -18,6 +19,9 @@ datacake-crdt = { version = "0.3", path = "../datacake-crdt" }
 datacake-cluster = { version = "0.1", path = "../datacake-cluster" }
 
 [dev-dependencies]
-rusqlite = { verson = "0.28.0", features = ["bundled"] }
+tracing = "0.1.37"
+tracing-subscriber = "0.3.16"
+
+rusqlite = { version = "0.28.0", features = ["bundled"] }
 uuid = { version = "1", features = ["v4"] }
 datacake-cluster = { version = "0.1", path = "../datacake-cluster", features = ["test-utils"] }

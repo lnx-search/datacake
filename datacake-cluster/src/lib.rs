@@ -176,6 +176,7 @@ where
     clock: Clock,
     node_selector: NodeSelectorHandle,
     task_service: TaskDistributor,
+    repair_service: ReplicationHandle,
     statistics: ClusterStatistics,
     _transport: Box<dyn Transport>,
 }
@@ -300,7 +301,7 @@ where
 
         setup_poller(
             task_service.clone(),
-            repair_service,
+            repair_service.clone(),
             network.clone(),
             &node,
             selector.clone(),
@@ -322,6 +323,7 @@ where
             clock,
             statistics,
             task_service,
+            repair_service,
             node_selector: selector,
             // Needs to live to run the network.
             _transport: transport,
@@ -331,6 +333,8 @@ where
     /// Shuts down the cluster and cleans up any connections.
     pub async fn shutdown(self) {
         self.node.shutdown().await;
+        self.task_service.kill();
+        self.repair_service.kill();
     }
 
     #[inline]

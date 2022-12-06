@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use crossbeam_channel::{unbounded, Receiver, Sender};
@@ -33,6 +34,7 @@ pub struct TaskServiceContext {
 /// This handle is cheap to clone.
 pub(crate) struct TaskDistributor {
     tx: Sender<Op>,
+    kill_switch: Arc<AtomicBool>,
 }
 
 impl TaskDistributor {
@@ -44,6 +46,11 @@ impl TaskDistributor {
     /// Marks that the cluster has mutated some data.
     pub(crate) fn mutation(&self, mutation: Mutation) {
         let _ = self.tx.send(Op::Mutation(mutation));
+    }
+
+    /// Kills the distributor service.
+    pub(crate) fn kill(&self) {
+        self.kill_switch.store(true, Ordering::Relaxed);
     }
 }
 
@@ -83,14 +90,19 @@ pub enum Mutation {
 pub(crate) async fn start_task_distributor_service(
     ctx: TaskServiceContext,
 ) -> TaskDistributor {
+    let kill_switch = Arc::new(AtomicBool::new(false));
     let (tx, rx) = unbounded();
 
-    tokio::spawn(task_distributor_service(ctx, rx));
+    tokio::spawn(task_distributor_service(ctx, rx, kill_switch.clone()));
 
-    TaskDistributor { tx }
+    TaskDistributor { tx, kill_switch }
 }
 
-async fn task_distributor_service(ctx: TaskServiceContext, rx: Receiver<Op>) {
+async fn task_distributor_service(
+    ctx: TaskServiceContext,
+    rx: Receiver<Op>,
+    kill_switch: Arc<AtomicBool>,
+) {
     info!("Task distributor service is running.");
 
     let mut live_members = BTreeMap::new();
@@ -98,6 +110,10 @@ async fn task_distributor_service(ctx: TaskServiceContext, rx: Receiver<Op>) {
     interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
     loop {
         interval.tick().await;
+
+        if kill_switch.load(Ordering::Relaxed) {
+            break;
+        }
 
         let mut put_payloads = BTreeMap::new();
         let mut del_payloads = BTreeMap::new();

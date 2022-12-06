@@ -6,9 +6,9 @@ use std::path::Path;
 use async_trait::async_trait;
 use datacake_cluster::{BulkMutationError, Document, Storage};
 use datacake_crdt::{HLCTimestamp, Key};
-pub use db::FromRow;
 
-use crate::db::StorageHandle;
+pub use db::FromRow;
+pub use crate::db::StorageHandle;
 
 /// A [datacake_cluster::Storage] implementation based on an SQLite database.
 pub struct SqliteStorage {
@@ -50,6 +50,23 @@ impl SqliteStorage {
         let inner = StorageHandle::open_in_memory().await?;
         setup_db(inner.clone()).await?;
         Ok(Self { inner })
+    }
+
+    /// Creates a new [SqliteStorage] instances from an existing storage handle.
+    pub fn from_handle(handle: StorageHandle) -> Self {
+        Self { inner: handle }
+    }
+
+    /// Creates a copy of the storage handle to be used in other sections of code
+    /// which do not need to be distributed.
+    ///
+    /// WARNING:
+    /// Any changes made to this will not be reflected in the cluster, it is primarily
+    /// only provided for ease of reading.
+    ///
+    /// The table `state_entries` is already created and reserved.
+    pub fn handle(&self) -> StorageHandle {
+        self.inner.clone()
     }
 }
 
@@ -252,8 +269,6 @@ mod models {
             let id = row.get::<_, i64>(0)? as Key;
             let ts = row.get::<_, String>(1)?;
             let is_tombstone = row.get::<_, bool>(2)?;
-
-            dbg!(&id, &ts, &is_tombstone);
 
             let ts = HLCTimestamp::from_str(&ts)
                 .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
