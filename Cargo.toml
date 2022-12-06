@@ -21,6 +21,5 @@ members = [
     "datacake-sqlite",
 
     # Example set
-    "examples/replicated-fs",
     "examples/replicated-kv",
 ]
