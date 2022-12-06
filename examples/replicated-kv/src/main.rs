@@ -47,7 +47,7 @@ async fn main() -> Result<()> {
     let handle = cluster.handle();
 
     let app = Router::new()
-        .route("/:keyspace/:id", get(get_value).post(set_value))
+        .route("/:keyspace/:key", get(get_value).post(set_value))
         .with_state(handle);
 
     info!("listening on {}", args.rest_listen_addr);

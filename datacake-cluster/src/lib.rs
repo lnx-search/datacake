@@ -499,8 +499,6 @@ where
         let last_updated = self.clock.get_time().await;
         let document = Document::new(doc_id, last_updated, data);
 
-        info!(node_id = %self.node_id, doc_id = doc_id, ts = %last_updated, "Putting document");
-
         let keyspace = self.group.get_or_create_keyspace(keyspace).await;
         let msg = Set {
             source: CONSISTENCY_SOURCE_ID,
