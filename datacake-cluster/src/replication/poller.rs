@@ -29,7 +29,7 @@ use crate::rpc::ReplicationClient;
 use crate::storage::ProgressWatcher;
 use crate::{Clock, ProgressTracker, PutContext, RpcNetwork, Storage};
 
-const INITIAL_KEYSPACE_WAIT: Duration = if cfg!(test) {
+const INITIAL_KEYSPACE_WAIT: Duration = if cfg!(any(test, feature = "test-utils")) {
     Duration::from_millis(500)
 } else {
     Duration::from_secs(30)
