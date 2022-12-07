@@ -29,6 +29,11 @@ use crate::rpc::ReplicationClient;
 use crate::storage::ProgressWatcher;
 use crate::{Clock, ProgressTracker, PutContext, RpcNetwork, Storage};
 
+const INITIAL_KEYSPACE_WAIT: Duration = if cfg!(test) {
+    Duration::from_millis(500)
+} else {
+    Duration::from_secs(30)
+};
 const KEYSPACE_SYNC_TIMEOUT: Duration = if cfg!(test) {
     Duration::from_secs(1)
 } else {
@@ -123,6 +128,9 @@ async fn replication_cycle<S>(
 
     let mut interval = interval(ctx.repair_interval);
     interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+
+    tokio::time::sleep(INITIAL_KEYSPACE_WAIT).await;
+
     loop {
         interval.tick().await;
 
