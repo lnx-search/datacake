@@ -249,6 +249,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::cmp::Reverse;
     use datacake_crdt::get_unix_timestamp_ms;
 
     use super::*;
@@ -652,7 +653,7 @@ mod tests {
         keyspace
             .on_multi_del(MultiDel {
                 source: 0,
-                key_ts_pairs: deletes_expected,
+                key_ts_pairs: deletes_expected.clone(),
                 _marker: Default::default(),
             })
             .await
@@ -665,6 +666,10 @@ mod tests {
         // Push the safe timestamp forwards.
         keyspace.state.insert_with_source(1, 5, HLCTimestamp::new(get_unix_timestamp_ms() + 3_700_000, 0, 0));
         keyspace.state.insert_with_source(0, 2, HLCTimestamp::new(get_unix_timestamp_ms() + 3_700_000, 1, 0));
-        assert!(keyspace.state.purge_old_deletes().is_empty());
+
+        let mut changes = keyspace.state.purge_old_deletes();
+        // Needed because it may not be ordered.
+        changes.sort_by_key(|change| Reverse(change.0));
+        assert_eq!(changes, deletes_expected);
     }
 }

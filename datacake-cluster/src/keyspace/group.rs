@@ -155,7 +155,7 @@ where
                 }
             }
 
-            states.entry(keyspace).or_insert(state);
+            states.insert(keyspace, state);
         }
 
         info!(
@@ -364,6 +364,8 @@ mod tests {
             });
 
         let group = KeyspaceGroup::new(Arc::new(storage), Clock::new(0)).await;
+        group.load_states_from_storage().await.expect("load from persisted store.");
+
         {
             let lock = group.group.read();
             for keyspace in keyspace_list {

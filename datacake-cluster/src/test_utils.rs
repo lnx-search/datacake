@@ -159,6 +159,10 @@ impl MockCounters {
 
 impl Drop for MockCounters {
     fn drop(&mut self) {
+        if std::thread::panicking() {
+            return;
+        }
+
         let lock = self.actual_counts.lock();
         for (name, count) in mem::take(&mut self.expected_method_counts) {
             let actual_count = lock.get(name).copied().unwrap_or_default();
