@@ -53,8 +53,7 @@ async fn main() -> Result<()> {
     MemStore::default(),
     DCAwareSelector::default(),
     ClusterOptions::default(),
-  )
-          .await?;
+  ).await?;
 
   tokio::time::sleep(Duration::from_secs(1)).await;
 
