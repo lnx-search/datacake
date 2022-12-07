@@ -27,7 +27,8 @@ async fn test_single_node_cluster() -> anyhow::Result<()> {
         DCAwareSelector::default(),
         ClusterOptions::default(),
     )
-    .await?;
+    .await
+    .expect("Connect node");
 
     tokio::time::sleep(Duration::from_millis(500)).await;
 
@@ -102,7 +103,8 @@ async fn test_single_node_cluster_with_keyspace_handle() -> anyhow::Result<()> {
         DCAwareSelector::default(),
         ClusterOptions::default(),
     )
-    .await?;
+    .await
+    .expect("Connect node");
 
     tokio::time::sleep(Duration::from_millis(500)).await;
 
@@ -173,7 +175,8 @@ async fn test_single_node_cluster_bulk_op() -> anyhow::Result<()> {
         DCAwareSelector::default(),
         ClusterOptions::default(),
     )
-    .await?;
+    .await
+    .expect("Connect node");
 
     tokio::time::sleep(Duration::from_millis(500)).await;
 
@@ -259,7 +262,8 @@ async fn test_single_node_cluster_bulk_op_with_keyspace_handle() -> anyhow::Resu
         DCAwareSelector::default(),
         ClusterOptions::default(),
     )
-    .await?;
+    .await
+    .expect("Connect node");
 
     tokio::time::sleep(Duration::from_millis(5000)).await;
 

@@ -138,8 +138,8 @@ async fn test_consistency_none() -> anyhow::Result<()> {
     let doc = node_3_handle.get(1).await.expect("Get value.");
     assert!(doc.is_none(), "No document should not exist!");
 
-    // 5 seconds should be enough for this test to propagate state without becoming flaky.
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    // 10 seconds should be enough for this test to propagate state without becoming flaky.
+    tokio::time::sleep(Duration::from_secs(10)).await;
 
     // Nodes 2 and 3 should now see the updated value.
     let doc = node_2_handle
@@ -167,7 +167,7 @@ async fn test_consistency_none() -> anyhow::Result<()> {
     let doc = node_3_handle.get(1).await.expect("Get value.");
     assert!(doc.is_none(), "No document should not exist!");
 
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    tokio::time::sleep(Duration::from_secs(10)).await;
 
     // Nodes should be caught up now.
     let doc = node_2_handle.get(1).await.expect("Get value.");
@@ -251,7 +251,7 @@ async fn test_async_operations() -> anyhow::Result<()> {
     assert_eq!(doc.id, 1);
     assert_eq!(doc.data, Bytes::from_static(b"Hello, world from node-3"));
 
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    tokio::time::sleep(Duration::from_secs(10)).await;
 
     // Man I love CRDTs, look at how easy this was! They're all the same now.
     let doc = node_1_handle
@@ -314,7 +314,7 @@ async fn test_async_operations() -> anyhow::Result<()> {
     let doc = node_2_handle.get(1).await.expect("Get value.");
     assert!(doc.is_none(), "Document should be deleted.");
 
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    tokio::time::sleep(Duration::from_secs(10)).await;
 
     // And now everything is consistent.
     let doc = node_1_handle.get(1).await.expect("Get value.");

@@ -23,7 +23,7 @@ use crate::{ClusterStatistics, DEFAULT_DATA_CENTER};
 
 static DATA_CENTER_KEY: &str = "data_center";
 const GOSSIP_INTERVAL: Duration = if cfg!(test) {
-    Duration::from_millis(200)
+    Duration::from_millis(500)
 } else {
     Duration::from_secs(1)
 };
@@ -109,9 +109,13 @@ impl DatacakeNode {
             is_ready_predicate: None,
         };
 
-        let chitchat_handle = spawn_chitchat(cfg, vec![], transport)
-            .await
-            .map_err(|e| DatacakeError::ChitChatError(e.to_string()))?;
+        let chitchat_handle = spawn_chitchat(
+            cfg,
+            vec![(DATA_CENTER_KEY.to_string(), me.data_center.clone())],
+            transport,
+        )
+        .await
+        .map_err(|e| DatacakeError::ChitChatError(e.to_string()))?;
 
         let chitchat = chitchat_handle.chitchat();
         let (members_tx, members_rx) = watch::channel(Vec::new());
