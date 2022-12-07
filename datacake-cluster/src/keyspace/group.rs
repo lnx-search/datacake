@@ -320,18 +320,15 @@ impl From<datacake_api::KeyspaceInfo> for KeyspaceTimestamps {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    use crate::test_utils::MockStorage;
     use super::*;
+    use crate::test_utils::MockStorage;
 
     #[tokio::test]
     async fn test_groups_load_from_blank_storage() {
-        let storage = MockStorage::default()
-            .expect_get_keyspace_list(1, || {
-                Ok(Vec::new())
-            });
+        let storage =
+            MockStorage::default().expect_get_keyspace_list(1, || Ok(Vec::new()));
 
         let group = KeyspaceGroup::new(Arc::new(storage), Clock::new(0)).await;
         assert!(group.keyspace_timestamps.read().is_empty());
@@ -344,7 +341,7 @@ mod tests {
             "keyspace-1".to_string(),
             "keyspace-2".to_string(),
             "keyspace-3".to_string(),
-            "keyspace-4".to_string()
+            "keyspace-4".to_string(),
         ];
         let metadata = vec![
             (1, HLCTimestamp::new(1, 0, 0), false),
@@ -356,24 +353,25 @@ mod tests {
         let keyspace_list_clone = keyspace_list.clone();
         let metadata_clone = metadata.clone();
         let storage = MockStorage::default()
-            .expect_get_keyspace_list(1, move || {
-                Ok(keyspace_list_clone.clone())
-            })
-            .expect_iter_metadata(4, move |_| {
-                Ok(metadata_clone.clone().into_iter())
-            });
+            .expect_get_keyspace_list(1, move || Ok(keyspace_list_clone.clone()))
+            .expect_iter_metadata(4, move |_| Ok(metadata_clone.clone().into_iter()));
 
         let group = KeyspaceGroup::new(Arc::new(storage), Clock::new(0)).await;
-        group.load_states_from_storage().await.expect("load from persisted store.");
+        group
+            .load_states_from_storage()
+            .await
+            .expect("load from persisted store.");
 
         {
             let lock = group.group.read();
             for keyspace in keyspace_list {
-                assert!(lock.get(keyspace.as_str()).is_some(), "Keyspace should exist");
+                assert!(
+                    lock.get(keyspace.as_str()).is_some(),
+                    "Keyspace should exist"
+                );
             }
         }
         assert!(!group.keyspace_timestamps.read().is_empty());
         assert!(!group.group.read().is_empty());
     }
-
 }

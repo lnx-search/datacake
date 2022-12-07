@@ -250,6 +250,7 @@ where
 #[cfg(test)]
 mod tests {
     use std::cmp::Reverse;
+
     use datacake_crdt::get_unix_timestamp_ms;
 
     use super::*;
@@ -468,7 +469,6 @@ mod tests {
             .expect("Put operation should be successful.");
     }
 
-
     #[tokio::test]
     async fn test_on_multi_set_unordered_events() {
         let clock = Clock::new(0);
@@ -481,14 +481,16 @@ mod tests {
 
         let docs = [doc_4.clone(), doc_2.clone(), doc_1.clone(), doc_3.clone()];
 
-        let mock_store = MockStorage::default()
-            .expect_multi_put_with_ctx(1, move |keyspace, mut docs_iter, ctx| {
+        let mock_store = MockStorage::default().expect_multi_put_with_ctx(
+            1,
+            move |keyspace, mut docs_iter, ctx| {
                 assert_eq!(keyspace, "my-keyspace");
                 assert!(ctx.is_none());
                 assert!(docs_iter.all(|doc| docs.contains(&doc)));
 
                 Ok(())
-            });
+            },
+        );
 
         let mut keyspace = make_actor(clock, mock_store).await;
 
@@ -664,8 +666,16 @@ mod tests {
         assert!(!keyspace.state.delete(doc_3.id, doc_3.last_updated));
 
         // Push the safe timestamp forwards.
-        keyspace.state.insert_with_source(1, 5, HLCTimestamp::new(get_unix_timestamp_ms() + 3_700_000, 0, 0));
-        keyspace.state.insert_with_source(0, 2, HLCTimestamp::new(get_unix_timestamp_ms() + 3_700_000, 1, 0));
+        keyspace.state.insert_with_source(
+            1,
+            5,
+            HLCTimestamp::new(get_unix_timestamp_ms() + 3_700_000, 0, 0),
+        );
+        keyspace.state.insert_with_source(
+            0,
+            2,
+            HLCTimestamp::new(get_unix_timestamp_ms() + 3_700_000, 1, 0),
+        );
 
         let mut changes = keyspace.state.purge_old_deletes();
         // Needed because it may not be ordered.
