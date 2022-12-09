@@ -251,4 +251,56 @@ mod tests {
         let str_ts = ts.to_string();
         HLCTimestamp::from_str(&str_ts).expect("Parse timestamp");
     }
+
+    #[test]
+    fn test_same_node_error() {
+        let mut ts1 = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 0);
+        let ts2 = HLCTimestamp::new(get_unix_timestamp_ms(), 1, 0);
+
+        assert!(matches!(
+            ts1.recv(&ts2),
+            Err(TimestampError::DuplicatedNode(0)),
+        ))
+    }
+
+    #[test]
+    fn test_clock_drift_error() {
+        let mut ts1 = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 0);
+        let ts2 = HLCTimestamp::new(ts1.millis + MAX_DRIFT_MS + 100, 0, 1);
+
+        assert!(matches!(ts1.recv(&ts2), Err(TimestampError::ClockDrift),));
+
+        let mut ts =
+            HLCTimestamp::new(get_unix_timestamp_ms() + MAX_DRIFT_MS + 100, 0, 1);
+        assert!(matches!(ts.send(), Err(TimestampError::ClockDrift)));
+    }
+
+    #[test]
+    fn test_clock_overflow_error() {
+        let mut ts1 = HLCTimestamp::new(get_unix_timestamp_ms(), u16::MAX, 0);
+        let ts2 = HLCTimestamp::new(ts1.millis, u16::MAX, 1);
+
+        assert!(matches!(ts1.recv(&ts2), Err(TimestampError::Overflow),))
+    }
+}
+
+#[cfg(all(test, feature = "rkyv-support"))]
+mod rkyv_tests {
+    use super::*;
+
+    #[test]
+    fn test_serialize() {
+        let ts = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 0);
+        rkyv::to_bytes::<_, 1024>(&ts).expect("Serialize timestamp OK");
+    }
+
+    #[test]
+    fn test_deserialize() {
+        let ts = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 0);
+        let buffer = rkyv::to_bytes::<_, 1024>(&ts).expect("Serialize timestamp OK");
+
+        let new_ts: HLCTimestamp =
+            rkyv::from_bytes(&buffer).expect("Deserialize timestamp OK");
+        assert_eq!(ts, new_ts);
+    }
 }

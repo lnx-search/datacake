@@ -267,8 +267,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_sharded_storage() {
-        let tmp_dir = temp_dir().join("sharded-store-test");
-        let store = ShardedStorage::open_in_dir(tmp_dir)
+        let path = temp_dir().join(uuid::Uuid::new_v4().to_string());
+        let store = ShardedStorage::open_in_dir(path)
             .await
             .expect("Create storage");
 

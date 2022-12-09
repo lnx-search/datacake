@@ -6,7 +6,7 @@ use std::net::SocketAddr;
 
 pub const MAX_CONCURRENT_REQUESTS: usize = 10;
 
-#[derive(Debug, Default, Clone)]
+#[derive(Default, Clone)]
 /// Represents a set of changes to the membership of the cluster.
 pub(crate) struct MembershipChanges {
     /// A set of nodes which have joined the cluster.

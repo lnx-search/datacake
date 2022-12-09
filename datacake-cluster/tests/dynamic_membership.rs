@@ -113,10 +113,7 @@ pub async fn test_member_join() -> anyhow::Result<()> {
     )
     .await
     .expect("Connect node.");
-    node_3
-        .wait_for_nodes(&["node-1", "node-2"], Duration::from_secs(30))
-        .await
-        .expect("Nodes should connect within timeout.");
+
     let node_3_handle = node_3.handle_with_keyspace("my-keyspace");
 
     node_3_handle
@@ -128,6 +125,11 @@ pub async fn test_member_join() -> anyhow::Result<()> {
     assert!(doc.is_none());
     let doc = node_3_handle.get(2).await.expect("Get value.");
     assert!(doc.is_none());
+
+    node_3
+        .wait_for_nodes(&["node-1", "node-2"], Duration::from_secs(30))
+        .await
+        .expect("Nodes should connect within timeout.");
 
     // Let state propagate
     tokio::time::sleep(Duration::from_secs(10)).await;

@@ -1134,4 +1134,17 @@ mod tests {
         assert!(node_set.delete_with_source(0, 3, clock.send().unwrap()));
         assert!(!node_set.delete_with_source(1, 4, initial_ts));
     }
+
+    #[test]
+    fn test_will_apply() {
+        let mut node_set = OrSWotSet::<1>::default();
+
+        assert!(node_set.will_apply(1, HLCTimestamp::new(1, 0, 0)));
+        node_set.insert(1, HLCTimestamp::new(1, 0, 0));
+        assert!(!node_set.will_apply(1, HLCTimestamp::new(1, 0, 0)));
+
+        assert!(node_set.will_apply(3, HLCTimestamp::new(3, 0, 0)));
+        node_set.delete(3, HLCTimestamp::new(5, 0, 0));
+        assert!(!node_set.will_apply(3, HLCTimestamp::new(4, 0, 0)));
+    }
 }
