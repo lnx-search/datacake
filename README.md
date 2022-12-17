@@ -101,3 +101,7 @@ if you wish to extend or modify it heavily as something's are not always as simp
 #### What sort of things could I contribute?
 🧪 Tests! 🧪 Tests! 🧪 Tests! Joking aside testing is probably the most important part of the system, extending these
 tests in any way you might think of, big or small is a huge help :) 
+
+### Future Ideas
+- Multi-raft framework?
+- More storage implementations?
