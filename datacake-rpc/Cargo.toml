@@ -1,0 +1,19 @@
+[package]
+name = "datacake-rpc"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bytecheck = "0.6.9"
+bytes = "1"
+quinn = "0.9.3"
+async-trait = "0.1.60"
+flume = "0.10.14"
+arc-swap = "1.5.1"
+thiserror = "1"
+
+rustls = { version = "0.20", features = ["dangerous_configuration"] }
+rkyv = { version = "0.7.39", features = ["validation"] }
+tokio = { version = "1", features = ["full"]  }
