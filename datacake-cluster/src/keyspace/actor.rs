@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use crossbeam_utils::atomic::AtomicCell;
 use datacake_crdt::{HLCTimestamp, OrSWotSet, StateChanges};
-use puppet::{puppet_actor, ActorMailbox};
 use datacake_node::Clock;
+use puppet::{puppet_actor, ActorMailbox};
 
 use super::messages::{Del, Diff, MultiDel, MultiSet, Set, SymDiff};
 use crate::keyspace::messages::{CorruptedState, PurgeDeletes, Serialize, NUM_SOURCES};

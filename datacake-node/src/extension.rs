@@ -1,6 +1,7 @@
-use crate::{DatacakeNode, ServiceRegistry};
 use async_trait::async_trait;
 use tonic::transport::server::Router;
+
+use crate::{DatacakeNode, ServiceRegistry};
 
 #[async_trait]
 /// An extension of the base node/cluster.
@@ -12,5 +13,8 @@ pub trait ClusterExtension: ServiceRegistry {
     type Output;
     type Error;
 
-    async fn init_extension(self, node: &DatacakeNode) -> Result<Self::Output, Self::Error>;
+    async fn init_extension(
+        self,
+        node: &DatacakeNode,
+    ) -> Result<Self::Output, Self::Error>;
 }

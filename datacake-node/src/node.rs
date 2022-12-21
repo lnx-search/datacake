@@ -18,11 +18,11 @@ use chitchat::{
 use tokio::sync::watch;
 use tokio_stream::wrappers::WatchStream;
 use tokio_stream::StreamExt;
-use tracing::{info, error, debug};
-use crate::DEFAULT_DATA_CENTER;
+use tracing::{debug, error, info};
 
 use crate::error::NodeError;
 use crate::statistics::ClusterStatistics;
+use crate::DEFAULT_DATA_CENTER;
 
 static DATA_CENTER_KEY: &str = "data_center";
 const GOSSIP_INTERVAL: Duration = if cfg!(test) {
@@ -44,11 +44,7 @@ pub struct ClusterMember {
 }
 
 impl ClusterMember {
-    pub fn new(
-        node_id: String,
-        public_addr: SocketAddr,
-        data_center: String,
-    ) -> Self {
+    pub fn new(node_id: String, public_addr: SocketAddr, data_center: String) -> Self {
         Self {
             node_id,
             public_addr,
@@ -66,7 +62,6 @@ impl From<ClusterMember> for NodeId {
         Self::new(member.chitchat_id(), member.public_addr)
     }
 }
-
 
 pub struct ChitchatNode {
     pub me: Cow<'static, ClusterMember>,
@@ -127,7 +122,8 @@ impl ChitchatNode {
             stop: Arc::new(Default::default()),
         };
 
-        let initial_members: BTreeMap<String, ClusterMember> = BTreeMap::from_iter([(me.node_id.clone(), me.clone())]);
+        let initial_members: BTreeMap<String, ClusterMember> =
+            BTreeMap::from_iter([(me.node_id.clone(), me.clone())]);
         if members_tx.send(initial_members).is_err() {
             error!("Failed to add itself as the initial member of the cluster.");
         }
@@ -324,7 +320,6 @@ mod tests {
             ..Default::default()
         }
     }
-
 
     pub async fn create_node_for_test_with_id(
         node_id: u16,

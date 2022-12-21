@@ -4,10 +4,10 @@ use std::sync::Arc;
 
 use crossbeam_utils::atomic::AtomicCell;
 use datacake_crdt::{HLCTimestamp, Key, OrSWotSet};
+use datacake_node::Clock;
 use rkyv::AlignedVec;
 use tonic::transport::Channel;
 use tonic::Status;
-use datacake_node::Clock;
 
 use crate::core::Document;
 use crate::keyspace::KeyspaceTimestamps;

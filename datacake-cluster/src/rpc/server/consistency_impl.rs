@@ -4,8 +4,8 @@ use std::net::SocketAddr;
 
 use async_trait::async_trait;
 use datacake_crdt::HLCTimestamp;
-use tonic::{Request, Response, Status};
 use datacake_node::RpcNetwork;
+use tonic::{Request, Response, Status};
 
 use crate::core::Document;
 use crate::keyspace::{KeyspaceGroup, CONSISTENCY_SOURCE_ID};

@@ -5,7 +5,7 @@ use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 
 use tokio::sync::oneshot;
-use tracing::{debug, info, warn, instrument};
+use tracing::{debug, info, instrument, warn};
 
 const NODE_CACHE_TIMEOUT: Duration = Duration::from_secs(2);
 

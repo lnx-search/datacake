@@ -1,38 +1,43 @@
+pub(crate) mod clock;
+mod error;
+mod extension;
 mod node;
 mod nodes_selector;
-mod statistics;
-mod error;
 mod rpc;
-pub(crate) mod clock;
-mod extension;
+mod statistics;
 
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Display;
 use std::net::SocketAddr;
 use std::sync::atomic::Ordering;
-use chitchat::FailureDetectorConfig;
+
 use chitchat::transport::Transport;
+use chitchat::FailureDetectorConfig;
+pub use clock::Clock;
+pub use error::NodeError;
+pub use extension::ClusterExtension;
 use futures::StreamExt;
+pub use node::{ChitchatNode, ClusterMember};
+pub use nodes_selector::{
+    Consistency,
+    ConsistencyError,
+    DCAwareSelector,
+    NodeSelector,
+    NodeSelectorHandle,
+};
+pub use rpc::network::RpcNetwork;
+pub use rpc::server::{DefaultRegistry, ServiceRegistry};
+pub use statistics::ClusterStatistics;
 use tokio::sync::watch;
 use tokio_stream::wrappers::WatchStream;
 use tracing::info;
-
-pub use clock::Clock;
-pub use error::NodeError;
-pub use nodes_selector::{Consistency, DCAwareSelector, NodeSelector, NodeSelectorHandle, ConsistencyError};
-pub use node::{ChitchatNode, ClusterMember};
-pub use extension::ClusterExtension;
-pub use rpc::network::RpcNetwork;
-pub use statistics::ClusterStatistics;
-pub use rpc::server::{DefaultRegistry, ServiceRegistry};
 
 use crate::rpc::chitchat_transport::GrpcTransport;
 use crate::rpc::server::Context;
 
 pub static DEFAULT_CLUSTER_ID: &str = "datacake-cluster-unknown";
 pub static DEFAULT_DATA_CENTER: &str = "datacake-dc-unknown";
-
 
 /// Build a datacake node using provided settings.
 pub struct DatacakeNodeBuilder<S> {
@@ -87,8 +92,7 @@ where
     /// No seed nodes need to be live at the time of connecting for the cluster to start correctly,
     /// but they are required in order for nodes to discover one-another and share
     /// their basic state.
-    pub async fn connect(self) -> Result<DatacakeNode, NodeError>
-    {
+    pub async fn connect(self) -> Result<DatacakeNode, NodeError> {
         self.connect_with_registry(DefaultRegistry).await
     }
 
@@ -108,7 +112,10 @@ where
     /// No seed nodes need to be live at the time of connecting for the cluster to start correctly,
     /// but they are required in order for nodes to discover one-another and share
     /// their basic state.
-    pub async fn connect_with_registry<R>(self, service_registry: R) -> Result<DatacakeNode, NodeError>
+    pub async fn connect_with_registry<R>(
+        self,
+        service_registry: R,
+    ) -> Result<DatacakeNode, NodeError>
     where
         R: ServiceRegistry + Send + Sync + Clone + 'static,
     {
@@ -169,7 +176,6 @@ where
     }
 }
 
-
 #[derive(Debug, Clone)]
 /// Configuration for the cluster network.
 pub struct ConnectionConfig {
@@ -209,7 +215,6 @@ impl ConnectionConfig {
         }
     }
 }
-
 
 pub struct DatacakeNode {
     node: ChitchatNode,
@@ -258,7 +263,10 @@ impl DatacakeNode {
 
     #[inline]
     /// Selects a set of nodes using a provided consistency level.
-    pub async fn select_nodes(&self, consistency: Consistency) -> Result<Vec<SocketAddr>, ConsistencyError> {
+    pub async fn select_nodes(
+        &self,
+        consistency: Consistency,
+    ) -> Result<Vec<SocketAddr>, ConsistencyError> {
         self.selector.get_nodes(consistency).await
     }
 
@@ -319,7 +327,10 @@ impl DatacakeHandle {
 
     #[inline]
     /// Selects a set of nodes using a provided consistency level.
-    pub async fn select_nodes(&self, consistency: Consistency) -> Result<Vec<SocketAddr>, ConsistencyError> {
+    pub async fn select_nodes(
+        &self,
+        consistency: Consistency,
+    ) -> Result<Vec<SocketAddr>, ConsistencyError> {
         self.selector.get_nodes(consistency).await
     }
 }
@@ -432,9 +443,7 @@ async fn watch_membership_changes(
             network.disconnect(*addr);
 
             if let Some(member) = members.get(node_id) {
-                membership_changes
-                    .left
-                    .push(member.clone());
+                membership_changes.left.push(member.clone());
             }
         }
 
@@ -448,9 +457,7 @@ async fn watch_membership_changes(
             );
 
             if let Some(member) = members.get(node_id) {
-                membership_changes
-                    .joined
-                    .push(member.clone());
+                membership_changes.joined.push(member.clone());
             }
         }
 

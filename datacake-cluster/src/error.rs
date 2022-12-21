@@ -2,8 +2,8 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::net::SocketAddr;
 
-use thiserror::Error;
 use datacake_node::ConsistencyError;
+use thiserror::Error;
 
 use crate::storage::BulkMutationError;
 

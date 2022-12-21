@@ -17,8 +17,8 @@ use datacake::cluster::{
     ConnectionConfig,
     Consistency,
     DCAwareSelector,
-    EventuallyConsistentStore,
     DatacakeHandle,
+    EventuallyConsistentStore,
 };
 use serde_json::json;
 

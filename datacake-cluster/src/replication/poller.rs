@@ -10,10 +10,10 @@ use anyhow::anyhow;
 use crossbeam_channel::{Receiver, Sender};
 use crossbeam_utils::atomic::AtomicCell;
 use datacake_crdt::{HLCTimestamp, StateChanges};
+use datacake_node::{Clock, MembershipChange, RpcNetwork};
 use puppet::ActorMailbox;
 use tokio::sync::Semaphore;
 use tokio::time::{interval, MissedTickBehavior};
-use datacake_node::{Clock, MembershipChange, RpcNetwork};
 
 use crate::keyspace::{
     Del,

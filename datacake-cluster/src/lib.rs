@@ -17,20 +17,26 @@ use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
+
 use anyhow::Error;
 use async_trait::async_trait;
-
 use bytes::Bytes;
 use datacake_crdt::Key;
+use datacake_node::{
+    ClusterExtension,
+    Consistency,
+    ConsistencyError,
+    DatacakeHandle,
+    DatacakeNode,
+    ServiceRegistry,
+};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
-use tonic::transport::server::Router;
-use datacake_node::{ClusterExtension, Consistency, ConsistencyError, DatacakeHandle, DatacakeNode, ServiceRegistry};
-
 pub use statistics::SystemStatistics;
 #[cfg(feature = "test-utils")]
 pub use storage::test_suite;
 pub use storage::{BulkMutationError, ProgressTracker, PutContext, Storage};
+use tonic::transport::server::Router;
 
 pub use self::core::Document;
 use crate::keyspace::{
@@ -56,7 +62,6 @@ const DEFAULT_REPAIR_INTERVAL: Duration = if cfg!(any(test, feature = "test-util
 } else {
     Duration::from_secs(60 * 60) // 1 Hour
 };
-
 
 /// A fully managed eventually consistent state controller.
 ///
@@ -103,19 +108,23 @@ where
     type Output = EventuallyConsistentStore<S>;
     type Error = error::StoreError<S::Error>;
 
-    async fn init_extension(self, node: &DatacakeNode) -> Result<Self::Output, Self::Error> {
-        EventuallyConsistentStore::create(self.datastore, self.repair_interval, node).await
+    async fn init_extension(
+        self,
+        node: &DatacakeNode,
+    ) -> Result<Self::Output, Self::Error> {
+        EventuallyConsistentStore::create(self.datastore, self.repair_interval, node)
+            .await
     }
 }
 
 impl<S> ServiceRegistry for EventuallyConsistentStoreExt<S>
-where S: 'static + Send + Storage + Sync
+where
+    S: 'static + Send + Storage + Sync,
 {
     fn register_service(&self, router: Router) -> Router {
         todo!()
     }
 }
-
 
 /// A fully managed eventually consistent state controller.
 ///
@@ -145,8 +154,7 @@ where
         datastore: S,
         repair_interval: Duration,
         node: &DatacakeNode,
-    ) -> Result<Self, error::StoreError<S::Error>>
-    {
+    ) -> Result<Self, error::StoreError<S::Error>> {
         let storage = Arc::new(datastore);
 
         let group = KeyspaceGroup::new(storage.clone(), node.clock().clone()).await;
@@ -351,7 +359,12 @@ where
                 let mut client = ConsistencyClient::new(clock, channel);
 
                 client
-                    .put(keyspace, document, &self.node.me().node_id, self.node.me().public_addr)
+                    .put(
+                        keyspace,
+                        document,
+                        &self.node.me().node_id,
+                        self.node.me().public_addr,
+                    )
                     .await
                     .map_err(|e| error::StoreError::RpcError(node, e))?;
 
@@ -417,7 +430,12 @@ where
                 let mut client = ConsistencyClient::new(clock, channel);
 
                 client
-                    .multi_put(keyspace, documents.into_iter(), &self_member.node_id, self_member.public_addr)
+                    .multi_put(
+                        keyspace,
+                        documents.into_iter(),
+                        &self_member.node_id,
+                        self_member.public_addr,
+                    )
                     .await
                     .map_err(|e| error::StoreError::RpcError(node, e))?;
 
@@ -441,10 +459,7 @@ where
             .await
             .map_err(error::StoreError::ConsistencyError)?;
 
-        let last_updated = self.node
-            .clock()
-            .get_time()
-            .await;
+        let last_updated = self.node.clock().get_time().await;
 
         let keyspace = self.group.get_or_create_keyspace(keyspace).await;
         let msg = Del {
@@ -646,7 +661,6 @@ where
             .await
     }
 }
-
 
 /// Watches for changes in the cluster membership.
 ///

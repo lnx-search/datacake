@@ -3,15 +3,15 @@ mod chitchat_impl;
 use std::net::SocketAddr;
 
 use chitchat::ChitchatMessage;
+use chitchat_impl::ChitchatService;
 use tokio::sync::oneshot;
 use tonic::transport::server::Router;
 use tonic::transport::{Error, Server};
 use tracing::info;
 
 use super::datacake_api::chitchat_transport_server::ChitchatTransportServer;
-use chitchat_impl::ChitchatService;
-use crate::Clock;
 use super::network::RpcNetwork;
+use crate::Clock;
 
 pub struct Context<R>
 where
@@ -65,8 +65,8 @@ where
     let chitchat_service =
         ChitchatService::new(ctx.clock.clone(), ctx.chitchat_messages);
 
-    let router = Server::builder()
-        .add_service(ChitchatTransportServer::new(chitchat_service));
+    let router =
+        Server::builder().add_service(ChitchatTransportServer::new(chitchat_service));
 
     let router = ctx.service_registry.register_service(router);
 

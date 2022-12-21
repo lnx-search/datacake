@@ -7,9 +7,9 @@ use std::time::Duration;
 
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use datacake_crdt::{HLCTimestamp, Key, StateChanges};
+use datacake_node::{Clock, MembershipChange, RpcNetwork};
 use tokio::sync::Semaphore;
 use tokio::time::{interval, MissedTickBehavior};
-use datacake_node::{Clock, RpcNetwork, MembershipChange};
 
 use crate::replication::MAX_CONCURRENT_REQUESTS;
 use crate::rpc::datacake_api;
