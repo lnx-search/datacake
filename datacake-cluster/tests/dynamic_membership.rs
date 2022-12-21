@@ -8,7 +8,7 @@ use datacake_cluster::{
     ConnectionConfig,
     Consistency,
     DCAwareSelector,
-    DatacakeCluster,
+    EventuallyConsistentStore,
 };
 
 #[tokio::test]
@@ -34,7 +34,7 @@ pub async fn test_member_join() -> anyhow::Result<()> {
         &[node_1_addr.to_string(), node_2_addr.to_string()],
     );
 
-    let node_1 = DatacakeCluster::connect(
+    let node_1 = EventuallyConsistentStore::connect(
         "node-1",
         node_1_connection_cfg,
         InstrumentedStorage(MemStore::default()),
@@ -43,7 +43,7 @@ pub async fn test_member_join() -> anyhow::Result<()> {
     )
     .await
     .expect("Connect node.");
-    let node_2 = DatacakeCluster::connect(
+    let node_2 = EventuallyConsistentStore::connect(
         "node-2",
         node_2_connection_cfg,
         InstrumentedStorage(MemStore::default()),
@@ -104,7 +104,7 @@ pub async fn test_member_join() -> anyhow::Result<()> {
     assert_eq!(doc.id, 2);
     assert_eq!(doc.data, Bytes::from_static(b"Hello, world from node-2"));
 
-    let node_3 = DatacakeCluster::connect(
+    let node_3 = EventuallyConsistentStore::connect(
         "node-3",
         node_3_connection_cfg,
         InstrumentedStorage(MemStore::default()),
@@ -191,7 +191,7 @@ pub async fn test_member_leave() -> anyhow::Result<()> {
         &[node_1_addr.to_string(), node_2_addr.to_string()],
     );
 
-    let node_1 = DatacakeCluster::connect(
+    let node_1 = EventuallyConsistentStore::connect(
         "node-1",
         node_1_connection_cfg,
         InstrumentedStorage(MemStore::default()),
@@ -200,7 +200,7 @@ pub async fn test_member_leave() -> anyhow::Result<()> {
     )
     .await
     .expect("Connect node.");
-    let node_2 = DatacakeCluster::connect(
+    let node_2 = EventuallyConsistentStore::connect(
         "node-2",
         node_2_connection_cfg,
         InstrumentedStorage(MemStore::default()),
@@ -209,7 +209,7 @@ pub async fn test_member_leave() -> anyhow::Result<()> {
     )
     .await
     .expect("Connect node.");
-    let node_3 = DatacakeCluster::connect(
+    let node_3 = EventuallyConsistentStore::connect(
         "node-3",
         node_3_connection_cfg.clone(),
         InstrumentedStorage(MemStore::default()),

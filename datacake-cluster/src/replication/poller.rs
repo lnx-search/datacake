@@ -13,6 +13,7 @@ use datacake_crdt::{HLCTimestamp, StateChanges};
 use puppet::ActorMailbox;
 use tokio::sync::Semaphore;
 use tokio::time::{interval, MissedTickBehavior};
+use datacake_node::{Clock, MembershipChange, RpcNetwork};
 
 use crate::keyspace::{
     Del,
@@ -24,10 +25,10 @@ use crate::keyspace::{
     MultiSet,
     READ_REPAIR_SOURCE_ID,
 };
-use crate::replication::{MembershipChanges, MAX_CONCURRENT_REQUESTS};
+use crate::replication::MAX_CONCURRENT_REQUESTS;
 use crate::rpc::ReplicationClient;
 use crate::storage::ProgressWatcher;
-use crate::{Clock, ProgressTracker, PutContext, RpcNetwork, Storage};
+use crate::{ProgressTracker, PutContext, Storage};
 
 const INITIAL_KEYSPACE_WAIT: Duration = if cfg!(any(test, feature = "test-utils")) {
     Duration::from_millis(500)
@@ -80,7 +81,7 @@ pub(crate) struct ReplicationHandle {
 
 impl ReplicationHandle {
     /// Marks that the cluster has had a membership change.
-    pub(crate) fn membership_change(&self, changes: MembershipChanges) {
+    pub(crate) fn membership_change(&self, changes: MembershipChange) {
         let _ = self.tx.send(Op::MembershipChange(changes));
     }
 
@@ -92,7 +93,7 @@ impl ReplicationHandle {
 
 /// A enqueued event/operation for the cycle to handle next tick.
 enum Op {
-    MembershipChange(MembershipChanges),
+    MembershipChange(MembershipChange),
 }
 
 /// Starts the replication cycle task.
@@ -141,13 +142,13 @@ async fn replication_cycle<S>(
         while let Ok(op) = rx.try_recv() {
             match op {
                 Op::MembershipChange(changes) => {
-                    for node_id in changes.left {
-                        live_members.remove(node_id.as_ref());
-                        keyspace_tracker.remove_node(node_id.as_ref());
+                    for member in changes.left {
+                        live_members.remove(&member.node_id);
+                        keyspace_tracker.remove_node(&member.node_id);
                     }
 
-                    for (node_id, addr) in changes.joined {
-                        live_members.insert(node_id.to_string(), addr);
+                    for member in changes.joined {
+                        live_members.insert(member.node_id, member.public_addr);
                     }
                 },
             }

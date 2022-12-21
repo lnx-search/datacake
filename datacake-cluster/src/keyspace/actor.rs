@@ -5,12 +5,13 @@ use std::sync::Arc;
 use crossbeam_utils::atomic::AtomicCell;
 use datacake_crdt::{HLCTimestamp, OrSWotSet, StateChanges};
 use puppet::{puppet_actor, ActorMailbox};
+use datacake_node::Clock;
 
 use super::messages::{Del, Diff, MultiDel, MultiSet, Set, SymDiff};
 use crate::keyspace::messages::{CorruptedState, PurgeDeletes, Serialize, NUM_SOURCES};
 use crate::keyspace::LastUpdated;
 use crate::storage::BulkMutationError;
-use crate::{Clock, Storage};
+use crate::Storage;
 
 /// Spawns a new keyspace actor, returning the actor's mailbox.
 pub async fn spawn_keyspace<S>(

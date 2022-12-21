@@ -8,7 +8,7 @@ use datacake_cluster::{
     ConnectionConfig,
     Consistency,
     DCAwareSelector,
-    DatacakeCluster,
+    EventuallyConsistentStore,
 };
 
 #[tokio::test]
@@ -333,7 +333,7 @@ async fn test_async_operations() -> anyhow::Result<()> {
 
 async fn connect_cluster(
     addrs: [SocketAddr; 3],
-) -> [DatacakeCluster<InstrumentedStorage<MemStore>>; 3] {
+) -> [EventuallyConsistentStore<InstrumentedStorage<MemStore>>; 3] {
     dbg!(
         crc32fast::hash("node-1".as_bytes()),
         crc32fast::hash("node-2".as_bytes()),
@@ -356,7 +356,7 @@ async fn connect_cluster(
         &[addrs[0].to_string(), addrs[1].to_string()],
     );
 
-    let node_1 = DatacakeCluster::connect(
+    let node_1 = EventuallyConsistentStore::connect(
         "node-1",
         node_1_connection_cfg,
         InstrumentedStorage(MemStore::default()),
@@ -365,7 +365,7 @@ async fn connect_cluster(
     )
     .await
     .expect("Connect node.");
-    let node_2 = DatacakeCluster::connect(
+    let node_2 = EventuallyConsistentStore::connect(
         "node-2",
         node_2_connection_cfg,
         InstrumentedStorage(MemStore::default()),
@@ -374,7 +374,7 @@ async fn connect_cluster(
     )
     .await
     .expect("Connect node.");
-    let node_3 = DatacakeCluster::connect(
+    let node_3 = EventuallyConsistentStore::connect(
         "node-3",
         node_3_connection_cfg,
         InstrumentedStorage(MemStore::default()),

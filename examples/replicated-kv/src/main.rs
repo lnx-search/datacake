@@ -17,7 +17,7 @@ use datacake::cluster::{
     ConnectionConfig,
     Consistency,
     DCAwareSelector,
-    DatacakeCluster,
+    EventuallyConsistentStore,
     DatacakeHandle,
 };
 use serde_json::json;
@@ -35,7 +35,7 @@ async fn main() -> Result<()> {
         args.public_addr.unwrap_or(args.cluster_listen_addr),
         args.seeds.into_iter(),
     );
-    let cluster = DatacakeCluster::connect(
+    let cluster = EventuallyConsistentStore::connect(
         args.node_id,
         connection_cfg,
         storage,
@@ -103,7 +103,7 @@ struct Params {
 
 async fn get_value(
     Path(params): Path<Params>,
-    State(handle): State<DatacakeHandle<ShardedStorage>>,
+    State(handle): State<ReplicatorHandle<ShardedStorage>>,
 ) -> Result<Bytes, StatusCode> {
     info!(
         doc_id = params.key,
@@ -127,7 +127,7 @@ async fn get_value(
 
 async fn set_value(
     Path(params): Path<Params>,
-    State(handle): State<DatacakeHandle<ShardedStorage>>,
+    State(handle): State<ReplicatorHandle<ShardedStorage>>,
     data: Bytes,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     info!(

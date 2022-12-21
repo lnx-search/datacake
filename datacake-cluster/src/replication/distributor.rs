@@ -9,11 +9,12 @@ use crossbeam_channel::{unbounded, Receiver, Sender};
 use datacake_crdt::{HLCTimestamp, Key, StateChanges};
 use tokio::sync::Semaphore;
 use tokio::time::{interval, MissedTickBehavior};
+use datacake_node::{Clock, RpcNetwork, MembershipChange};
 
-use crate::replication::{MembershipChanges, MAX_CONCURRENT_REQUESTS};
+use crate::replication::MAX_CONCURRENT_REQUESTS;
 use crate::rpc::datacake_api;
 use crate::rpc::datacake_api::Context;
-use crate::{Clock, ConsistencyClient, Document, RpcNetwork};
+use crate::{ConsistencyClient, Document};
 
 const BATCHING_INTERVAL: Duration = Duration::from_secs(1);
 
@@ -39,7 +40,7 @@ pub(crate) struct TaskDistributor {
 
 impl TaskDistributor {
     /// Marks that the cluster has had a membership change.
-    pub(crate) fn membership_change(&self, changes: MembershipChanges) {
+    pub(crate) fn membership_change(&self, changes: MembershipChange) {
         let _ = self.tx.send(Op::MembershipChange(changes));
     }
 
@@ -56,7 +57,7 @@ impl TaskDistributor {
 
 /// A enqueued event/operation for the distributor to handle next tick.
 enum Op {
-    MembershipChange(MembershipChanges),
+    MembershipChange(MembershipChange),
     Mutation(Mutation),
 }
 
@@ -120,12 +121,12 @@ async fn task_distributor_service(
         while let Ok(task) = rx.try_recv() {
             match task {
                 Op::MembershipChange(changes) => {
-                    for node_id in changes.left {
-                        live_members.remove(node_id.as_ref());
+                    for member in changes.left {
+                        live_members.remove(&member.node_id);
                     }
 
-                    for (node_id, addr) in changes.joined {
-                        live_members.insert(node_id, addr);
+                    for member in changes.joined {
+                        live_members.insert(member.node_id, member.public_addr);
                     }
                 },
                 Op::Mutation(mutation) => {
@@ -207,7 +208,7 @@ fn register_mutation(
 
 async fn execute_batch(
     ctx: &TaskServiceContext,
-    live_members: &BTreeMap<Cow<'static, str>, SocketAddr>,
+    live_members: &BTreeMap<String, SocketAddr>,
     batch: datacake_api::BatchPayload,
 ) -> anyhow::Result<()> {
     let limiter = Arc::new(Semaphore::new(MAX_CONCURRENT_REQUESTS));

@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 
 use crossbeam_utils::atomic::AtomicCell;
 use datacake_crdt::{HLCTimestamp, Key, OrSWotSet};
+use datacake_node::Clock;
 use parking_lot::RwLock;
 use puppet::ActorMailbox;
 use tokio::time::interval;
@@ -15,7 +16,7 @@ use super::NUM_SOURCES;
 use crate::keyspace::messages::PurgeDeletes;
 use crate::keyspace::KeyspaceActor;
 use crate::rpc::datacake_api;
-use crate::{Clock, Storage};
+use crate::Storage;
 
 const PURGE_DELETES_INTERVAL: Duration = if cfg!(test) {
     Duration::from_secs(1)

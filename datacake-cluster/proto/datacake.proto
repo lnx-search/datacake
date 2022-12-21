@@ -3,16 +3,6 @@ syntax = "proto3";
 
 package datacake_api;
 
-service ChitchatTransport {
-    rpc send_msg(ChitchatRpcMessage) returns (Empty);
-}
-
-message ChitchatRpcMessage {
-    bytes message = 1;
-    bytes source = 2;
-    Timestamp timestamp = 3;
-}
-
 service ConsistencyApi {
   // Adds a document to the state.
   rpc put(PutPayload) returns (Timestamp);

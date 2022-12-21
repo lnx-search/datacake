@@ -22,6 +22,7 @@ rkyv = ["datacake-crdt/rkyv-support"]
 
 [workspace]
 members = [
+    "datacake-node",
     "datacake-cluster",
     "datacake-crdt",
     "datacake-sqlite",

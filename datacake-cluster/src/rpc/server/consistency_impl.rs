@@ -5,6 +5,7 @@ use std::net::SocketAddr;
 use async_trait::async_trait;
 use datacake_crdt::HLCTimestamp;
 use tonic::{Request, Response, Status};
+use datacake_node::RpcNetwork;
 
 use crate::core::Document;
 use crate::keyspace::{KeyspaceGroup, CONSISTENCY_SOURCE_ID};
@@ -19,7 +20,7 @@ use crate::rpc::datacake_api::{
     RemovePayload,
 };
 use crate::storage::Storage;
-use crate::{ProgressTracker, PutContext, RpcNetwork};
+use crate::{ProgressTracker, PutContext};
 
 pub struct ConsistencyService<S>
 where

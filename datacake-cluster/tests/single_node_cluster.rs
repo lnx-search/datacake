@@ -7,7 +7,7 @@ use datacake_cluster::{
     ConnectionConfig,
     Consistency,
     DCAwareSelector,
-    DatacakeCluster,
+    EventuallyConsistentStore,
 };
 use tracing::info;
 
@@ -20,7 +20,7 @@ async fn test_single_node_cluster() -> anyhow::Result<()> {
     let addr = "127.0.0.1:8001".parse::<SocketAddr>().unwrap();
     let connection_cfg = ConnectionConfig::new(addr, addr, Vec::<String>::new());
 
-    let cluster = DatacakeCluster::connect(
+    let cluster = EventuallyConsistentStore::connect(
         "node-1",
         connection_cfg,
         MemStore::default(),
@@ -96,7 +96,7 @@ async fn test_single_node_cluster_with_keyspace_handle() -> anyhow::Result<()> {
     let addr = "127.0.0.1:8002".parse::<SocketAddr>().unwrap();
     let connection_cfg = ConnectionConfig::new(addr, addr, Vec::<String>::new());
 
-    let cluster = DatacakeCluster::connect(
+    let cluster = EventuallyConsistentStore::connect(
         "node-1",
         connection_cfg,
         MemStore::default(),
@@ -168,7 +168,7 @@ async fn test_single_node_cluster_bulk_op() -> anyhow::Result<()> {
     let addr = "127.0.0.1:8003".parse::<SocketAddr>().unwrap();
     let connection_cfg = ConnectionConfig::new(addr, addr, Vec::<String>::new());
 
-    let cluster = DatacakeCluster::connect(
+    let cluster = EventuallyConsistentStore::connect(
         "node-1",
         connection_cfg,
         MemStore::default(),
@@ -255,7 +255,7 @@ async fn test_single_node_cluster_bulk_op_with_keyspace_handle() -> anyhow::Resu
     let addr = "127.0.0.1:8004".parse::<SocketAddr>().unwrap();
     let connection_cfg = ConnectionConfig::new(addr, addr, Vec::<String>::new());
 
-    let cluster = DatacakeCluster::connect(
+    let cluster = EventuallyConsistentStore::connect(
         "node-1",
         connection_cfg,
         MemStore::default(),

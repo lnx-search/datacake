@@ -7,7 +7,7 @@ use datacake_cluster::{
     ConnectionConfig,
     Consistency,
     DCAwareSelector,
-    DatacakeCluster,
+    EventuallyConsistentStore,
 };
 
 static KEYSPACE_1: &str = "my-first-keyspace";
@@ -21,7 +21,7 @@ async fn test_single_node() -> anyhow::Result<()> {
     let node_addr = "127.0.0.1:8014".parse::<SocketAddr>().unwrap();
     let connection_cfg =
         ConnectionConfig::new(node_addr, node_addr, Vec::<String>::new());
-    let node = DatacakeCluster::connect(
+    let node = EventuallyConsistentStore::connect(
         "node-1",
         connection_cfg,
         InstrumentedStorage(MemStore::default()),
@@ -91,7 +91,7 @@ async fn test_multi_node() -> anyhow::Result<()> {
         &[node_1_addr.to_string(), node_2_addr.to_string()],
     );
 
-    let node_1 = DatacakeCluster::connect(
+    let node_1 = EventuallyConsistentStore::connect(
         "node-1",
         node_1_connection_cfg,
         InstrumentedStorage(MemStore::default()),
@@ -100,7 +100,7 @@ async fn test_multi_node() -> anyhow::Result<()> {
     )
     .await
     .expect("Connect node.");
-    let node_2 = DatacakeCluster::connect(
+    let node_2 = EventuallyConsistentStore::connect(
         "node-2",
         node_2_connection_cfg,
         InstrumentedStorage(MemStore::default()),
@@ -109,7 +109,7 @@ async fn test_multi_node() -> anyhow::Result<()> {
     )
     .await
     .expect("Connect node.");
-    let node_3 = DatacakeCluster::connect(
+    let node_3 = EventuallyConsistentStore::connect(
         "node-3",
         node_3_connection_cfg,
         InstrumentedStorage(MemStore::default()),

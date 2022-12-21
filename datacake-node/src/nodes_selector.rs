@@ -5,6 +5,7 @@ use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 
 use tokio::sync::oneshot;
+use tracing::{debug, info, warn, instrument};
 
 const NODE_CACHE_TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -88,7 +89,7 @@ pub struct NodeSelectorHandle {
 
 impl NodeSelectorHandle {
     /// Set the nodes which can be used by the selector.
-    pub async fn set_nodes(
+    pub(crate) async fn set_nodes(
         &self,
         data_centers: BTreeMap<Cow<'static, str>, Vec<SocketAddr>>,
     ) {

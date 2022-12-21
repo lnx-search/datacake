@@ -35,6 +35,7 @@ chitchat = { version = "0.5.1", package  = "datacake-chitchat-fork" }
 tokio = { version = "1", default-features = false, features = ["sync", "time"] }
 rkyv = { version = "0.7.9", features = ["validation"] }
 
+datacake-node = { path = "../datacake-node", version = "0.1" }
 datacake-crdt = { path = "../datacake-crdt", version = "0.3", features = ["rkyv-support"] }
 
 [features]

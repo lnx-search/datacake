@@ -10,31 +10,29 @@ use chitchat::ChitchatMessage;
 use futures::io;
 use parking_lot::Mutex;
 use tokio::sync::oneshot;
+use tracing::{info, trace};
 
 use crate::rpc::datacake_api::chitchat_transport_client::ChitchatTransportClient;
 use crate::rpc::datacake_api::ChitchatRpcMessage;
 use crate::rpc::network::RpcNetwork;
 use crate::rpc::server::ServiceRegistry;
-use crate::storage::Storage;
 use crate::Clock;
 
 #[derive(Clone)]
 /// Chitchat compatible transport built on top of an existing GRPC connection.
 ///
 /// This allows us to maintain a single connection rather than both a UDP and TCP connection.
-pub struct GrpcTransport<S, R>(Arc<GrpcTransportInner<S, R>>)
+pub struct GrpcTransport<R>(Arc<GrpcTransportInner<R>>)
 where
-    S: Storage + Send + Sync + 'static,
     R: ServiceRegistry + Clone;
 
-impl<S, R> GrpcTransport<S, R>
+impl<R> GrpcTransport<R>
 where
-    S: Storage + Send + Sync + 'static,
     R: ServiceRegistry + Clone,
 {
     /// Creates a new GRPC transport instances.
     pub fn new(
-        ctx: super::server::Context<S, R>,
+        ctx: super::server::Context<R>,
         messages: flume::Receiver<(SocketAddr, ChitchatMessage)>,
     ) -> Self {
         Self(Arc::new(GrpcTransportInner {
@@ -45,12 +43,11 @@ where
     }
 }
 
-impl<S, R> Deref for GrpcTransport<S, R>
+impl<R> Deref for GrpcTransport<R>
 where
-    S: Storage + Send + Sync + 'static,
     R: ServiceRegistry + Clone,
 {
-    type Target = GrpcTransportInner<S, R>;
+    type Target = GrpcTransportInner<R>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -58,9 +55,8 @@ where
 }
 
 #[async_trait]
-impl<S, R> Transport for GrpcTransport<S, R>
+impl<R> Transport for GrpcTransport<R>
 where
-    S: Storage + Sync + Send + 'static,
     R: ServiceRegistry + Send + Sync + Clone + 'static,
 {
     async fn open(
@@ -76,7 +72,7 @@ where
         }
 
         Ok(Box::new(GrpcConnection {
-            clock: self.ctx.keyspace_group.clock().clone(),
+            clock: self.ctx.clock.clone(),
             self_addr: listen_addr,
             network: self.ctx.network.clone(),
             messages: self.messages.clone(),
@@ -84,13 +80,12 @@ where
     }
 }
 
-pub struct GrpcTransportInner<S, R>
+pub struct GrpcTransportInner<R>
 where
-    S: Storage + Send + Sync + 'static,
     R: ServiceRegistry + Clone,
 {
     /// Context to be passed when binding a new RPC server instance.
-    ctx: super::server::Context<S, R>,
+    ctx: super::server::Context<R>,
 
     /// The set of server handles that should be kept alive until the system shuts down.
     shutdown_handles: Mutex<Vec<oneshot::Sender<()>>>,

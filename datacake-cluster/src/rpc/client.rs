@@ -7,6 +7,7 @@ use datacake_crdt::{HLCTimestamp, Key, OrSWotSet};
 use rkyv::AlignedVec;
 use tonic::transport::Channel;
 use tonic::Status;
+use datacake_node::Clock;
 
 use crate::core::Document;
 use crate::keyspace::KeyspaceTimestamps;
@@ -24,7 +25,6 @@ use crate::rpc::datacake_api::{
     PutPayload,
     RemovePayload,
 };
-use crate::Clock;
 
 /// A high level wrapper around the consistency GRPC service.
 pub struct ConsistencyClient {

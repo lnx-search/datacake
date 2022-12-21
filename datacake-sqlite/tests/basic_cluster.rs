@@ -6,7 +6,7 @@ use datacake_cluster::{
     ConnectionConfig,
     Consistency,
     DCAwareSelector,
-    DatacakeCluster,
+    EventuallyConsistentStore,
 };
 use datacake_sqlite::SqliteStorage;
 
@@ -21,7 +21,7 @@ async fn test_basic_sqlite_cluster() -> Result<()> {
     let addr = "127.0.0.1:9000".parse::<SocketAddr>().unwrap();
     let connection_cfg = ConnectionConfig::new(addr, addr, Vec::<String>::new());
 
-    let cluster = DatacakeCluster::connect(
+    let cluster = EventuallyConsistentStore::connect(
         "node-1",
         connection_cfg,
         store,

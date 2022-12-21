@@ -1,4 +1,5 @@
-use std::error::Error;
+use std::borrow::Cow;
+use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -17,9 +18,11 @@ use chitchat::{
 use tokio::sync::watch;
 use tokio_stream::wrappers::WatchStream;
 use tokio_stream::StreamExt;
+use tracing::{info, error, debug};
+use crate::DEFAULT_DATA_CENTER;
 
-use crate::error::DatacakeError;
-use crate::{ClusterStatistics, DEFAULT_DATA_CENTER};
+use crate::error::NodeError;
+use crate::statistics::ClusterStatistics;
 
 static DATA_CENTER_KEY: &str = "data_center";
 const GOSSIP_INTERVAL: Duration = if cfg!(test) {
@@ -44,12 +47,12 @@ impl ClusterMember {
     pub fn new(
         node_id: String,
         public_addr: SocketAddr,
-        data_center: impl Into<String>,
+        data_center: String,
     ) -> Self {
         Self {
             node_id,
             public_addr,
-            data_center: data_center.into(),
+            data_center,
         }
     }
 
@@ -64,21 +67,17 @@ impl From<ClusterMember> for NodeId {
     }
 }
 
-pub struct DatacakeNode {
-    /// The ID of the cluster this node belongs to.
-    pub cluster_id: String,
-    /// The ID of the current node.
-    pub node_id: String,
-    /// The public address of the node.
-    pub public_addr: SocketAddr,
 
+pub struct ChitchatNode {
+    pub me: Cow<'static, ClusterMember>,
+    statistics: ClusterStatistics,
     chitchat_handle: ChitchatHandle,
-    members: watch::Receiver<Vec<ClusterMember>>,
+    members: watch::Receiver<BTreeMap<String, ClusterMember>>,
     stop: Arc<AtomicBool>,
 }
 
-impl DatacakeNode {
-    pub async fn connect<E>(
+impl ChitchatNode {
+    pub async fn connect(
         me: ClusterMember,
         listen_addr: SocketAddr,
         cluster_id: String,
@@ -86,10 +85,7 @@ impl DatacakeNode {
         failure_detector_config: FailureDetectorConfig,
         transport: &dyn Transport,
         statistics: ClusterStatistics,
-    ) -> Result<Self, DatacakeError<E>>
-    where
-        E: Error + Send + 'static,
-    {
+    ) -> Result<Self, NodeError> {
         info!(
             cluster_id = %cluster_id,
             node_id = %me.node_id,
@@ -98,6 +94,9 @@ impl DatacakeNode {
             peer_seed_addrs = %seed_nodes.join(", "),
             "Joining cluster."
         );
+
+        statistics.num_live_members.store(1, Ordering::Relaxed);
+        statistics.num_data_centers.store(1, Ordering::Relaxed);
 
         let cfg = ChitchatConfig {
             node_id: NodeId::from(me.clone()),
@@ -115,21 +114,20 @@ impl DatacakeNode {
             transport,
         )
         .await
-        .map_err(|e| DatacakeError::ChitChatError(e.to_string()))?;
+        .map_err(|e| NodeError::ChitChatError(e.to_string()))?;
 
         let chitchat = chitchat_handle.chitchat();
-        let (members_tx, members_rx) = watch::channel(Vec::new());
+        let (members_tx, members_rx) = watch::channel(BTreeMap::new());
 
-        let cluster = DatacakeNode {
-            cluster_id,
-            node_id: me.chitchat_id(),
-            public_addr: me.public_addr,
+        let cluster = ChitchatNode {
+            me: Cow::Owned(me.clone()),
             chitchat_handle,
+            statistics: statistics.clone(),
             members: members_rx,
             stop: Arc::new(Default::default()),
         };
 
-        let initial_members: Vec<ClusterMember> = vec![me.clone()];
+        let initial_members: BTreeMap<String, ClusterMember> = BTreeMap::from_iter([(me.node_id.clone(), me.clone())]);
         if members_tx.send(initial_members).is_err() {
             error!("Failed to add itself as the initial member of the cluster.");
         }
@@ -153,17 +151,21 @@ impl DatacakeNode {
                     .into_iter()
                     .map(|node_id| build_cluster_member(&node_id, &state_snapshot))
                     .filter_map(|member_res| {
-                        // Just log an error for members that cannot be built.
-                        if let Err(error) = &member_res {
-                            error!(
-                                error = ?error,
-                                "Failed to build cluster member from cluster state, ignoring member.",
-                            );
+                        match member_res {
+                            Ok(member) => {
+                                Some((member.node_id.clone(), member))
+                            },
+                            Err(error) => {
+                                error!(
+                                    error = ?error,
+                                    "Failed to build cluster member from cluster state, ignoring member.",
+                                );
+                                None
+                            },
                         }
-                        member_res.ok()
                     })
-                    .collect::<Vec<_>>();
-                members.push(me.clone());
+                    .collect::<BTreeMap<_, _>>();
+                members.insert(me.node_id.clone(), me.clone());
 
                 statistics
                     .num_live_members
@@ -181,29 +183,40 @@ impl DatacakeNode {
                 }
             }
 
-            Result::<(), DatacakeError<E>>::Ok(())
+            Result::<(), NodeError>::Ok(())
         });
 
         Ok(cluster)
     }
 
     /// Return [WatchStream] for monitoring change of node members.
-    pub fn member_change_watcher(&self) -> WatchStream<Vec<ClusterMember>> {
+    pub fn member_change_watcher(&self) -> WatchStream<BTreeMap<String, ClusterMember>> {
         WatchStream::new(self.members.clone())
+    }
+
+    /// Returns a handle to the members watcher channel.
+    pub fn members_watcher(&self) -> watch::Receiver<BTreeMap<String, ClusterMember>> {
+        self.members.clone()
     }
 
     #[cfg(test)]
     /// Returns a list of node members.
-    pub fn members(&self) -> Vec<ClusterMember> {
+    pub fn members(&self) -> BTreeMap<String, ClusterMember> {
         self.members.borrow().clone()
+    }
+
+    #[inline]
+    /// Get a handle to the live statistics.
+    pub fn statistics(&self) -> ClusterStatistics {
+        self.statistics.clone()
     }
 
     /// Leave the cluster.
     pub async fn shutdown(self) {
-        info!(self_addr = ?self.public_addr, "Shutting down the cluster.");
+        info!(self_addr = ?self.me.public_addr, "Shutting down the cluster.");
         let result = self.chitchat_handle.shutdown().await;
         if let Err(error) = result {
-            error!(self_addr = ?self.public_addr, error = ?error, "Error while shutting down.");
+            error!(self_addr = ?self.me.public_addr, error = ?error, "Error while shutting down.");
         }
 
         self.stop.store(true, Ordering::Relaxed);
@@ -212,12 +225,12 @@ impl DatacakeNode {
     /// Convenience method for testing that waits for the predicate to hold true for the cluster's
     /// members.
     pub async fn wait_for_members<F>(
-        self: &DatacakeNode,
+        self: &ChitchatNode,
         mut predicate: F,
         timeout_after: Duration,
     ) -> Result<(), anyhow::Error>
     where
-        F: FnMut(&Vec<ClusterMember>) -> bool,
+        F: FnMut(&BTreeMap<String, ClusterMember>) -> bool,
     {
         use tokio::time::timeout;
 
@@ -247,7 +260,7 @@ fn build_cluster_member<'a>(
     Ok(ClusterMember::new(
         node_id.id.to_string(),
         node_id.gossip_public_address,
-        data_center,
+        data_center.to_owned(),
     ))
 }
 
@@ -270,9 +283,9 @@ mod tests {
         let members: Vec<SocketAddr> = cluster
             .members()
             .iter()
-            .map(|member| member.public_addr)
+            .map(|(_, member)| member.public_addr)
             .collect();
-        let expected_members = vec![cluster.public_addr];
+        let expected_members = vec![cluster.me.public_addr];
         assert_eq!(members, expected_members);
         cluster.shutdown().await;
         Ok(())
@@ -284,7 +297,7 @@ mod tests {
 
         let transport = ChannelTransport::default();
         let node1 = create_node_for_test(Vec::new(), &transport).await?;
-        let node_1_gossip_addr = node1.public_addr.to_string();
+        let node_1_gossip_addr = node1.me.public_addr.to_string();
         let node2 =
             create_node_for_test(vec![node_1_gossip_addr.clone()], &transport).await?;
         let node3 = create_node_for_test(vec![node_1_gossip_addr], &transport).await?;
@@ -297,8 +310,8 @@ mod tests {
                 .unwrap();
         }
 
-        for member in node1.members() {
-            dbg!(&member.public_addr);
+        for (id, member) in node1.members() {
+            dbg!(id, &member.public_addr);
         }
 
         Ok(())
@@ -312,21 +325,18 @@ mod tests {
         }
     }
 
-    #[derive(Debug, thiserror::Error)]
-    #[error("{0}")]
-    pub struct TestError(#[from] pub anyhow::Error);
 
     pub async fn create_node_for_test_with_id(
         node_id: u16,
         cluster_id: String,
         seeds: Vec<String>,
         transport: &dyn Transport,
-    ) -> Result<DatacakeNode> {
+    ) -> Result<ChitchatNode> {
         let public_addr: SocketAddr = ([127, 0, 0, 1], node_id).into();
         let node_id = format!("node_{node_id}");
         let failure_detector_config = create_failure_detector_config_for_test();
-        let node = DatacakeNode::connect::<TestError>(
-            ClusterMember::new(node_id, public_addr, DATA_CENTER_KEY),
+        let node = ChitchatNode::connect(
+            ClusterMember::new(node_id, public_addr, "unknown".to_string()),
             public_addr,
             cluster_id,
             seeds,
@@ -341,7 +351,7 @@ mod tests {
     pub async fn create_node_for_test(
         seeds: Vec<String>,
         transport: &dyn Transport,
-    ) -> Result<DatacakeNode> {
+    ) -> Result<ChitchatNode> {
         static NODE_AUTO_INCREMENT: AtomicU16 = AtomicU16::new(1u16);
         let node_id = NODE_AUTO_INCREMENT.fetch_add(1, Ordering::Relaxed);
         let node = create_node_for_test_with_id(

@@ -3,12 +3,12 @@ use std::fmt::Debug;
 use std::net::SocketAddr;
 
 use thiserror::Error;
+use datacake_node::ConsistencyError;
 
-use crate::nodes_selector::ConsistencyError;
 use crate::storage::BulkMutationError;
 
 #[derive(Debug, Error)]
-pub enum DatacakeError<E: Error + Send + 'static> {
+pub enum StoreError<E: Error + Send + 'static> {
     #[error("{0}")]
     /// An error has occurred within Chitchat.
     ChitChatError(String),
