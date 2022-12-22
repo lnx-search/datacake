@@ -22,7 +22,7 @@ impl Server {
     pub async fn listen(addr: SocketAddr) -> Result<Self, ServerBindError> {
         let state = ServerState::default();
         let handle =
-            crate::net::start_rpc_server(addr, &addr.to_string(), state.clone()).await?;
+            crate::net::start_rpc_server(addr, state.clone()).await?;
 
         Ok(Self { state, handle })
     }

@@ -9,7 +9,7 @@ pub const KIND_SIZE: usize = 1;
 pub const META_LEN_SIZE: usize = mem::size_of::<u16>();
 pub const DATA_LEN_SIZE: usize = mem::size_of::<u32>();
 pub const LEN_SIZE: usize = KIND_SIZE + META_LEN_SIZE + DATA_LEN_SIZE;
-pub const HEADER_SIZE: usize = mem::size_of::<u16>() + mem::size_of::<u32>() + 2;
+pub const HEADER_SIZE: usize = LEN_SIZE + 2;
 pub const MESSAGE_KIND_PAYLOAD: u8 = 0;
 pub const MESSAGE_KIND_ERROR: u8 = 1;
 
@@ -29,11 +29,11 @@ pub(crate) fn parse_header(buf: &[u8]) -> Option<MessageKind> {
         return None;
     }
 
-    let data_size_bytes = &header[KIND_SIZE + META_LEN_SIZE..DATA_LEN_SIZE];
+    let data_size_bytes = &header[KIND_SIZE + META_LEN_SIZE..KIND_SIZE + META_LEN_SIZE + DATA_LEN_SIZE];
     let data_size = u32::from_le_bytes(data_size_bytes.try_into().ok()?);
     let kind = match header[0] {
         0 => {
-            let meta_size_bytes = &header[KIND_SIZE..META_LEN_SIZE];
+            let meta_size_bytes = &header[KIND_SIZE..KIND_SIZE + META_LEN_SIZE];
             let meta_size = u16::from_le_bytes(meta_size_bytes.try_into().ok()?);
             MessageKind::Payload {
                 meta: meta_size as usize,
@@ -56,9 +56,9 @@ fn serialize_header(
 ) -> [u8; HEADER_SIZE] {
     let mut header = [0; HEADER_SIZE];
     header[0] = kind;
-    header[KIND_SIZE..META_LEN_SIZE]
+    header[KIND_SIZE..KIND_SIZE + META_LEN_SIZE]
         .copy_from_slice(&(metadata_len as u16).to_le_bytes());
-    header[KIND_SIZE + META_LEN_SIZE..DATA_LEN_SIZE]
+    header[KIND_SIZE + META_LEN_SIZE..KIND_SIZE + META_LEN_SIZE + DATA_LEN_SIZE]
         .copy_from_slice(&(data_size as u32).to_le_bytes());
     header[KIND_SIZE + META_LEN_SIZE + DATA_LEN_SIZE..]
         .copy_from_slice(HEADER_TERMINATOR);
@@ -80,7 +80,7 @@ pub(crate) fn serialize_message(
         Vec::with_capacity(HEADER_SIZE + metadata_bytes.len() + msg_bytes.len());
     buffer.extend_from_slice(&header);
     buffer.extend_from_slice(&metadata_bytes);
-    buffer.extend_from_slice(&msg_bytes);
+    buffer.extend_from_slice(msg_bytes);
 
     Ok(buffer)
 }

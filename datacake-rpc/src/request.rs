@@ -9,7 +9,7 @@ use rkyv::{Archive, Deserialize, Serialize};
 use crate::view::{DataView, InvalidView};
 
 #[repr(C)]
-#[derive(Serialize, Deserialize, Archive)]
+#[derive(Serialize, Deserialize, Archive, Debug)]
 #[archive_attr(derive(CheckBytes, Debug, PartialEq, Eq))]
 pub(crate) struct MessageMetadata {
     #[with(rkyv::with::AsOwned)]

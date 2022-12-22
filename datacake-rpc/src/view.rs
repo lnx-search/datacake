@@ -167,18 +167,4 @@ mod tests {
         let value = view.to_owned().unwrap();
         assert_eq!(value, demo, "Deserialized and original value should match.")
     }
-
-    #[test]
-    fn test_unsafe_view() {
-        let demo = Demo {
-            a: "Jello".to_string(),
-            b: 133,
-        };
-
-        let bytes = rkyv::to_bytes::<_, 1024>(&demo).unwrap();
-        let buf = unsafe { mem::transmute::<&[u8], &'static [u8]>(bytes.as_ref()) };
-        let main_value = rkyv::check_archived_root::<'static, Demo>(buf).unwrap();
-        let view: DataView<String> = DataView::new(bytes, &main_value.a);
-        dbg!(view);
-    }
 }

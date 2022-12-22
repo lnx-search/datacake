@@ -34,9 +34,7 @@ impl Client {
     /// Connects to a remote RPC server.
     pub async fn connect(remote_addr: SocketAddr) -> Result<Self, ClientConnectError> {
         let bind = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0);
-        let conn =
-            ClientConnection::connect(bind, remote_addr, &remote_addr.to_string())
-                .await?;
+        let conn = ClientConnection::connect(bind, remote_addr).await?;
 
         Ok(Self { conn })
     }

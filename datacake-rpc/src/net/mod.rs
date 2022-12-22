@@ -75,7 +75,6 @@ impl ConnectionChannel {
             if self
                 .extend_buffer_pos(&mut buffer[..], HEADER_SIZE + skip)
                 .await?
-                == 0
             {
                 break Ok(None);
             }
@@ -92,22 +91,25 @@ impl ConnectionChannel {
                     data: msg_len,
                 }) => {
                     let skip_n_bytes = HEADER_SIZE + skip;
-                    end_pos = skip_n_bytes + msg_len + metadata_len;
-                    if self.extend_buffer_pos(&mut buffer[..], end_pos).await? == 0 {
+                    end_pos = skip_n_bytes + metadata_len;
+                    if self.extend_buffer_pos(&mut buffer[..], end_pos).await? {
                         break Ok(None);
                     }
 
                     let metadata: MessageMetadata = {
-                        rkyv::from_bytes(&self.buf[skip_n_bytes..end_pos]).map_err(
-                            |_| {
+                        let mut aligned = AlignedVec::with_capacity(metadata_len);
+                        aligned.extend_from_slice(&self.buf[skip_n_bytes..end_pos]);
+                        rkyv::from_bytes(&aligned).map_err(
+                            |e| {
                                 io::Error::new(
                                     ErrorKind::InvalidData,
-                                    "Message missing metadata payload.",
+                                    format!("Invalid metadata payload: {}", e),
                                 )
                             },
                         )?
                     };
 
+                    end_pos += msg_len;
                     let mut buffer = AlignedVec::with_capacity(msg_len);
                     buffer.extend_from_slice(
                         &self.buf[skip_n_bytes + metadata_len..end_pos],
@@ -124,7 +126,7 @@ impl ConnectionChannel {
                         break Ok(Some(Err(AlignedVec::new())));
                     }
 
-                    if self.extend_buffer_pos(&mut buffer[..], end_pos).await? == 0 {
+                    if self.extend_buffer_pos(&mut buffer[..], end_pos).await? {
                         break Ok(None);
                     }
 
@@ -152,18 +154,16 @@ impl ConnectionChannel {
         &mut self,
         buffer: &mut [u8],
         min_len: usize,
-    ) -> Result<usize, ReadError> {
-        let mut total_read = 0;
-        while self.buf.len() <= min_len {
+    ) -> Result<bool, ReadError> {
+        while self.buf.len() < min_len {
             match self.recv.read(&mut buffer[..]).await? {
-                None => return Ok(0),
+                None => return Ok(true),
                 Some(n) => {
                     self.buf.extend_from_slice(&buffer[..n]);
-                    total_read += n;
                 },
             };
         }
 
-        Ok(total_read)
+        Ok(false)
     }
 }

@@ -22,10 +22,9 @@ pub enum ServerBindError {
 /// This takes a binding socket address and server name.
 pub(crate) async fn start_rpc_server(
     bind_addr: SocketAddr,
-    server_name: &str,
     state: ServerState,
 ) -> Result<JoinHandle<()>, ServerBindError> {
-    let (cfg, _) = super::tls::configure_server(vec![server_name.to_string()])
+    let (cfg, _) = super::tls::configure_server(vec!["rpc.datacake.net".to_string()])
         .map_err(|e| ServerBindError::Config(e.to_string()))?;
     let connection = Endpoint::server(cfg, bind_addr)?;
 

@@ -33,11 +33,10 @@ impl ClientConnection {
     pub async fn connect(
         bind_addr: SocketAddr,
         remote_addr: SocketAddr,
-        server_name: &str,
     ) -> Result<Self, ClientConnectError> {
         let cfg = super::tls::configure_client();
         let connection = Endpoint::client(bind_addr)?
-            .connect_with(cfg, remote_addr, server_name)?
+            .connect_with(cfg, remote_addr, "rpc.datacake.net")?
             .await?;
 
         Ok(Self {
