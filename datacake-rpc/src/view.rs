@@ -1,17 +1,17 @@
 use std::fmt::{Debug, Formatter};
 use std::mem;
 use std::ops::Deref;
-use rkyv::{AlignedVec, Archive};
-use bytecheck::{CheckBytes};
-use rkyv::validation::validators::DefaultValidator;
 
+use bytecheck::CheckBytes;
+use rkyv::de::deserializers::SharedDeserializeMap;
+use rkyv::validation::validators::DefaultValidator;
+use rkyv::{AlignedVec, Archive, Deserialize};
 
 #[derive(Debug, thiserror::Error)]
 #[error("View cannot be made for type with provided data.")]
 /// The data provided is unable to be presented as the archived version
 /// of the view type.
 pub struct InvalidView;
-
 
 /// A block of data that can be accessed as if it is the archived value `T`.
 ///
@@ -43,17 +43,28 @@ where
         // SAFETY:
         //  This is safe as we own the data and keep it apart
         //  of the view itself.
-        let extended_buf = unsafe {
-            mem::transmute::<&[u8], &'static [u8]>(&data)
-        };
+        let extended_buf = unsafe { mem::transmute::<&[u8], &'static [u8]>(&data) };
 
-        let view = rkyv::check_archived_root::<'_, T>(extended_buf)
-            .map_err(|_| InvalidView)?;
+        let view =
+            rkyv::check_archived_root::<'_, T>(extended_buf).map_err(|_| InvalidView)?;
 
-        Ok(Self {
-            data,
-            view,
-        })
+        Ok(Self { data, view })
+    }
+}
+
+impl<T, D> DataView<T, D>
+where
+    T: Archive,
+    T::Archived: CheckBytes<DefaultValidator<'static>>
+        + Deserialize<T, SharedDeserializeMap>
+        + 'static,
+    D: Deref<Target = [u8]> + Send + Sync,
+{
+    /// Deserializes the view into it's owned value T.
+    pub fn to_owned(&self) -> Result<T, InvalidView> {
+        self.view
+            .deserialize(&mut SharedDeserializeMap::default())
+            .map_err(|_| InvalidView)
     }
 }
 
@@ -64,8 +75,7 @@ where
     D: Deref<Target = [u8]> + Send + Sync + Clone,
 {
     fn clone(&self) -> Self {
-        Self::using(self.data.clone())
-            .expect("BUG: Valid data has become invalid?")
+        Self::using(self.data.clone()).expect("BUG: Valid data has become invalid?")
     }
 }
 
@@ -117,10 +127,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use bytecheck::CheckBytes;
-    use rkyv::{Serialize, Deserialize, Archive};
+    use rkyv::{Archive, Deserialize, Serialize};
+
+    use super::*;
 
     #[repr(C)]
     #[derive(Serialize, Deserialize, Archive, PartialEq, Eq, Debug)]
@@ -140,7 +150,35 @@ mod tests {
 
         let bytes = rkyv::to_bytes::<_, 1024>(&demo).unwrap();
         let view: DataView<Demo, _> = DataView::using(bytes).unwrap();
-        assert!(view == demo , "Original and view must match.");
+        assert!(view == demo, "Original and view must match.");
+    }
+
+    #[test]
+    fn test_deserialize() {
+        let demo = Demo {
+            a: "Jello".to_string(),
+            b: 133,
+        };
+
+        let bytes = rkyv::to_bytes::<_, 1024>(&demo).unwrap();
+        let view: DataView<Demo, _> = DataView::using(bytes).unwrap();
+        assert!(view == demo, "Original and view must match.");
+
+        let value = view.to_owned().unwrap();
+        assert_eq!(value, demo, "Deserialized and original value should match.")
+    }
+
+    #[test]
+    fn test_unsafe_view() {
+        let demo = Demo {
+            a: "Jello".to_string(),
+            b: 133,
+        };
+
+        let bytes = rkyv::to_bytes::<_, 1024>(&demo).unwrap();
+        let buf = unsafe { mem::transmute::<&[u8], &'static [u8]>(bytes.as_ref()) };
+        let main_value = rkyv::check_archived_root::<'static, Demo>(buf).unwrap();
+        let view: DataView<String> = DataView::new(bytes, &main_value.a);
+        dbg!(view);
     }
 }
-
