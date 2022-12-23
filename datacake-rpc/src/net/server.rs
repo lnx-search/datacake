@@ -1,10 +1,11 @@
 use std::io;
 use std::net::SocketAddr;
 
-use quinn::{Connecting, Endpoint};
+use quinn::{Connecting, Endpoint, EndpointConfig, TokioRuntime};
+use socket2::{Domain, Socket, Type};
 use tokio::task::JoinHandle;
 
-use crate::net::ConnectionChannel;
+use crate::net::{BUFFER_SIZE, ConnectionChannel};
 use crate::server::{ServerState, ServerTask};
 
 #[derive(Debug, thiserror::Error)]
@@ -26,10 +27,21 @@ pub(crate) async fn start_rpc_server(
 ) -> Result<JoinHandle<()>, ServerBindError> {
     let (cfg, _) = super::tls::configure_server(vec!["rpc.datacake.net".to_string()])
         .map_err(|e| ServerBindError::Config(e.to_string()))?;
-    let connection = Endpoint::server(cfg, bind_addr)?;
+
+    let socket = Socket::new(Domain::IPV4, Type::DGRAM, None)?;
+    //socket.set_recv_buffer_size(24 << 10)?;
+    //socket.set_send_buffer_size(24 << 10)?;
+    socket.bind(&socket2::SockAddr::from(bind_addr))?;
+
+    let endpoint = Endpoint::new(
+        EndpointConfig::default(),
+        Some(cfg),
+        socket.into(),
+        TokioRuntime,
+    )?;
 
     let handle = tokio::spawn(async move {
-        while let Some(conn) = connection.accept().await {
+        while let Some(conn) = endpoint.accept().await {
             tokio::spawn(handle_connecting(conn, state.clone()));
         }
     });
@@ -50,6 +62,7 @@ async fn handle_connecting(conn: Connecting, state: ServerState) -> io::Result<(
             remote_addr,
             send,
             recv,
+            hot_buffer: Box::new([0u8; BUFFER_SIZE]),
             buf: Vec::with_capacity(12 << 10),
         };
 

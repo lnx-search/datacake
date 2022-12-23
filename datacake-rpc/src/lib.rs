@@ -15,7 +15,6 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 pub use async_trait::async_trait;
-pub use bytecheck::CheckBytes;
 pub use client::{Client, MessageReply, RpcClient};
 pub use net::{
     ArchivedErrorCode,

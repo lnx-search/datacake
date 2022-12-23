@@ -1,9 +1,10 @@
 use std::io;
 use std::net::SocketAddr;
 
-use quinn::{ConnectError, Connection, ConnectionError, Endpoint};
+use quinn::{ConnectError, Connection, ConnectionError, Endpoint, EndpointConfig, TokioRuntime};
+use socket2::{Domain, Socket, Type};
 
-use crate::net::ConnectionChannel;
+use crate::net::{BUFFER_SIZE, ConnectionChannel};
 
 #[derive(Debug, thiserror::Error)]
 /// The client failed to establish a connection to the remote server.
@@ -35,7 +36,18 @@ impl ClientConnection {
         remote_addr: SocketAddr,
     ) -> Result<Self, ClientConnectError> {
         let cfg = super::tls::configure_client();
-        let connection = Endpoint::client(bind_addr)?
+        let socket = Socket::new(Domain::IPV4, Type::DGRAM, None)?;
+        //socket.set_recv_buffer_size(32 << 10)?;
+        //socket.set_send_buffer_size(32 << 10)?;
+        socket.bind(&socket2::SockAddr::from(bind_addr))?;
+
+        let endpoint = Endpoint::new(
+            EndpointConfig::default(),
+            None,
+            socket.into(),
+            TokioRuntime,
+        )?;
+        let connection = endpoint
             .connect_with(cfg, remote_addr, "rpc.datacake.net")?
             .await?;
 
@@ -52,6 +64,7 @@ impl ClientConnection {
             remote_addr: self.remote_addr,
             send,
             recv,
+            hot_buffer: Box::new([0u8; BUFFER_SIZE]),
             buf: Vec::new(),
         })
     }

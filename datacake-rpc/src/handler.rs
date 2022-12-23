@@ -100,7 +100,7 @@ pub trait RpcService: Sized {
 ///
 pub trait Handler<Msg>: RpcService
 where
-    Msg: Archive + ?Sized,
+    Msg: Archive,
     Msg::Archived: CheckBytes<DefaultValidator<'static>> + 'static,
 {
     type Reply: Archive + Serialize<AllocSerializer<SCRATCH_SPACE>>;

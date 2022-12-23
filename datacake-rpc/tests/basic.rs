@@ -1,10 +1,11 @@
 use std::hint;
 use std::net::SocketAddr;
-use std::time::Instant;
-use datacake_rpc::{Client, RpcService, Server, ServiceRegistry, CheckBytes, Handler, Request, Status};
+use datacake_rpc::{Client, RpcService, Server, ServiceRegistry, Handler, Request, Status};
 use rkyv::{Serialize, Deserialize, Archive};
+use bytecheck::CheckBytes;
 
 
+#[repr(C)]
 #[derive(Serialize, Deserialize, Archive, Debug)]
 #[archive_attr(derive(CheckBytes, Debug))]
 pub struct MyMessage {
@@ -31,10 +32,10 @@ impl RpcService for MyService {
 
 #[datacake_rpc::async_trait]
 impl Handler<MyMessage> for MyService {
-    type Reply = MyMessage;
+    type Reply = String;
 
     async fn on_message(&self, msg: Request<MyMessage>) -> Result<Self::Reply, Status> {
-        Ok(msg.to_owned().unwrap())
+        Ok(msg.to_owned().unwrap().name)
     }
 }
 
@@ -72,7 +73,7 @@ async fn test_basic() {
     };
 
     let resp = hint::black_box(rpc_client.send(hint::black_box(&msg1)).await.unwrap());
-    assert_eq!(resp, msg1);
+    assert_eq!(resp, msg1.name);
     let resp = hint::black_box(rpc_client.send(hint::black_box(&msg2)).await.unwrap());
     assert_eq!(resp, msg2);
 }

@@ -18,7 +18,7 @@ pub use status::{ArchivedErrorCode, ArchivedStatus, ErrorCode, Status};
 use crate::net::utils::{MessageKind, HEADER_SIZE};
 use crate::request::MessageMetadata;
 
-pub const BUFFER_SIZE: usize = 32 << 10;
+pub const BUFFER_SIZE: usize = 64 << 10;
 
 pub enum SendMsgError {
     IoError(io::Error),
@@ -30,6 +30,7 @@ pub(crate) struct ConnectionChannel {
     remote_addr: SocketAddr,
     send: SendStream,
     recv: RecvStream,
+    hot_buffer: Box<[u8]>,
     buf: Vec<u8>,
 }
 
@@ -66,14 +67,13 @@ impl ConnectionChannel {
     pub(crate) async fn recv_msg(
         &mut self,
     ) -> io::Result<Option<Result<(MessageMetadata, AlignedVec), AlignedVec>>> {
-        let mut buffer = Box::new([0u8; BUFFER_SIZE]);
         let mut skip = 0;
         let mut end_pos = 0;
 
         // Seek upto the first message.
         let res = loop {
             if self
-                .extend_buffer_pos(&mut buffer[..], HEADER_SIZE + skip)
+                .extend_buffer_pos(HEADER_SIZE + skip)
                 .await?
             {
                 break Ok(None);
@@ -92,7 +92,7 @@ impl ConnectionChannel {
                 }) => {
                     let skip_n_bytes = HEADER_SIZE + skip;
                     end_pos = skip_n_bytes + metadata_len;
-                    if self.extend_buffer_pos(&mut buffer[..], end_pos).await? {
+                    if self.extend_buffer_pos(end_pos + msg_len).await? {
                         break Ok(None);
                     }
 
@@ -126,7 +126,7 @@ impl ConnectionChannel {
                         break Ok(Some(Err(AlignedVec::new())));
                     }
 
-                    if self.extend_buffer_pos(&mut buffer[..], end_pos).await? {
+                    if self.extend_buffer_pos(end_pos).await? {
                         break Ok(None);
                     }
 
@@ -152,14 +152,13 @@ impl ConnectionChannel {
 
     async fn extend_buffer_pos(
         &mut self,
-        buffer: &mut [u8],
         min_len: usize,
     ) -> Result<bool, ReadError> {
         while self.buf.len() < min_len {
-            match self.recv.read(&mut buffer[..]).await? {
+            match self.recv.read(&mut self.hot_buffer[..]).await? {
                 None => return Ok(true),
                 Some(n) => {
-                    self.buf.extend_from_slice(&buffer[..n]);
+                    self.buf.extend_from_slice(&self.hot_buffer[..n]);
                 },
             };
         }

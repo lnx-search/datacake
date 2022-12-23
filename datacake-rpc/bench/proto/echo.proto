@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package echo_api;
+
+service Echo {
+  rpc Echo (Message) returns (Message) {}
+}
+
+// The request message containing the user's name.
+message Message {
+  string name = 1;
+  uint32 age = 2;
+  bytes buffer = 3;
+}
