@@ -111,7 +111,6 @@ where
         let msg_bytes =
             rkyv::to_bytes::<_, SCRATCH_SPACE>(msg).map_err(|_| Status::invalid())?;
 
-        let start = Instant::now();
         self.channel
             .send_msg(&metadata, &msg_bytes)
             .await
@@ -119,16 +118,13 @@ where
                 SendMsgError::IoError(e) => Status::connection(e),
                 SendMsgError::Status(s) => s,
             })?;
-        println!("Send Took: {:?}", start.elapsed());
 
-        let start = Instant::now();
         let result = self
             .channel
             .recv_msg()
             .await
             .map_err(Status::connection)?
             .ok_or_else(Status::closed)?;
-        println!("Recv Took: {:?}", start.elapsed());
 
         match result {
             Ok((_, msg)) => {

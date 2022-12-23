@@ -47,17 +47,13 @@ impl ConnectionChannel {
         metadata: &MessageMetadata,
         msg: &[u8],
     ) -> Result<(), SendMsgError> {
-        let start = Instant::now();
         let buffer =
             utils::serialize_message(metadata, msg).map_err(SendMsgError::Status)?;
-        println!("Serialize took: {:?}", start.elapsed());
 
-        let start = Instant::now();
         self.stream
             .write_all(&buffer)
             .await
-            .map_err(|e| SendMsgError::IoError(e.into()))?;
-        println!("Write took: {:?}", start.elapsed());
+            .map_err(SendMsgError::IoError)?;
         Ok(())
     }
 
