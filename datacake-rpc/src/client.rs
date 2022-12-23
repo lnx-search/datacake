@@ -1,16 +1,16 @@
 use std::borrow::Cow;
 use std::io;
 use std::marker::PhantomData;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::SocketAddr;
 
 use bytecheck::CheckBytes;
 use rkyv::ser::serializers::AllocSerializer;
 use rkyv::validation::validators::DefaultValidator;
 use rkyv::{Archive, Serialize};
+use tokio::time::Instant;
 
 use crate::handler::{Handler, RpcService};
 use crate::net::{
-    ClientConnectError,
     ClientConnection,
     ConnectionChannel,
     SendMsgError,
@@ -32,10 +32,8 @@ pub struct Client {
 
 impl Client {
     /// Connects to a remote RPC server.
-    pub async fn connect(remote_addr: SocketAddr) -> Result<Self, ClientConnectError> {
-        let bind = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0);
-        let conn = ClientConnection::connect(bind, remote_addr).await?;
-
+    pub async fn connect(remote_addr: SocketAddr) -> io::Result<Self> {
+        let conn = ClientConnection::connect(remote_addr).await?;
         Ok(Self { conn })
     }
 
@@ -113,6 +111,7 @@ where
         let msg_bytes =
             rkyv::to_bytes::<_, SCRATCH_SPACE>(msg).map_err(|_| Status::invalid())?;
 
+        let start = Instant::now();
         self.channel
             .send_msg(&metadata, &msg_bytes)
             .await
@@ -120,13 +119,16 @@ where
                 SendMsgError::IoError(e) => Status::connection(e),
                 SendMsgError::Status(s) => s,
             })?;
+        println!("Send Took: {:?}", start.elapsed());
 
+        let start = Instant::now();
         let result = self
             .channel
             .recv_msg()
             .await
             .map_err(Status::connection)?
             .ok_or_else(Status::closed)?;
+        println!("Recv Took: {:?}", start.elapsed());
 
         match result {
             Ok((_, msg)) => {

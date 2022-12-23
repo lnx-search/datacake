@@ -7,6 +7,7 @@ use echo::echo_server::{Echo, EchoServer};
 use echo::Message;
 use rkyv::{Serialize, Deserialize, Archive};
 use bytecheck::CheckBytes;
+use tonic::transport::Endpoint;
 use datacake_rpc::{Handler, Request, RpcService, ServiceRegistry, Status};
 
 pub mod echo {
@@ -20,18 +21,18 @@ async fn main() -> Result<()> {
     let mut client = EchoClient::connect("http://127.0.0.1:8001").await?;
 
     let start = Instant::now();
-    for _ in 0..10_000 {
+    //for _ in 0..10_000 {
         let request = tonic::Request::new(Message {
             name: "Harrison".into(),
             age: 19,
-            buffer: vec![0u8; 32 << 10],
+            buffer: vec![0u8; 32 << 20],
         });
 
         let response = black_box(client.echo(black_box(request)).await)?;
         let inner = response.into_inner();
         assert_eq!(inner.name, "Harrison");
-        assert_eq!(inner.age, 19)
-    }
+        assert_eq!(inner.age, 19);
+    //}
     println!("Tonic took: {:?}, {:?}/req", start.elapsed(), start.elapsed() / 10_000);
 
     //let client = Endpoint::from_static("http://127.0.0.1:8001").connect().await?;
@@ -44,7 +45,7 @@ async fn main() -> Result<()> {
     //            let request = tonic::Request::new(Message {
     //                name: "Harrison".into(),
     //                age: 19,
-    //                buffer: vec![0u8; 32 << 10],
+    //                buffer: vec![0u8; 32 << 20],
     //            });
     //
     //            let response = black_box(client.echo(black_box(request)).await)?;
@@ -74,16 +75,16 @@ async fn main() -> Result<()> {
 
     let mut rpc_client = client.create_rpc_client::<MyService>().await.unwrap();
     let start = Instant::now();
-    for _ in 0..10_000 {
+    //for _ in 0..10_000 {
         let request = DatacakeMessage {
             name: "Harrison".into(),
             age: 19,
-            buffer: vec![0u8; 32 << 10],
+            buffer: vec![0u8; 32 << 20],
         };
         let response = black_box(rpc_client.send(&black_box(request)).await)?;
         assert_eq!(response.name, "Harrison");
-        assert_eq!(response.age, 19)
-    }
+        assert_eq!(response.age, 19);
+    //}
     println!("Datacake took: {:?}, {:?}/req", start.elapsed(), start.elapsed() / 10_000);
 
     //let start = Instant::now();
@@ -95,7 +96,7 @@ async fn main() -> Result<()> {
     //            let request = DatacakeMessage {
     //                name: "Harrison".into(),
     //                age: 19,
-    //                buffer: vec![0u8; 32 << 10],
+    //                buffer: vec![0u8; 32 << 20],
     //            };
     //            let response = black_box(rpc_client.send(&black_box(request)).await)?;
     //            assert_eq!(response.name, "Harrison");

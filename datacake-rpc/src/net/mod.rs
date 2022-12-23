@@ -1,18 +1,19 @@
 mod client;
 mod server;
 mod status;
-mod tls;
 mod utils;
+mod limits;
 
 use std::io;
 use std::io::ErrorKind;
 use std::net::SocketAddr;
+use std::time::Instant;
 
-pub use client::{ClientConnectError, ClientConnection};
-use quinn::{ReadError, RecvStream, SendStream};
+pub use client::ClientConnection;
 use rkyv::AlignedVec;
+use s2n_quic::stream::BidirectionalStream;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 pub(crate) use server::start_rpc_server;
-pub use server::ServerBindError;
 pub use status::{ArchivedErrorCode, ArchivedStatus, ErrorCode, Status};
 
 use crate::net::utils::{MessageKind, HEADER_SIZE};
@@ -28,8 +29,7 @@ pub enum SendMsgError {
 /// A multiplexed client connection.
 pub(crate) struct ConnectionChannel {
     remote_addr: SocketAddr,
-    send: SendStream,
-    recv: RecvStream,
+    stream: BidirectionalStream,
     hot_buffer: Box<[u8]>,
     buf: Vec<u8>,
 }
@@ -47,19 +47,23 @@ impl ConnectionChannel {
         metadata: &MessageMetadata,
         msg: &[u8],
     ) -> Result<(), SendMsgError> {
+        let start = Instant::now();
         let buffer =
             utils::serialize_message(metadata, msg).map_err(SendMsgError::Status)?;
+        println!("Serialize took: {:?}", start.elapsed());
 
-        self.send
+        let start = Instant::now();
+        self.stream
             .write_all(&buffer)
             .await
             .map_err(|e| SendMsgError::IoError(e.into()))?;
+        println!("Write took: {:?}", start.elapsed());
         Ok(())
     }
 
     /// Sends a message payload across the channel to the server.
     pub(crate) async fn send_error(&mut self, status: &Status) -> io::Result<()> {
-        self.send.write_all(&utils::serialize_error(status)).await?;
+        self.stream.write_all(&utils::serialize_error(status)).await?;
         Ok(())
     }
 
@@ -153,14 +157,15 @@ impl ConnectionChannel {
     async fn extend_buffer_pos(
         &mut self,
         min_len: usize,
-    ) -> Result<bool, ReadError> {
+    ) -> io::Result<bool> {
         while self.buf.len() < min_len {
-            match self.recv.read(&mut self.hot_buffer[..]).await? {
-                None => return Ok(true),
-                Some(n) => {
-                    self.buf.extend_from_slice(&self.hot_buffer[..n]);
-                },
-            };
+            let n = self.stream.read(&mut self.hot_buffer[..]).await?;
+
+            if n == 0 {
+                return Ok(false);
+            }
+
+            self.buf.extend_from_slice(&self.hot_buffer[..n]);
         }
 
         Ok(false)

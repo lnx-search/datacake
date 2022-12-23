@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -6,7 +7,7 @@ use parking_lot::RwLock;
 use tokio::task::JoinHandle;
 
 use crate::handler::{HandlerKey, OpaqueMessageHandler, RpcService, ServiceRegistry};
-use crate::net::{ConnectionChannel, SendMsgError, ServerBindError};
+use crate::net::{ConnectionChannel, SendMsgError};
 use crate::Status;
 
 /// A RPC server instance.
@@ -19,7 +20,7 @@ pub struct Server {
 
 impl Server {
     /// Spawns the RPC server task and returns the server handle.
-    pub async fn listen(addr: SocketAddr) -> Result<Self, ServerBindError> {
+    pub async fn listen(addr: SocketAddr) -> io::Result<Self> {
         let state = ServerState::default();
         let handle =
             crate::net::start_rpc_server(addr, state.clone()).await?;

@@ -19,9 +19,7 @@ pub use client::{Client, MessageReply, RpcClient};
 pub use net::{
     ArchivedErrorCode,
     ArchivedStatus,
-    ClientConnectError,
     ErrorCode,
-    ServerBindError,
     Status,
 };
 pub use request::Request;
