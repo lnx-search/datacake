@@ -1,26 +1,22 @@
 use std::io;
-use std::io::ErrorKind;
 use std::net::SocketAddr;
-use std::sync::Arc;
+use rkyv::AlignedVec;
+use http::{Method, Request};
+use hyper::{Body, Client, StatusCode};
+use hyper::body::{Bytes, HttpBody};
+use hyper::client::HttpConnector;
 
-use s2n_quic::{Client, Connection};
-use s2n_quic::client::Connect;
-use tokio::sync::Mutex;
-
-use crate::net::{BUFFER_SIZE, ConnectionChannel};
-use crate::net::limits::Limits;
-
-pub static CERT_PEM: &str = include_str!("../certs/cert.pem");
+use crate::request::MessageMetadata;
 
 
 #[derive(Clone)]
 /// A raw QUIC client connection which can produce multiplexed streams.
-pub struct ClientConnection {
-    connection: Arc<Mutex<Connection>>,
+pub struct Channel {
+    connection: Client<HttpConnector, Body>,
     remote_addr: SocketAddr,
 }
 
-impl ClientConnection {
+impl Channel {
     /// Connects to a remote QUIC server.
     ///
     /// This takes a bind address as this is effectively the binding address
@@ -28,34 +24,57 @@ impl ClientConnection {
     pub async fn connect(
         remote_addr: SocketAddr,
     ) -> io::Result<Self> {
-        let client = Client::builder()
-            .with_limits(Limits::default().limits()).unwrap()
-            .with_io("0.0.0.0:0")?
-            .with_tls(CERT_PEM).unwrap()
-            .start()
-            .map_err(|e| io::Error::new(ErrorKind::Other, e.to_string()))?;
+        let mut http = HttpConnector::new();
+        http.enforce_http(false);
+        http.set_nodelay(true);
 
-        let connect = Connect::new(remote_addr).with_server_name("localhost");
-        let connection = client
-            .connect(connect)
-            .await
-            .map_err(|e| io::Error::new(ErrorKind::Other, e.to_string()))?;
+        let client = hyper::Client::builder()
+            .http2_only(true)
+            .http2_adaptive_window(true)
+            .build(http);
 
         Ok(Self {
-            connection: Arc::new(Mutex::new(connection)),
+            connection: client,
             remote_addr,
         })
     }
 
     /// Opens a new channel to be used as part of a RPC message.
-    pub(crate) async fn open_channel(&self) -> io::Result<ConnectionChannel> {
-        let mut lock = self.connection.lock().await;
-        let stream = lock.open_bidirectional_stream().await?;
-        Ok(ConnectionChannel {
-            remote_addr: self.remote_addr,
-            stream,
-            hot_buffer: Box::new([0u8; BUFFER_SIZE]),
-            buf: Vec::new(),
-        })
+    pub(crate) async fn send_msg(
+        &self,
+        metadata: MessageMetadata,
+        msg: Bytes,
+    ) -> Result<Result<AlignedVec, AlignedVec>, hyper::Error> {
+        let uri = format!(
+            "http://{}{}",
+            self.remote_addr,
+            crate::to_uri_path(&metadata.service_name, &metadata.path),
+        );
+        let request = Request::builder()
+            .method(Method::POST)
+            .uri(uri)
+            .body(Body::from(msg))
+            .unwrap();
+
+        let resp = self.connection.request(request).await?;
+        let (req, mut body) = resp.into_parts();
+
+        let size = body.size_hint().upper().unwrap_or(1024);
+        let mut buffer = AlignedVec::with_capacity(size as usize);
+        while let Some(chunk) = body.data().await {
+            buffer.extend_from_slice(&chunk?);
+        }
+
+        if req.status == StatusCode::OK {
+            Ok(Ok(buffer))
+        } else {
+            Ok(Err(buffer))
+        }
+    }
+
+    #[inline]
+    /// The address of the remote connection.
+    pub fn remote_addr(&self) -> SocketAddr {
+        self.remote_addr
     }
 }

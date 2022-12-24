@@ -11,7 +11,7 @@ use crate::view::{DataView, InvalidView};
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive, Debug)]
 #[archive_attr(derive(CheckBytes, Debug, PartialEq, Eq))]
-pub(crate) struct MessageMetadata {
+pub struct MessageMetadata {
     #[with(rkyv::with::AsOwned)]
     /// The name of the service being targeted.
     pub(crate) service_name: Cow<'static, str>,

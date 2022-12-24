@@ -1,14 +1,11 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
-
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use tokio::task::JoinHandle;
 
 use crate::handler::{HandlerKey, OpaqueMessageHandler, RpcService, ServiceRegistry};
-use crate::net::{ConnectionChannel, SendMsgError};
-use crate::Status;
 
 /// A RPC server instance.
 ///
@@ -36,7 +33,7 @@ impl Server {
         let mut registry = ServiceRegistry::new(service);
         Svc::register_handlers(&mut registry);
         let handlers = registry.into_handlers();
-        self.state.add_handlers(handlers);
+        self.state.add_handlers(Svc::service_name(), handlers);
     }
 
     /// Removes all handlers linked with the given service name.
@@ -53,6 +50,7 @@ impl Server {
 #[derive(Clone, Default)]
 /// Represents the shared state of the RPC server.
 pub(crate) struct ServerState {
+    services: Arc<Mutex<BTreeMap<String, BTreeSet<HandlerKey>>>>,
     handlers: Arc<RwLock<BTreeMap<HandlerKey, Arc<dyn OpaqueMessageHandler>>>>,
 }
 
@@ -63,81 +61,41 @@ impl ServerState {
     /// the already running RPC system.
     pub(crate) fn add_handlers(
         &self,
+        service_name: &str,
         handlers: BTreeMap<HandlerKey, Arc<dyn OpaqueMessageHandler>>,
     ) {
+        {
+            let mut lock = self.services.lock();
+            for key in handlers.keys() {
+                lock.entry(service_name.to_string())
+                    .or_default()
+                    .insert(*key);
+            }
+        }
+
         let mut lock = self.handlers.write();
         lock.extend(handlers);
     }
 
     /// Removes a new set of handlers from the server state.
     pub(crate) fn remove_handlers(&self, service: &str) {
-        let service = crate::hash(service);
+        let uris = {
+            match self.services.lock().remove(service) {
+                None => return,
+                Some(uris) => uris,
+            }
+        };
 
         let mut lock = self.handlers.write();
-        lock.retain(|key, _| key.0 != service);
+        lock.retain(|key, _| uris.contains(key));
     }
 
     /// Attempts to get the message handler for a specific service and message.
     pub(crate) fn get_handler(
         &self,
-        service: &str,
-        path: &str,
+        uri: &str
     ) -> Option<Arc<dyn OpaqueMessageHandler>> {
-        let service = crate::hash(service);
-        let path = crate::hash(path);
         let lock = self.handlers.read();
-        lock.get(&(service, path)).cloned()
-    }
-}
-
-/// A single server task as part of a multiplexed connection to the server.
-pub(crate) struct ServerTask {
-    channel: ConnectionChannel,
-    state: ServerState,
-}
-
-impl ServerTask {
-    /// Creates a new server task.
-    pub(crate) fn new(channel: ConnectionChannel, state: ServerState) -> Self {
-        Self { channel, state }
-    }
-
-    /// Continuously receives messages from the remote client until the connection
-    /// is closed.
-    pub(crate) async fn handle_messages(mut self) {
-        let remote_addr = self.channel.remote_addr();
-        while let Ok(Some(Ok((metadata, msg)))) = self.channel.recv_msg().await {
-            let handler = self
-                .state
-                .get_handler(metadata.service_name.as_ref(), metadata.path.as_ref());
-
-            match handler {
-                Some(handler) => {
-                    let reply = handler.try_handle(remote_addr, msg).await;
-                    match self.channel.send_msg(&metadata, &reply).await {
-                        Ok(()) => {},
-                        Err(SendMsgError::IoError(e)) => {
-                            warn!(error = ?e, "Encountered an IO error while handling connection.");
-                            break;
-                        },
-                        Err(SendMsgError::Status(status)) => {
-                            if let Err(e) = self.channel.send_error(&status).await {
-                                warn!(error = ?e, "Encountered an IO error while handling connection.");
-                            };
-                        },
-                    }
-                },
-                None => {
-                    let status = Status::unavailable(format!(
-                        "Unknown handler for service and message: {}/{}",
-                        metadata.service_name, metadata.path,
-                    ));
-
-                    if let Err(e) = self.channel.send_error(&status).await {
-                        warn!(error = ?e, "Encountered an IO error while handling connection.");
-                    };
-                },
-            }
-        }
+        lock.get(&crate::hash(uri)).cloned()
     }
 }

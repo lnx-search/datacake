@@ -1,6 +1,6 @@
 use std::hint;
 use std::net::SocketAddr;
-use datacake_rpc::{Client, RpcService, Server, ServiceRegistry, Handler, Request, Status};
+use datacake_rpc::{Channel, RpcService, Server, ServiceRegistry, Handler, Request, Status, RpcClient};
 use rkyv::{Serialize, Deserialize, Archive};
 use bytecheck::CheckBytes;
 
@@ -11,22 +11,15 @@ use bytecheck::CheckBytes;
 pub struct MyMessage {
     name: String,
     age: u32,
+    buffer: Vec<u8>,
 }
 
-#[repr(C)]
-#[derive(Serialize, Deserialize, Archive, PartialEq, Eq, Debug)]
-#[archive(compare(PartialEq))]
-#[archive_attr(derive(CheckBytes, Debug, PartialEq, Eq))]
-pub struct MyOtherMessage {
-    age: u32,
-}
 
 pub struct MyService;
 
 impl RpcService for MyService {
     fn register_handlers(registry: &mut ServiceRegistry<Self>) {
         registry.add_handler::<MyMessage>();
-        registry.add_handler::<MyOtherMessage>();
     }
 }
 
@@ -36,15 +29,6 @@ impl Handler<MyMessage> for MyService {
 
     async fn on_message(&self, msg: Request<MyMessage>) -> Result<Self::Reply, Status> {
         Ok(msg.to_owned().unwrap().name)
-    }
-}
-
-#[datacake_rpc::async_trait]
-impl Handler<MyOtherMessage> for MyService {
-    type Reply = MyOtherMessage;
-
-    async fn on_message(&self, msg: Request<MyOtherMessage>) -> Result<Self::Reply, Status> {
-        Ok(msg.to_owned().unwrap())
     }
 }
 
@@ -58,22 +42,20 @@ async fn test_basic() {
     server.add_service(MyService);
     println!("Listening to address {}!", bind);
 
-    let client = Client::connect(connect).await.unwrap();
+    let client = Channel::connect(connect).await.unwrap();
     println!("Connected to address {}!", connect);
 
-    let mut rpc_client = client.create_rpc_client::<MyService>().await.unwrap();
+    let mut rpc_client = RpcClient::<MyService>::new(client);
 
     let msg1 = MyMessage {
         name: "Bobby".to_string(),
         age: 12,
+        buffer: vec![0u8; 32 << 10],
     };
 
-    let msg2 = MyOtherMessage {
-        age: 1
-    };
-
-    let resp = hint::black_box(rpc_client.send(hint::black_box(&msg1)).await.unwrap());
-    assert_eq!(resp, msg1.name);
-    let resp = hint::black_box(rpc_client.send(hint::black_box(&msg2)).await.unwrap());
-    assert_eq!(resp, msg2);
+    for _ in 0..3 {
+        println!("=================================================");
+        let resp = hint::black_box(rpc_client.send(hint::black_box(&msg1)).await.unwrap());
+        assert_eq!(resp, msg1.name);
+    }
 }

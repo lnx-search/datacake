@@ -16,7 +16,7 @@ use crate::{DataView, SCRATCH_SPACE};
 /// A specific handler key.
 ///
 /// This is in the format of (service_name, handler_path).
-pub type HandlerKey = (u64, u64);
+pub type HandlerKey = u64;
 
 /// A registry system used for linking a service's message handlers
 /// with the RPC system at runtime.
@@ -65,11 +65,9 @@ where
             _msg: PhantomData::<Msg>::default(),
         };
 
+        let uri = crate::to_uri_path(Svc::service_name(), <Svc as Handler<Msg>>::path());
         self.handlers.insert(
-            (
-                crate::hash(Svc::service_name()),
-                crate::hash(<Svc as Handler<Msg>>::path()),
-            ),
+            crate::hash(&uri),
             Arc::new(phantom),
         );
     }
@@ -115,7 +113,7 @@ where
 
 #[async_trait]
 pub(crate) trait OpaqueMessageHandler: Send + Sync {
-    async fn try_handle(&self, remote_addr: SocketAddr, data: AlignedVec) -> AlignedVec;
+    async fn try_handle(&self, remote_addr: SocketAddr, data: AlignedVec) -> Result<AlignedVec, AlignedVec>;
 }
 
 struct PhantomHandler<H, Msg>
@@ -148,24 +146,30 @@ where
     Msg::Archived: CheckBytes<DefaultValidator<'static>> + Send + Sync + 'static,
     H: Handler<Msg> + Send + Sync + 'static,
 {
-    async fn try_handle(&self, remote_addr: SocketAddr, data: AlignedVec) -> AlignedVec {
+    async fn try_handle(&self, remote_addr: SocketAddr, data: AlignedVec) -> Result<AlignedVec, AlignedVec> {
         let view = match DataView::using(data) {
             Ok(view) => view,
             Err(crate::view::InvalidView) => {
                 let status = Status::invalid();
                 let error = rkyv::to_bytes::<_, SCRATCH_SPACE>(&status)
                     .unwrap_or_else(|_| AlignedVec::new());
-                return error;
+                return Err(error);
             },
         };
 
         let msg = Request { remote_addr, view };
 
-        match self.handler.on_message(msg).await {
-            Ok(reply) => rkyv::to_bytes(&reply).unwrap_or_else(|_| AlignedVec::new()),
-            Err(status) => rkyv::to_bytes::<_, SCRATCH_SPACE>(&status)
-                .unwrap_or_else(|_| AlignedVec::new()),
-        }
+        self.handler
+            .on_message(msg)
+            .await
+            .map(|reply| {
+                rkyv::to_bytes::<_, SCRATCH_SPACE>(&reply)
+                    .unwrap_or_else(|_| AlignedVec::new())
+            })
+            .map_err(|status| {
+                rkyv::to_bytes::<_, SCRATCH_SPACE>(&status)
+                    .unwrap_or_else(|_| AlignedVec::new())
+            })
     }
 }
 

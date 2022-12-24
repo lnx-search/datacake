@@ -15,8 +15,9 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 pub use async_trait::async_trait;
-pub use client::{Client, MessageReply, RpcClient};
+pub use client::{MessageReply, RpcClient};
 pub use net::{
+    Channel,
     ArchivedErrorCode,
     ArchivedStatus,
     ErrorCode,
@@ -31,4 +32,9 @@ pub(crate) fn hash<H: Hash + ?Sized>(v: &H) -> u64 {
     let mut hasher = DefaultHasher::new();
     v.hash(&mut hasher);
     hasher.finish()
+}
+
+
+pub(crate) fn to_uri_path(service: &str, path: &str) -> String {
+    format!("/{}/{}", service, path)
 }

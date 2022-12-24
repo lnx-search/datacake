@@ -1,17 +1,19 @@
 use std::io;
-use std::io::ErrorKind;
+use std::convert::Infallible;
 use std::net::SocketAddr;
-use s2n_quic::{Connection, Server};
+use rkyv::AlignedVec;
+use http::{Request, Response, StatusCode};
+use hyper::Body;
+use hyper::body::HttpBody;
+use hyper::server::conn::AddrStream;
+use hyper::service::{make_service_fn, service_fn};
 
 use tokio::task::JoinHandle;
 
-use crate::net::{BUFFER_SIZE, ConnectionChannel};
-use crate::net::limits::Limits;
-use crate::server::{ServerState, ServerTask};
+use crate::server::{ServerState};
+use crate::Status;
+use crate::SCRATCH_SPACE;
 
-
-pub static CERT_PEM: &str = include_str!("../certs/cert.pem");
-pub static KEY_PEM: &str = include_str!("../certs/key.pem");
 
 /// Starts the RPC QUIC server.
 ///
@@ -20,16 +22,25 @@ pub(crate) async fn start_rpc_server(
     bind_addr: SocketAddr,
     state: ServerState,
 ) -> io::Result<JoinHandle<()>> {
-    let mut server = Server::builder()
-        .with_limits(Limits::default().limits()).unwrap()
-        .with_tls((CERT_PEM, KEY_PEM)).unwrap()
-        .with_io(bind_addr)?
-        .start()
-        .map_err(|e| io::Error::new(ErrorKind::Other, e.to_string()))?;
+    let make_service = make_service_fn(move |socket: &AddrStream| {
+        let remote_addr = socket.remote_addr();
+        let state = state.clone();
+
+        async move {
+            let service = move |req| handle_connection(req, state.clone(), remote_addr);
+            Ok::<_, Infallible>(service_fn(service))
+
+        }
+    });
 
     let handle = tokio::spawn(async move {
-        while let Some(conn) = server.accept().await {
-            tokio::spawn(handle_connecting(conn, state.clone()));
+        let server = hyper::Server::bind(&bind_addr)
+            .http2_only(true)
+            .http2_adaptive_window(true)
+            .serve(make_service);
+
+        if let Err(e) = server.await {
+            error!(error = ?e, "Server failed to handle requests.");
         }
     });
 
@@ -40,20 +51,64 @@ pub(crate) async fn start_rpc_server(
 ///
 /// This accepts new streams being created and spawns concurrent tasks to handle
 /// them.
-async fn handle_connecting(mut conn: Connection, state: ServerState) -> io::Result<()> {
-    let remote_addr = conn.remote_addr()?;
-
-    while let Some(stream) = conn.accept_bidirectional_stream().await? {
-        let channel = ConnectionChannel {
-            remote_addr,
-            stream,
-            hot_buffer: Box::new([0u8; BUFFER_SIZE]),
-            buf: Vec::with_capacity(12 << 10),
-        };
-
-        let server = ServerTask::new(channel, state.clone());
-        tokio::spawn(server.handle_messages());
+async fn handle_connection(
+    req: Request<Body>,
+    state: ServerState,
+    remote_addr: SocketAddr,
+) -> Result<Response<Body>, Infallible> {
+    match handle_message(req, state, remote_addr).await {
+        Ok(r) => Ok(r),
+        Err(e) => {
+            let mut response = Response::new(Body::from(e.to_string()));
+            (*response.status_mut()) = StatusCode::INTERNAL_SERVER_ERROR;
+            Ok(response)
+        },
     }
+}
 
-    Ok(())
+async fn handle_message(
+    req: Request<Body>,
+    state: ServerState,
+    remote_addr: SocketAddr,
+) -> anyhow::Result<Response<Body>> {
+    let (req, mut body) = req.into_parts();
+    let uri = req.uri.path();
+    match state.get_handler(uri) {
+        None => {
+            let status = Status::unavailable(format!("Unknown service {}", uri));
+            let buffer = rkyv::to_bytes::<_, SCRATCH_SPACE>(&status)
+                .unwrap_or_else(|e| {
+                    warn!(error = ?e, "Failed to serialize error message.");
+                    AlignedVec::new()
+                });
+
+            let mut response = Response::new(Body::from(buffer.into_vec()));
+            (*response.status_mut()) = StatusCode::BAD_REQUEST;
+
+            Ok(response)
+        },
+        Some(handler) => {
+            let size = body.size_hint().upper().unwrap_or(1024);
+            let mut data = AlignedVec::with_capacity(size as usize);
+            while let Some(chunk) = body.data().await {
+                data.extend_from_slice(&chunk?);
+            }
+
+            let reply = handler.try_handle(remote_addr, data).await;
+
+            match reply {
+                Ok(buffer) => {
+                    let mut response = Response::new(Body::from(buffer.into_vec()));
+                    (*response.status_mut()) = StatusCode::OK;
+                    Ok(response)
+                },
+                Err(buffer) => {
+                    let mut response = Response::new(Body::from(buffer.into_vec()));
+                    (*response.status_mut()) = StatusCode::BAD_REQUEST;
+                    Ok(response)
+                },
+            }
+
+        },
+    }
 }
