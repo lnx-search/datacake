@@ -7,7 +7,6 @@ use echo::echo_server::{Echo, EchoServer};
 use echo::Message;
 use rkyv::{Serialize, Deserialize, Archive};
 use bytecheck::CheckBytes;
-use tonic::transport::Endpoint;
 use datacake_rpc::{Handler, Request, RpcClient, RpcService, ServiceRegistry, Status};
 
 pub mod echo {
@@ -25,7 +24,7 @@ async fn main() -> Result<()> {
         let request = tonic::Request::new(Message {
             name: "Harrison".into(),
             age: 19,
-            buffer: vec![0u8; 32 << 10],
+            buffer: vec![0u8; 32 << 20],
         });
 
         let response = black_box(client.echo(black_box(request)).await)?;
@@ -35,33 +34,33 @@ async fn main() -> Result<()> {
     }
     println!("Tonic took: {:?}, {:?}/req", start.elapsed(), start.elapsed() / 10_000);
 
-    let client = Endpoint::from_static("http://127.0.0.1:8001").connect().await?;
-    let start = Instant::now();
-    let mut tasks = Vec::new();
-    for _ in 0..100 {
-        let mut client = EchoClient::new(client.clone());
-        let task = tokio::spawn(async move {
-            for _ in 0..10_000 {
-                let request = tonic::Request::new(Message {
-                    name: "Harrison".into(),
-                    age: 19,
-                    buffer: vec![0u8; 32 << 10],
-                });
-    
-                let response = black_box(client.echo(black_box(request)).await)?;
-                let inner = response.into_inner();
-                assert_eq!(inner.name, "Harrison");
-                assert_eq!(inner.age, 19)
-            }
-            Ok::<_, anyhow::Error>(())
-        });
-        tasks.push(task);
-    }
-    
-    for task in tasks {
-        task.await.unwrap()?;
-    }
-    println!("(100 Concurrency) Tonic took: {:?}, {:?}/req", start.elapsed(), start.elapsed() / (10_000 * 100));
+    //let client = Endpoint::from_static("http://127.0.0.1:8001").connect().await?;
+    //let start = Instant::now();
+    //let mut tasks = Vec::new();
+    //for _ in 0..100 {
+    //    let mut client = EchoClient::new(client.clone());
+    //    let task = tokio::spawn(async move {
+    //        for _ in 0..10_000 {
+    //            let request = tonic::Request::new(Message {
+    //                name: "Harrison".into(),
+    //                age: 19,
+    //                buffer: vec![0u8; 32 << 1],
+    //            });
+    //
+    //            let response = black_box(client.echo(black_box(request)).await)?;
+    //            let inner = response.into_inner();
+    //            assert_eq!(inner.name, "Harrison");
+    //            assert_eq!(inner.age, 19)
+    //        }
+    //        Ok::<_, anyhow::Error>(())
+    //    });
+    //    tasks.push(task);
+    //}
+    //
+    //for task in tasks {
+    //    task.await.unwrap()?;
+    //}
+    //println!("(100 Concurrency) Tonic took: {:?}, {:?}/req", start.elapsed(), start.elapsed() / (10_000 * 100));
     task.abort();
 
     let bind = "0.0.0.0:8000".parse::<SocketAddr>().unwrap();
@@ -79,7 +78,7 @@ async fn main() -> Result<()> {
         let request = DatacakeMessage {
             name: "Harrison".into(),
             age: 19,
-            buffer: vec![0u8; 32 << 10],
+            buffer: vec![0u8; 32 << 20],
         };
         let response = black_box(rpc_client.send(&black_box(request)).await)?;
         assert_eq!(response.name, "Harrison");
@@ -87,30 +86,30 @@ async fn main() -> Result<()> {
     }
     println!("Datacake took: {:?}, {:?}/req", start.elapsed(), start.elapsed() / 10_000);
 
-    let start = Instant::now();
-    let mut tasks = Vec::new();
-    for _ in 0..100 {
-        let mut rpc_client = RpcClient::<MyService>::new(channel.clone());
-        let task = tokio::spawn(async move {
-            for _ in 0..10_000 {
-                let request = DatacakeMessage {
-                    name: "Harrison".into(),
-                    age: 19,
-                    buffer: vec![0u8; 32 << 10],
-                };
-                let response = black_box(rpc_client.send(&black_box(request)).await)?;
-                assert_eq!(response.name, "Harrison");
-                assert_eq!(response.age, 19)
-            }
-            Ok::<_, anyhow::Error>(())
-        });
-        tasks.push(task);
-    }
-
-    for task in tasks {
-        task.await.unwrap()?;
-    }
-    println!("(100 Concurrency) Datacake took: {:?}, {:?}/req", start.elapsed(), start.elapsed() / (10_000 * 100));
+    //let start = Instant::now();
+    //let mut tasks = Vec::new();
+    //for _ in 0..100 {
+    //    let mut rpc_client = RpcClient::<MyService>::new(channel.clone());
+    //    let task = tokio::spawn(async move {
+    //        for _ in 0..10_000 {
+    //            let request = DatacakeMessage {
+    //                name: "Harrison".into(),
+    //                age: 19,
+    //                buffer: vec![0u8; 32 << 1],
+    //            };
+    //            let response = black_box(rpc_client.send(&black_box(request)).await)?;
+    //            assert_eq!(response.name, "Harrison");
+    //            assert_eq!(response.age, 19)
+    //        }
+    //        Ok::<_, anyhow::Error>(())
+    //    });
+    //    tasks.push(task);
+    //}
+    //
+    //for task in tasks {
+    //    task.await.unwrap()?;
+    //}
+    //println!("(100 Concurrency) Datacake took: {:?}, {:?}/req", start.elapsed(), start.elapsed() / (10_000 * 100));
     Ok(())
 }
 

@@ -35,6 +35,7 @@ pub(crate) async fn start_rpc_server(
 
     let handle = tokio::spawn(async move {
         let server = hyper::Server::bind(&bind_addr)
+            .tcp_nodelay(false)
             .http2_only(true)
             .http2_adaptive_window(true)
             .serve(make_service);
