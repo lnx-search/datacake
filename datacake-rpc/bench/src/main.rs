@@ -14,13 +14,13 @@ pub mod echo {
     tonic::include_proto!("echo_api");
 }
 
-#[tokio::main(flavor = "current_thread")]
+#[tokio::main]
 async fn main() -> Result<()> {
     let task = tokio::spawn(run_tonic_server());
     let mut client = EchoClient::connect("http://127.0.0.1:8001").await?;
 
     let start = Instant::now();
-    for _ in 0..10_000 {
+    for _ in 0..1_00 {
         let request = tonic::Request::new(Message {
             name: "Harrison".into(),
             age: 19,
@@ -35,7 +35,7 @@ async fn main() -> Result<()> {
     println!(
         "Tonic took: {:?}, {:?}/req",
         start.elapsed(),
-        start.elapsed() / 10_000
+        start.elapsed() / 1_00
     );
 
     //let client = Endpoint::from_static("http://127.0.0.1:8001").connect().await?;
@@ -78,7 +78,7 @@ async fn main() -> Result<()> {
 
     let mut rpc_client = RpcClient::<MyService>::new(channel.clone());
     let start = Instant::now();
-    for _ in 0..10_000 {
+    for _ in 0..100 {
         let request = DatacakeMessage {
             name: "Harrison".into(),
             age: 19,
@@ -91,7 +91,7 @@ async fn main() -> Result<()> {
     println!(
         "Datacake took: {:?}, {:?}/req",
         start.elapsed(),
-        start.elapsed() / 10_000
+        start.elapsed() / 1_00
     );
 
     //let start = Instant::now();
