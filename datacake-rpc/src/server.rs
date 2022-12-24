@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
+
 use parking_lot::{Mutex, RwLock};
 use tokio::task::JoinHandle;
 
@@ -19,8 +20,7 @@ impl Server {
     /// Spawns the RPC server task and returns the server handle.
     pub async fn listen(addr: SocketAddr) -> io::Result<Self> {
         let state = ServerState::default();
-        let handle =
-            crate::net::start_rpc_server(addr, state.clone()).await?;
+        let handle = crate::net::start_rpc_server(addr, state.clone()).await?;
 
         Ok(Self { state, handle })
     }
@@ -93,7 +93,7 @@ impl ServerState {
     /// Attempts to get the message handler for a specific service and message.
     pub(crate) fn get_handler(
         &self,
-        uri: &str
+        uri: &str,
     ) -> Option<Arc<dyn OpaqueMessageHandler>> {
         let lock = self.handlers.read();
         lock.get(&crate::hash(uri)).cloned()

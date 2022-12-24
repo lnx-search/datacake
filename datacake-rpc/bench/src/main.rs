@@ -1,18 +1,18 @@
 use std::hint::black_box;
 use std::net::SocketAddr;
 use std::time::Instant;
+
 use anyhow::Result;
+use bytecheck::CheckBytes;
+use datacake_rpc::{Handler, Request, RpcClient, RpcService, ServiceRegistry, Status};
 use echo::echo_client::EchoClient;
 use echo::echo_server::{Echo, EchoServer};
 use echo::Message;
-use rkyv::{Serialize, Deserialize, Archive};
-use bytecheck::CheckBytes;
-use datacake_rpc::{Handler, Request, RpcClient, RpcService, ServiceRegistry, Status};
+use rkyv::{Archive, Deserialize, Serialize};
 
 pub mod echo {
     tonic::include_proto!("echo_api");
 }
-
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
@@ -32,7 +32,11 @@ async fn main() -> Result<()> {
         assert_eq!(inner.name, "Harrison");
         assert_eq!(inner.age, 19)
     }
-    println!("Tonic took: {:?}, {:?}/req", start.elapsed(), start.elapsed() / 10_000);
+    println!(
+        "Tonic took: {:?}, {:?}/req",
+        start.elapsed(),
+        start.elapsed() / 10_000
+    );
 
     //let client = Endpoint::from_static("http://127.0.0.1:8001").connect().await?;
     //let start = Instant::now();
@@ -84,7 +88,11 @@ async fn main() -> Result<()> {
         assert_eq!(response.name, "Harrison");
         assert_eq!(response.age, 19)
     }
-    println!("Datacake took: {:?}, {:?}/req", start.elapsed(), start.elapsed() / 10_000);
+    println!(
+        "Datacake took: {:?}, {:?}/req",
+        start.elapsed(),
+        start.elapsed() / 10_000
+    );
 
     //let start = Instant::now();
     //let mut tasks = Vec::new();
@@ -113,7 +121,6 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-
 async fn run_tonic_server() -> Result<()> {
     let addr = "127.0.0.1:8001".parse().unwrap();
     let greeter = TonicServer::default();
@@ -141,8 +148,6 @@ impl Echo for TonicServer {
     }
 }
 
-
-
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive, Debug)]
 #[archive_attr(derive(CheckBytes, Debug))]
@@ -151,7 +156,6 @@ pub struct DatacakeMessage {
     age: u32,
     buffer: Vec<u8>,
 }
-
 
 pub struct MyService;
 
@@ -165,7 +169,10 @@ impl RpcService for MyService {
 impl Handler<DatacakeMessage> for MyService {
     type Reply = DatacakeMessage;
 
-    async fn on_message(&self, msg: Request<DatacakeMessage>) -> Result<Self::Reply, Status> {
+    async fn on_message(
+        &self,
+        msg: Request<DatacakeMessage>,
+    ) -> Result<Self::Reply, Status> {
         Ok(msg.to_owned().unwrap())
     }
 }

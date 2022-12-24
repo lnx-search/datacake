@@ -8,10 +8,7 @@ use rkyv::validation::validators::DefaultValidator;
 use rkyv::{Archive, Serialize};
 
 use crate::handler::{Handler, RpcService};
-use crate::net::{
-    Channel,
-    Status,
-};
+use crate::net::{Channel, Status};
 use crate::request::MessageMetadata;
 use crate::{DataView, SCRATCH_SPACE};
 
@@ -87,23 +84,22 @@ where
             path: Cow::Borrowed(<Svc as Handler<Msg>>::path()),
         };
 
-        let msg_bytes = rkyv::to_bytes::<_, SCRATCH_SPACE>(msg)
-            .map_err(|_| Status::invalid())?;
+        let msg_bytes =
+            rkyv::to_bytes::<_, SCRATCH_SPACE>(msg).map_err(|_| Status::invalid())?;
 
-        let result = self.channel
+        let result = self
+            .channel
             .send_msg(metadata, Bytes::from(msg_bytes.into_vec()))
             .await
             .map_err(Status::connection)?;
 
         match result {
             Ok(buffer) => {
-                let view = DataView::using(buffer)
-                    .map_err(|_| Status::invalid())?;
+                let view = DataView::using(buffer).map_err(|_| Status::invalid())?;
                 Ok(view)
             },
             Err(buffer) => {
-                let status = rkyv::from_bytes(&buffer)
-                    .map_err(|_| Status::invalid())?;
+                let status = rkyv::from_bytes(&buffer).map_err(|_| Status::invalid())?;
                 Err(status)
             },
         }

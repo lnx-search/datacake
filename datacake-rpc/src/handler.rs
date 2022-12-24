@@ -66,10 +66,7 @@ where
         };
 
         let uri = crate::to_uri_path(Svc::service_name(), <Svc as Handler<Msg>>::path());
-        self.handlers.insert(
-            crate::hash(&uri),
-            Arc::new(phantom),
-        );
+        self.handlers.insert(crate::hash(&uri), Arc::new(phantom));
     }
 }
 
@@ -113,7 +110,11 @@ where
 
 #[async_trait]
 pub(crate) trait OpaqueMessageHandler: Send + Sync {
-    async fn try_handle(&self, remote_addr: SocketAddr, data: AlignedVec) -> Result<AlignedVec, AlignedVec>;
+    async fn try_handle(
+        &self,
+        remote_addr: SocketAddr,
+        data: AlignedVec,
+    ) -> Result<AlignedVec, AlignedVec>;
 }
 
 struct PhantomHandler<H, Msg>
@@ -146,7 +147,11 @@ where
     Msg::Archived: CheckBytes<DefaultValidator<'static>> + Send + Sync + 'static,
     H: Handler<Msg> + Send + Sync + 'static,
 {
-    async fn try_handle(&self, remote_addr: SocketAddr, data: AlignedVec) -> Result<AlignedVec, AlignedVec> {
+    async fn try_handle(
+        &self,
+        remote_addr: SocketAddr,
+        data: AlignedVec,
+    ) -> Result<AlignedVec, AlignedVec> {
         let view = match DataView::using(data) {
             Ok(view) => view,
             Err(crate::view::InvalidView) => {

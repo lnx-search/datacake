@@ -1,19 +1,17 @@
-use std::io;
 use std::convert::Infallible;
+use std::io;
 use std::net::SocketAddr;
-use rkyv::AlignedVec;
+
 use http::{Request, Response, StatusCode};
-use hyper::Body;
 use hyper::body::HttpBody;
 use hyper::server::conn::AddrStream;
 use hyper::service::{make_service_fn, service_fn};
-
+use hyper::Body;
+use rkyv::AlignedVec;
 use tokio::task::JoinHandle;
 
-use crate::server::{ServerState};
-use crate::Status;
-use crate::SCRATCH_SPACE;
-
+use crate::server::ServerState;
+use crate::{Status, SCRATCH_SPACE};
 
 /// Starts the RPC QUIC server.
 ///
@@ -29,7 +27,6 @@ pub(crate) async fn start_rpc_server(
         async move {
             let service = move |req| handle_connection(req, state.clone(), remote_addr);
             Ok::<_, Infallible>(service_fn(service))
-
         }
     });
 
@@ -77,8 +74,8 @@ async fn handle_message(
     match state.get_handler(uri) {
         None => {
             let status = Status::unavailable(format!("Unknown service {}", uri));
-            let buffer = rkyv::to_bytes::<_, SCRATCH_SPACE>(&status)
-                .unwrap_or_else(|e| {
+            let buffer =
+                rkyv::to_bytes::<_, SCRATCH_SPACE>(&status).unwrap_or_else(|e| {
                     warn!(error = ?e, "Failed to serialize error message.");
                     AlignedVec::new()
                 });
@@ -109,7 +106,6 @@ async fn handle_message(
                     Ok(response)
                 },
             }
-
         },
     }
 }

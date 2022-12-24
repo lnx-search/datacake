@@ -1,13 +1,13 @@
 use std::io;
 use std::net::SocketAddr;
-use rkyv::AlignedVec;
+
 use http::{Method, Request};
-use hyper::{Body, Client, StatusCode};
 use hyper::body::{Bytes, HttpBody};
 use hyper::client::HttpConnector;
+use hyper::{Body, Client, StatusCode};
+use rkyv::AlignedVec;
 
 use crate::request::MessageMetadata;
-
 
 #[derive(Clone)]
 /// A raw QUIC client connection which can produce multiplexed streams.
@@ -21,9 +21,7 @@ impl Channel {
     ///
     /// This takes a bind address as this is effectively the binding address
     /// of the UDP socket being used.
-    pub async fn connect(
-        remote_addr: SocketAddr,
-    ) -> io::Result<Self> {
+    pub async fn connect(remote_addr: SocketAddr) -> io::Result<Self> {
         let mut http = HttpConnector::new();
         http.enforce_http(false);
         http.set_nodelay(true);

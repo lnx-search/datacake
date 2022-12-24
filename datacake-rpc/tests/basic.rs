@@ -1,9 +1,18 @@
 use std::hint;
 use std::net::SocketAddr;
-use datacake_rpc::{Channel, RpcService, Server, ServiceRegistry, Handler, Request, Status, RpcClient};
-use rkyv::{Serialize, Deserialize, Archive};
-use bytecheck::CheckBytes;
 
+use bytecheck::CheckBytes;
+use datacake_rpc::{
+    Channel,
+    Handler,
+    Request,
+    RpcClient,
+    RpcService,
+    Server,
+    ServiceRegistry,
+    Status,
+};
+use rkyv::{Archive, Deserialize, Serialize};
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive, Debug)]
@@ -13,7 +22,6 @@ pub struct MyMessage {
     age: u32,
     buffer: Vec<u8>,
 }
-
 
 pub struct MyService;
 
@@ -31,7 +39,6 @@ impl Handler<MyMessage> for MyService {
         Ok(msg.to_owned().unwrap().name)
     }
 }
-
 
 #[tokio::test]
 async fn test_basic() {
@@ -55,7 +62,8 @@ async fn test_basic() {
 
     for _ in 0..3 {
         println!("=================================================");
-        let resp = hint::black_box(rpc_client.send(hint::black_box(&msg1)).await.unwrap());
+        let resp =
+            hint::black_box(rpc_client.send(hint::black_box(&msg1)).await.unwrap());
         assert_eq!(resp, msg1.name);
     }
 }

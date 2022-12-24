@@ -16,24 +16,17 @@ use std::hash::{Hash, Hasher};
 
 pub use async_trait::async_trait;
 pub use client::{MessageReply, RpcClient};
-pub use net::{
-    Channel,
-    ArchivedErrorCode,
-    ArchivedStatus,
-    ErrorCode,
-    Status,
-};
+pub use handler::{Handler, RpcService, ServiceRegistry};
+pub use net::{ArchivedErrorCode, ArchivedStatus, Channel, ErrorCode, Status};
 pub use request::Request;
 pub use server::Server;
 pub use view::{DataView, InvalidView};
-pub use handler::{ServiceRegistry, RpcService, Handler};
 
 pub(crate) fn hash<H: Hash + ?Sized>(v: &H) -> u64 {
     let mut hasher = DefaultHasher::new();
     v.hash(&mut hasher);
     hasher.finish()
 }
-
 
 pub(crate) fn to_uri_path(service: &str, path: &str) -> String {
     format!("/{}/{}", service, path)
