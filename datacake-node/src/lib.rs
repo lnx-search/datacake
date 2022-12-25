@@ -15,6 +15,7 @@ use std::sync::atomic::Ordering;
 use chitchat::transport::Transport;
 use chitchat::FailureDetectorConfig;
 pub use clock::Clock;
+use datacake_rpc::{RpcService, Server};
 pub use error::NodeError;
 pub use extension::ClusterExtension;
 use futures::StreamExt;
@@ -31,7 +32,6 @@ pub use statistics::ClusterStatistics;
 use tokio::sync::watch;
 use tokio_stream::wrappers::WatchStream;
 use tracing::info;
-use datacake_rpc::{RpcService, Server};
 
 use crate::rpc::chitchat_transport::ChitchatTransport;
 use crate::rpc::services::chitchat_impl::ChitchatService;
@@ -212,7 +212,7 @@ impl DatacakeNode {
     /// Add a RPC service to the existing RPC system.
     pub fn add_rpc_service<Svc>(&self, service: Svc)
     where
-        Svc: RpcService + Send + Sync + 'static
+        Svc: RpcService + Send + Sync + 'static,
     {
         self.rpc_server.add_service(service);
     }
@@ -352,12 +352,8 @@ async fn connect_node(
     let service = ChitchatService::new(clock.clone(), chitchat_tx);
     server.add_service(service);
 
-    let transport = ChitchatTransport::new(
-        cluster_info.listen_addr,
-        clock,
-        network,
-        chitchat_rx,
-    );
+    let transport =
+        ChitchatTransport::new(cluster_info.listen_addr, clock, network, chitchat_rx);
 
     let me = ClusterMember::new(
         node_id,

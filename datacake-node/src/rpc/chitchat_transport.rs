@@ -2,20 +2,19 @@ use std::io::ErrorKind;
 use std::net::SocketAddr;
 use std::ops::Deref;
 use std::sync::Arc;
-use anyhow::bail;
 
+use anyhow::bail;
 use async_trait::async_trait;
 use chitchat::serialize::Serializable;
 use chitchat::transport::{Socket, Transport};
 use chitchat::ChitchatMessage;
+use datacake_rpc::RpcClient;
 use futures::io;
 use tracing::trace;
-use datacake_rpc::RpcClient;
 
 use crate::rpc::network::RpcNetwork;
-use crate::Clock;
 use crate::rpc::services::chitchat_impl::{ChitchatRpcMessage, ChitchatService};
-
+use crate::Clock;
 
 #[derive(Clone)]
 /// Chitchat compatible transport built on top of an existing RPC connection.
@@ -55,7 +54,10 @@ impl Transport for ChitchatTransport {
         listen_addr: SocketAddr,
     ) -> Result<Box<dyn Socket>, anyhow::Error> {
         if listen_addr != self.rpc_listen_addr {
-            bail!("Listen addr does not match RPC server address. {listen_addr} != {}", self.rpc_listen_addr);
+            bail!(
+                "Listen addr does not match RPC server address. {listen_addr} != {}",
+                self.rpc_listen_addr
+            );
         }
 
         Ok(Box::new(GrpcConnection {
@@ -98,11 +100,10 @@ impl Socket for GrpcConnection {
         trace!(to = %to, msg = ?msg, "Gossip send");
         let data = msg.serialize_to_vec();
 
-        let channel = self.network
+        let channel = self
+            .network
             .get_or_connect(to)
-            .map_err(|e| {
-                io::Error::new(ErrorKind::ConnectionRefused, e.to_string())
-            })?;
+            .map_err(|e| io::Error::new(ErrorKind::ConnectionRefused, e.to_string()))?;
 
         let timestamp = self.clock.get_time().await;
         let msg = ChitchatRpcMessage {

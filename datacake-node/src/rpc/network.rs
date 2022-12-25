@@ -3,8 +3,8 @@ use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use parking_lot::RwLock;
 use datacake_rpc::Channel;
+use parking_lot::RwLock;
 use tracing::trace;
 
 #[derive(Clone, Default)]
