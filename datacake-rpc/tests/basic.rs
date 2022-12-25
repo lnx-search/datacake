@@ -60,10 +60,6 @@ async fn test_basic() {
         buffer: vec![0u8; 32 << 10],
     };
 
-    for _ in 0..3 {
-        println!("=================================================");
-        let resp =
-            hint::black_box(rpc_client.send(hint::black_box(&msg1)).await.unwrap());
-        assert_eq!(resp, msg1.name);
-    }
+    let resp = rpc_client.send(&msg1).await.unwrap();
+    assert_eq!(resp, msg1.name);
 }
