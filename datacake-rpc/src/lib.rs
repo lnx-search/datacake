@@ -1,4 +1,4 @@
-//! A actor-like RPC framework built for true zero-copy message handling.
+//! An actor-like RPC framework built for true zero-copy message handling.
 //!
 //! This framework is inspired by tonic but is *not* a GRPC framework. Instead,
 //! it makes use of the incredible [rkyv] (de)serialization framework which provides

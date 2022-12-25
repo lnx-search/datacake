@@ -2,6 +2,12 @@
 name = "datacake-rpc"
 version = "0.1.0"
 edition = "2021"
+description = "A zero-copy, actor-like RPC framework using rkyv."
+license = "MIT"
+keywords = ["tokio", "rpc", "zero-copy"]
+categories = ["concurrency", "asyncronous"]
+repository = "https://github.com/lnx-search/datacake"
+readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
