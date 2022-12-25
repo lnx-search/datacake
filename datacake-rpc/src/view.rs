@@ -19,7 +19,7 @@ pub struct InvalidView;
 /// allocations if the situation does not require having an owned version of the value.
 pub struct DataView<T, D = AlignedVec>
 where
-    T: Archive,
+    T: Archive + ?Sized,
     T::Archived: 'static,
     D: Deref<Target = [u8]> + Send + Sync,
 {

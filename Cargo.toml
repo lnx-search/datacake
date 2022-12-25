@@ -27,9 +27,6 @@ members = [
     "datacake-sqlite",
     "datacake-rpc",
 
-    # Sub-project crates
-    "datacake-rpc/bench",
-
     # Example set
     "examples/replicated-kv",
 ]

@@ -13,9 +13,9 @@ use tokio::task::JoinHandle;
 use crate::server::ServerState;
 use crate::{Status, SCRATCH_SPACE};
 
-/// Starts the RPC QUIC server.
+/// Starts the RPC server.
 ///
-/// This takes a binding socket address and server name.
+/// This takes a binding socket address and server state.
 pub(crate) async fn start_rpc_server(
     bind_addr: SocketAddr,
     state: ServerState,

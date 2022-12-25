@@ -20,12 +20,25 @@ pub struct MessageMetadata {
     pub(crate) path: Cow<'static, str>,
 }
 
+/// A zero-copy view of the message data and any additional metadata provided
+/// by the RPC system.
+///
+/// The request contains the original request buffer which is used to create
+/// the 'view' of the given message type.
 pub struct Request<Msg>
 where
     Msg: Archive,
     Msg::Archived: CheckBytes<DefaultValidator<'static>> + 'static,
 {
     pub(crate) remote_addr: SocketAddr,
+
+    // A small hack around how linters behave to prevent
+    // them raising incorrect errors which may be confusing
+    // for users who are implementing the required traits.
+    #[cfg(debug_assertions)]
+    pub(crate) view: Box<DataView<Msg>>,
+
+    #[cfg(not(debug_assertions))]
     pub(crate) view: DataView<Msg>,
 }
 
@@ -34,6 +47,24 @@ where
     Msg: Archive,
     Msg::Archived: CheckBytes<DefaultValidator<'static>> + 'static,
 {
+    pub(crate) fn new(remote_addr: SocketAddr, view: DataView<Msg>) -> Self {
+        Self {
+            remote_addr,
+            #[cfg(debug_assertions)]
+            view: Box::new(view),
+
+            #[cfg(not(debug_assertions))]
+            view,
+        }
+    }
+
+    #[cfg(debug_assertions)]
+    /// Consumes the request into the data view of the message.
+    pub fn into_view(self) -> DataView<Msg> {
+        *self.view
+    }
+
+    #[cfg(not(debug_assertions))]
     /// Consumes the request into the data view of the message.
     pub fn into_view(self) -> DataView<Msg> {
         self.view

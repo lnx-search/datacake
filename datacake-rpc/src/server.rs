@@ -10,7 +10,57 @@ use crate::handler::{HandlerKey, OpaqueMessageHandler, RpcService, ServiceRegist
 
 /// A RPC server instance.
 ///
-/// This allows for dynamic adding and removal of services.
+/// This is used for listening for inbound connections and handling any RPC messages
+/// coming from clients.
+///
+/// ```rust
+/// use rkyv::{Archive, Deserialize, Serialize};
+/// use datacake_rpc::{Server, Handler, Request, RpcService, ServiceRegistry, Status};
+/// use std::net::SocketAddr;
+///
+/// #[repr(C)]
+/// #[derive(Serialize, Deserialize, Archive, Debug)]
+/// #[archive_attr(derive(CheckBytes, Debug))]
+/// pub struct MyMessage {
+///     name: String,
+///     age: u32,
+/// }
+///
+/// pub struct EchoService;
+///
+/// impl RpcService for EchoService {
+///     fn register_handlers(registry: &mut ServiceRegistry<Self>) {
+///         registry.add_handler::<MyMessage>();
+///     }
+/// }
+///
+/// #[datacake_rpc::async_trait]
+/// impl Handler<MyMessage> for EchoService {
+///     type Reply = MyMessage;
+///
+///     async fn on_message(&self, msg: Request<MyMessage>) -> Result<Self::Reply, Status> {
+///         Ok(msg.to_owned().unwrap())
+///     }
+/// }
+///
+/// # #[tokio::main]
+/// # async fn main() -> anyhow::Result<()> {
+/// let bind = "127.0.0.1:8000".parse::<SocketAddr>()?;
+/// // Start the RPC server listening on our bind address.
+/// let server = Server::listen(bind).await?;
+///
+/// // Once our server is running we can add or remove services.
+/// // Once a service is added it is able to begin handling RPC messages.
+/// server.add_service(EchoService);
+///
+/// // Once a service is removed the server will reject messages for the
+/// // service that is no longer registered,
+/// server.remove_service(EchoService::service_name());
+///
+/// server.wait().await;
+/// # Ok(())
+/// # }
+/// ```
 pub struct Server {
     state: ServerState,
     handle: JoinHandle<()>,
@@ -44,6 +94,14 @@ impl Server {
     /// Signals the server to shutdown.
     pub fn shutdown(&self) {
         self.handle.abort();
+    }
+
+    /// Waits until the server exits.
+    ///
+    /// This typically is just a future that pends forever as the server
+    /// will not exit unless an external force triggers it.
+    pub async fn wait(self) {
+        self.handle.await.expect("Wait for server handle.");
     }
 }
 

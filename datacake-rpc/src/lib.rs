@@ -4,7 +4,6 @@ extern crate tracing;
 mod client;
 mod handler;
 mod net;
-mod replay;
 mod request;
 mod server;
 mod view;

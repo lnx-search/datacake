@@ -27,6 +27,61 @@ pub type HandlerKey = u64;
 ///
 /// Not registering a handler will cause the handler to not be triggered
 /// even if a valid message comes through.
+///
+///
+/// ```rust
+/// use rkyv::{Archive, Deserialize, Serialize};
+/// use datacake_rpc::{Handler, Request, RpcService, ServiceRegistry, Status, RpcClient, Channel};
+/// use std::net::SocketAddr;
+///
+/// #[repr(C)]
+/// #[derive(Serialize, Deserialize, Archive, Debug)]
+/// #[archive_attr(derive(CheckBytes, Debug))]
+/// pub struct MyMessage {
+///     name: String,
+///     age: u32,
+/// }
+///
+/// #[repr(C)]
+/// #[derive(Serialize, Deserialize, Archive, Debug)]
+/// #[archive_attr(derive(CheckBytes, Debug))]
+/// pub struct MyOtherMessage {
+///     age: u32,
+/// }
+///
+/// pub struct EchoService;
+///
+/// impl RpcService for EchoService {
+///     fn register_handlers(registry: &mut ServiceRegistry<Self>) {
+///         // Since we've registered the `MyMessage` handler, the RPC system
+///         // will dispatch the messages to out handler.
+///         //
+///         // But because we *haven't* registered our `MyOtherMessage` handler,
+///         // even though our service implements the handler, no messages will
+///         // be dispatched.
+///         registry.add_handler::<MyMessage>();
+///
+///     }
+/// }
+///
+/// #[datacake_rpc::async_trait]
+/// impl Handler<MyMessage> for EchoService {
+///     type Reply = MyMessage;
+///
+///     async fn on_message(&self, msg: Request<MyMessage>) -> Result<Self::Reply, Status> {
+///         Ok(msg.to_owned().unwrap())
+///     }
+/// }
+///
+/// #[datacake_rpc::async_trait]
+/// impl Handler<MyOtherMessage> for EchoService {
+///     type Reply = MyOtherMessage;
+///
+///     async fn on_message(&self, msg: Request<MyOtherMessage>) -> Result<Self::Reply, Status> {
+///         Ok(msg.to_owned().unwrap())
+///     }
+/// }
+/// ```
 pub struct ServiceRegistry<Svc> {
     handlers: BTreeMap<HandlerKey, Arc<dyn OpaqueMessageHandler>>,
     service: Arc<Svc>,
@@ -71,6 +126,25 @@ where
 }
 
 /// A standard RPC server that handles messages.
+///
+/// ```rust
+/// use datacake_rpc::{RpcService, ServiceRegistry};
+///
+/// pub struct MyService;
+///
+/// impl RpcService for MyService {
+///     // This is an optional method which can be used
+///     // to avoid naming conflicts between two services.
+///     // By default this uses the type name of the service.
+///     fn service_name() -> &'static str {
+///         "my-lovely-service"
+///     }
+///
+///     fn register_handlers(registry: &mut ServiceRegistry<Self>) {
+///         // Register each one of our handlers here.
+///     }
+/// }
+/// ```
 pub trait RpcService: Sized {
     /// An optional name of the service.
     ///
@@ -92,19 +166,66 @@ pub trait RpcService: Sized {
 #[async_trait]
 /// A generic RPC message handler.
 ///
+/// ```rust
+/// use rkyv::{Archive, Deserialize, Serialize};
+/// use datacake_rpc::{Handler, Request, RpcService, ServiceRegistry, Status, RpcClient, Channel};
+/// use std::net::SocketAddr;
 ///
+/// #[repr(C)]
+/// #[derive(Serialize, Deserialize, Archive, Debug)]
+/// #[archive_attr(derive(CheckBytes, Debug))]
+/// pub struct MyMessage {
+///     name: String,
+///     age: u32,
+/// }
+///
+/// pub struct EchoService;
+///
+/// impl RpcService for EchoService {
+///     fn register_handlers(registry: &mut ServiceRegistry<Self>) {
+///         registry.add_handler::<MyMessage>();
+///     }
+/// }
+///
+/// // Our message must implement `Archive` and have it's archived value
+/// // implement check bytes, this is used to provide the zero-copy functionality.
+/// #[datacake_rpc::async_trait]
+/// impl Handler<MyMessage> for EchoService {
+///     // Our reply can be any type that implements `Archive` and `Serialize` as part
+///     // of the rkyv package. Here we're just echoing the message back.
+///     type Reply = MyMessage;
+///
+///     // We get passed a `Request` which is a thin wrapper around the `DataView` type.
+///     // This means we are simply being given a zero-copy view of the message rather
+///     // than a owned value. If you need a owned version which is not tied ot the
+///     // request buffer, you can use the `to_owned` method which will attempt to
+///     // deserialize the inner message/view.
+///     async fn on_message(&self, msg: Request<MyMessage>) -> Result<Self::Reply, Status> {
+///         Ok(msg.to_owned().unwrap())
+///     }
+/// }
+/// ```
 pub trait Handler<Msg>: RpcService
 where
     Msg: Archive,
     Msg::Archived: CheckBytes<DefaultValidator<'static>> + 'static,
 {
+    /// Our reply can be any type that implements [Archive] and [Serialize] as part
+    /// of the [rkyv] package. Here we're just echoing the message back.
     type Reply: Archive + Serialize<AllocSerializer<SCRATCH_SPACE>>;
 
+    /// The path of the message, this is similar to the service name which can
+    /// be used to avoid conflicts, by default this uses the name of the message type.
     fn path() -> &'static str {
         std::any::type_name::<Msg>()
     }
 
     /// Process a message.
+    /// We get passed a [Request] which is a thin wrapper around the [DataView] type.
+    /// This means we are simply being given a zero-copy view of the message rather
+    /// than a owned value. If you need a owned version which is not tied ot the
+    /// request buffer, you can use the `to_owned` method which will attempt to
+    /// deserialize the inner message/view.
     async fn on_message(&self, msg: Request<Msg>) -> Result<Self::Reply, Status>;
 }
 
@@ -162,7 +283,7 @@ where
             },
         };
 
-        let msg = Request { remote_addr, view };
+        let msg = Request::new(remote_addr, view);
 
         self.handler
             .on_message(msg)

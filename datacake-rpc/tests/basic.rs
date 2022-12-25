@@ -1,4 +1,3 @@
-use std::hint;
 use std::net::SocketAddr;
 
 use bytecheck::CheckBytes;

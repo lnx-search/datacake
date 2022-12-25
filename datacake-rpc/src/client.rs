@@ -15,6 +15,58 @@ use crate::{DataView, SCRATCH_SPACE};
 pub type MessageReply<Svc, Msg> = DataView<<Svc as Handler<Msg>>::Reply>;
 
 /// A RPC client handle for a given service.
+///
+/// ```rust
+/// use rkyv::{Archive, Deserialize, Serialize};
+/// use datacake_rpc::{Handler, Request, RpcService, ServiceRegistry, Status, RpcClient, Channel};
+/// use std::net::SocketAddr;
+///
+/// #[repr(C)]
+/// #[derive(Serialize, Deserialize, Archive, Debug)]
+/// #[archive_attr(derive(CheckBytes, Debug))]
+/// pub struct MyMessage {
+///     name: String,
+///     age: u32,
+/// }
+///
+/// pub struct EchoService;
+///
+/// impl RpcService for EchoService {
+///     fn register_handlers(registry: &mut ServiceRegistry<Self>) {
+///         registry.add_handler::<MyMessage>();
+///     }
+/// }
+///
+/// #[datacake_rpc::async_trait]
+/// impl Handler<MyMessage> for EchoService {
+///     type Reply = MyMessage;
+///
+///     async fn on_message(&self, msg: Request<MyMessage>) -> Result<Self::Reply, Status> {
+///         Ok(msg.to_owned().unwrap())
+///     }
+/// }
+///
+/// # #[tokio::main]
+/// # async fn main() -> anyhow::Result<()> {
+/// # use datacake_rpc::Server;
+/// # let bind = "127.0.0.1:8000".parse::<SocketAddr>().unwrap();
+/// # let server = Server::listen(bind).await.unwrap();
+/// # server.add_service(EchoService);
+/// let connect = "127.0.0.1:8000".parse::<SocketAddr>()?;
+/// let client = Channel::connect(connect).await?;
+///
+/// let mut rpc_client = RpcClient::<EchoService>::new(client);
+///
+/// let msg = MyMessage {
+///     name: "Bobby".to_string(),
+///     age: 12,
+/// };
+///
+/// let resp = rpc_client.send(&msg1).await?;
+/// assert_eq!(resp, msg);
+/// # Ok(())
+/// # }
+/// ```
 pub struct RpcClient<Svc>
 where
     Svc: RpcService,

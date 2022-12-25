@@ -10,17 +10,14 @@ use rkyv::AlignedVec;
 use crate::request::MessageMetadata;
 
 #[derive(Clone)]
-/// A raw QUIC client connection which can produce multiplexed streams.
+/// A raw client connection which can produce multiplexed streams.
 pub struct Channel {
     connection: Client<HttpConnector, Body>,
     remote_addr: SocketAddr,
 }
 
 impl Channel {
-    /// Connects to a remote QUIC server.
-    ///
-    /// This takes a bind address as this is effectively the binding address
-    /// of the UDP socket being used.
+    /// Connects to a remote RPC server.
     pub async fn connect(remote_addr: SocketAddr) -> io::Result<Self> {
         let mut http = HttpConnector::new();
         http.enforce_http(false);
@@ -37,7 +34,8 @@ impl Channel {
         })
     }
 
-    /// Opens a new channel to be used as part of a RPC message.
+    /// Sends a message payload the remote server and gets the response
+    /// data back.
     pub(crate) async fn send_msg(
         &self,
         metadata: MessageMetadata,
