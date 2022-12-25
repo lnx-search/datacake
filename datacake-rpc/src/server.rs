@@ -15,6 +15,7 @@ use crate::handler::{HandlerKey, OpaqueMessageHandler, RpcService, ServiceRegist
 ///
 /// ```rust
 /// use rkyv::{Archive, Deserialize, Serialize};
+/// use bytecheck::CheckBytes;
 /// use datacake_rpc::{Server, Handler, Request, RpcService, ServiceRegistry, Status};
 /// use std::net::SocketAddr;
 ///
@@ -58,7 +59,8 @@ use crate::handler::{HandlerKey, OpaqueMessageHandler, RpcService, ServiceRegist
 /// // service that is no longer registered,
 /// server.remove_service(EchoService::service_name());
 ///
-/// server.wait().await;
+/// // We can use server.wait() to wait until the task completes (forever!)
+/// // server.wait().await;
 /// # Ok(())
 /// # }
 /// ```

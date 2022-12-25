@@ -88,7 +88,7 @@
 //!     // Clients only need references to the message which helps
 //!     // reduce allocations.
 //!     let resp = rpc_client.send(&msg1).await?;
-//!     assert_eq!(resp, &msg1);
+//!     assert_eq!(resp, msg1.name);
 //!     Ok(())
 //! }
 //! ```
