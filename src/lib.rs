@@ -12,12 +12,9 @@
 
 #[cfg(feature = "datacake-cluster")]
 pub use datacake_cluster as cluster;
-
 #[cfg(feature = "datacake-crdt")]
 pub use datacake_crdt as crdt;
-
-#[cfg(feature = "datacake-sqlite")]
-pub use datacake_sqlite as sqlite;
-
 #[cfg(feature = "datacake-rpc")]
 pub use datacake_rpc as rpc;
+#[cfg(feature = "datacake-sqlite")]
+pub use datacake_sqlite as sqlite;
