@@ -41,15 +41,14 @@ impl Handler<MyMessage> for MyService {
 
 #[tokio::test]
 async fn test_basic() {
-    let bind = "0.0.0.0:8000".parse::<SocketAddr>().unwrap();
-    let connect = "127.0.0.1:8000".parse::<SocketAddr>().unwrap();
+    let addr = "127.0.0.1:8001".parse::<SocketAddr>().unwrap();
 
-    let server = Server::listen(bind).await.unwrap();
+    let server = Server::listen(addr).await.unwrap();
     server.add_service(MyService);
-    println!("Listening to address {}!", bind);
+    println!("Listening to address {}!", addr);
 
-    let client = Channel::connect(connect).await.unwrap();
-    println!("Connected to address {}!", connect);
+    let client = Channel::connect(addr).await.unwrap();
+    println!("Connected to address {}!", addr);
 
     let mut rpc_client = RpcClient::<MyService>::new(client);
 
