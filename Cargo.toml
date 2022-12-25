@@ -1,6 +1,6 @@
 [package]
 name = "datacake"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "A batteries included framework for building fault-tolerance distributed data systems."
 license = "MIT"
@@ -12,13 +12,20 @@ readme = "README.md"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-datacake-crdt = { version = "0.3", path = "datacake-crdt" }
-datacake-cluster = { version = "0.1", path = "datacake-cluster" }
-datacake-sqlite = { version = "0.1", path = "datacake-sqlite" }
+datacake-crdt = { version = "0.3", path = "datacake-crdt", optional = true }
+datacake-cluster = { version = "0.1", path = "datacake-cluster", optional = true }
+datacake-sqlite = { version = "0.1", path = "datacake-sqlite", optional = true }
+datacake-rpc = { version = "0.1", path = "datacake-rpc", optional = true }
 
 [features]
 test-utils = ["datacake-cluster/test-utils"]
 rkyv = ["datacake-crdt/rkyv-support"]
+default = [
+    "datacake-crdt",
+    "datacake-rpc",
+    "datacake-cluster",
+    "datacake-sqlite",
+]
 
 [workspace]
 members = [
