@@ -81,7 +81,7 @@ async fn test_multiple_msgs() {
     server.add_service(CountingService::default());
     println!("Listening to address {}!", addr);
 
-    let client = Channel::connect(addr).await.unwrap();
+    let client = Channel::connect(addr).unwrap();
     println!("Connected to address {}!", addr);
 
     let mut rpc_client = RpcClient::<CountingService>::new(client);

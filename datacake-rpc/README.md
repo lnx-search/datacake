@@ -76,7 +76,7 @@ async fn main() -> anyhow::Result<()> {
     println!("Listening to address {}!", address);                                              
                                                                                                 
     // Channels are cheap to clone similar to tonic.                                            
-    let client = Channel::connect(address).await?;                                              
+    let client = Channel::connect(address)?;                                              
     println!("Connected to address {}!", address);                                              
                                                                                                 
     let mut rpc_client = RpcClient::<MyService>::new(client);                                   

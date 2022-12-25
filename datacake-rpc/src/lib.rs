@@ -75,7 +75,7 @@
 //!     println!("Listening to address {}!", address);
 //!
 //!     // Channels are cheap to clone similar to tonic.
-//!     let client = Channel::connect(address).await?;
+//!     let client = Channel::connect(address)?;
 //!     println!("Connected to address {}!", address);
 //!
 //!     let mut rpc_client = RpcClient::<MyService>::new(client);
@@ -88,7 +88,7 @@
 //!     // Clients only need references to the message which helps
 //!     // reduce allocations.
 //!     let resp = rpc_client.send(&msg1).await?;
-//!     assert_eq!(resp, msg1);
+//!     assert_eq!(resp, &msg1);
 //!     Ok(())
 //! }
 //! ```
