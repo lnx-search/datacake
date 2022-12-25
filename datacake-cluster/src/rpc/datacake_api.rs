@@ -1,3 +1,4 @@
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct BatchPayload {
     #[prost(message, optional, tag = "1")]
@@ -7,11 +8,13 @@ pub struct BatchPayload {
     #[prost(message, repeated, tag = "3")]
     pub removed: ::prost::alloc::vec::Vec<MultiRemovePayload>,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct PollPayload {
     #[prost(message, optional, tag = "1")]
     pub timestamp: ::core::option::Option<Timestamp>,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct PutPayload {
     #[prost(string, tag = "1")]
@@ -21,6 +24,7 @@ pub struct PutPayload {
     #[prost(message, optional, tag = "3")]
     pub document: ::core::option::Option<Document>,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct MultiPutPayload {
     #[prost(string, tag = "1")]
@@ -30,6 +34,7 @@ pub struct MultiPutPayload {
     #[prost(message, repeated, tag = "3")]
     pub documents: ::prost::alloc::vec::Vec<Document>,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Context {
     #[prost(string, tag = "1")]
@@ -37,6 +42,7 @@ pub struct Context {
     #[prost(string, tag = "2")]
     pub node_addr: ::prost::alloc::string::String,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RemovePayload {
     #[prost(string, tag = "1")]
@@ -44,6 +50,7 @@ pub struct RemovePayload {
     #[prost(message, optional, tag = "2")]
     pub document: ::core::option::Option<DocumentMetadata>,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct MultiRemovePayload {
     #[prost(string, tag = "1")]
@@ -51,6 +58,7 @@ pub struct MultiRemovePayload {
     #[prost(message, repeated, tag = "2")]
     pub documents: ::prost::alloc::vec::Vec<DocumentMetadata>,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct KeyspaceInfo {
     #[prost(message, optional, tag = "1")]
@@ -62,6 +70,7 @@ pub struct KeyspaceInfo {
         Timestamp,
     >,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetState {
     /// The keyspace to fetch the CRDT set from.
@@ -70,6 +79,7 @@ pub struct GetState {
     #[prost(message, optional, tag = "2")]
     pub timestamp: ::core::option::Option<Timestamp>,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct KeyspaceOrSwotSet {
     /// The timestamp in which the keyspace was last updated.
@@ -81,6 +91,7 @@ pub struct KeyspaceOrSwotSet {
     #[prost(message, optional, tag = "3")]
     pub timestamp: ::core::option::Option<Timestamp>,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FetchDocs {
     /// The keyspace to fetch the documents from.
@@ -92,6 +103,7 @@ pub struct FetchDocs {
     #[prost(message, optional, tag = "3")]
     pub timestamp: ::core::option::Option<Timestamp>,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FetchedDocs {
     /// The returning set of documents with their applicable data and metadata.
@@ -100,9 +112,11 @@ pub struct FetchedDocs {
     #[prost(message, optional, tag = "3")]
     pub timestamp: ::core::option::Option<Timestamp>,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Empty {}
 /// / A HLCTimestamp.
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Timestamp {
     #[prost(uint64, tag = "1")]
@@ -112,6 +126,7 @@ pub struct Timestamp {
     #[prost(uint32, tag = "3")]
     pub node_id: u32,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Document {
     #[prost(message, optional, tag = "1")]
@@ -120,6 +135,7 @@ pub struct Document {
     #[prost(bytes = "bytes", tag = "2")]
     pub data: ::prost::bytes::Bytes,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DocumentMetadata {
     /// The unique id of the document.
@@ -435,7 +451,7 @@ pub mod replication_api_client {
 pub mod consistency_api_server {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
     use tonic::codegen::*;
-    ///Generated trait containing gRPC methods that should be implemented for use with ConsistencyApiServer.
+    /// Generated trait containing gRPC methods that should be implemented for use with ConsistencyApiServer.
     #[async_trait]
     pub trait ConsistencyApi: Send + Sync + 'static {
         /// Adds a document to the state.
@@ -757,7 +773,7 @@ pub mod consistency_api_server {
 pub mod replication_api_server {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
     use tonic::codegen::*;
-    ///Generated trait containing gRPC methods that should be implemented for use with ReplicationApiServer.
+    /// Generated trait containing gRPC methods that should be implemented for use with ReplicationApiServer.
     #[async_trait]
     pub trait ReplicationApi: Send + Sync + 'static {
         /// Fetches the live state of the keyspace states.

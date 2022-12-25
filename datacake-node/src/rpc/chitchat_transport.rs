@@ -18,15 +18,16 @@ use crate::rpc::network::RpcNetwork;
 use crate::rpc::server::ServiceRegistry;
 use crate::Clock;
 
+
 #[derive(Clone)]
-/// Chitchat compatible transport built on top of an existing GRPC connection.
+/// Chitchat compatible transport built on top of an existing RPC connection.
 ///
 /// This allows us to maintain a single connection rather than both a UDP and TCP connection.
-pub struct GrpcTransport<R>(Arc<GrpcTransportInner<R>>)
+pub struct ChitchatTransport<R>(Arc<ChitchatTransportInner<R>>)
 where
     R: ServiceRegistry + Clone;
 
-impl<R> GrpcTransport<R>
+impl<R> ChitchatTransport<R>
 where
     R: ServiceRegistry + Clone,
 {
@@ -35,7 +36,7 @@ where
         ctx: super::server::Context<R>,
         messages: flume::Receiver<(SocketAddr, ChitchatMessage)>,
     ) -> Self {
-        Self(Arc::new(GrpcTransportInner {
+        Self(Arc::new(ChitchatTransportInner {
             ctx,
             shutdown_handles: Default::default(),
             messages,
@@ -43,11 +44,11 @@ where
     }
 }
 
-impl<R> Deref for GrpcTransport<R>
+impl<R> Deref for ChitchatTransport<R>
 where
     R: ServiceRegistry + Clone,
 {
-    type Target = GrpcTransportInner<R>;
+    type Target = ChitchatTransportInner<R>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -55,7 +56,7 @@ where
 }
 
 #[async_trait]
-impl<R> Transport for GrpcTransport<R>
+impl<R> Transport for ChitchatTransport<R>
 where
     R: ServiceRegistry + Send + Sync + Clone + 'static,
 {
@@ -80,7 +81,7 @@ where
     }
 }
 
-pub struct GrpcTransportInner<R>
+pub struct ChitchatTransportInner<R>
 where
     R: ServiceRegistry + Clone,
 {

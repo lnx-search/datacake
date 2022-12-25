@@ -1,11 +1,12 @@
 use std::collections::HashMap;
+use std::io;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
 use parking_lot::RwLock;
-use tonic::transport::{Channel, Endpoint, Error};
+use datacake_rpc::Channel;
 use tracing::trace;
 
 pub const TIMEOUT_LIMIT: Duration = Duration::from_secs(2);
@@ -19,7 +20,7 @@ pub struct RpcNetwork {
 
 impl RpcNetwork {
     /// Attempts to get an already existing connection or creates a new connection.
-    pub async fn get_or_connect(&self, addr: SocketAddr) -> Result<Channel, Error> {
+    pub async fn get_or_connect(&self, addr: SocketAddr) -> io::Result<Channel> {
         {
             let guard = self.clients.read();
             if let Some(channel) = guard.get(&addr) {
@@ -32,14 +33,8 @@ impl RpcNetwork {
     }
 
     /// Connects to a given address and adds it to the clients.
-    pub async fn connect(&self, addr: SocketAddr) -> Result<Channel, Error> {
-        let uri = format!("http://{}", addr);
-        let channel = Endpoint::from_str(&uri)
-            .unwrap()
-            .timeout(TIMEOUT_LIMIT)
-            .connect_timeout(CONNECT_TIMEOUT_LIMIT)
-            .connect()
-            .await?;
+    pub async fn connect(&self, addr: SocketAddr) -> io::Result<Channel> {
+        let channel = Channel::connect(addr).await?;
 
         {
             let mut guard = self.clients.write();
@@ -48,6 +43,7 @@ impl RpcNetwork {
 
         Ok(channel)
     }
+
     /// Attempts to get an already existing connection or creates a new connection.
     pub fn get_or_connect_lazy(&self, addr: SocketAddr) -> Channel {
         {

@@ -33,7 +33,7 @@ use tokio::sync::watch;
 use tokio_stream::wrappers::WatchStream;
 use tracing::info;
 
-use crate::rpc::chitchat_transport::GrpcTransport;
+use crate::rpc::chitchat_transport::ChitchatTransport;
 use crate::rpc::server::Context;
 
 pub static DEFAULT_CLUSTER_ID: &str = "datacake-cluster-unknown";
@@ -371,7 +371,7 @@ where
         service_registry,
         network,
     };
-    let transport = GrpcTransport::new(context, chitchat_rx);
+    let transport = ChitchatTransport::new(context, chitchat_rx);
 
     let me = ClusterMember::new(
         node_id,
