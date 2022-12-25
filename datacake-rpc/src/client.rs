@@ -55,7 +55,7 @@ pub type MessageReply<Svc, Msg> = DataView<<Svc as Handler<Msg>>::Reply>;
 /// # let server = Server::listen(bind).await.unwrap();
 /// # server.add_service(EchoService);
 /// let connect = "127.0.0.1:8000".parse::<SocketAddr>()?;
-/// let client = Channel::connect(connect).await?;
+/// let client = Channel::connect(connect)?;
 ///
 /// let mut rpc_client = RpcClient::<EchoService>::new(client);
 ///

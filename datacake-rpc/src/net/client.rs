@@ -1,5 +1,6 @@
 use std::io;
 use std::net::SocketAddr;
+use std::time::Duration;
 
 use http::{Method, Request};
 use hyper::body::{Bytes, HttpBody};
@@ -18,12 +19,14 @@ pub struct Channel {
 
 impl Channel {
     /// Connects to a remote RPC server.
-    pub async fn connect(remote_addr: SocketAddr) -> io::Result<Self> {
+    pub fn connect(remote_addr: SocketAddr) -> io::Result<Self> {
         let mut http = HttpConnector::new();
         http.enforce_http(false);
         http.set_nodelay(true);
+        http.set_connect_timeout(Some(Duration::from_secs(2)));
 
         let client = hyper::Client::builder()
+            .http2_keep_alive_while_idle(true)
             .http2_only(true)
             .http2_adaptive_window(true)
             .build(http);
