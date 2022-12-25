@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 use std::net::SocketAddr;
 
 use bytecheck::CheckBytes;
-use parking_lot::Mutex;
 use datacake_rpc::{
     Channel,
     Handler,
@@ -13,6 +12,7 @@ use datacake_rpc::{
     ServiceRegistry,
     Status,
 };
+use parking_lot::Mutex;
 use rkyv::{Archive, Deserialize, Serialize};
 
 #[repr(C)]
@@ -30,7 +30,6 @@ pub struct DecCounter {
     name: String,
     value: u64,
 }
-
 
 #[derive(Default)]
 pub struct CountingService {

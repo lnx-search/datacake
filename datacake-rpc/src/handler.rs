@@ -247,20 +247,6 @@ where
     _msg: PhantomData<Msg>,
 }
 
-impl<H, Msg> Clone for PhantomHandler<H, Msg>
-where
-    Msg: Archive + Send + Sync + 'static,
-    Msg::Archived: CheckBytes<DefaultValidator<'static>> + Send + Sync + 'static,
-    H: Handler<Msg> + Send + Sync + 'static,
-{
-    fn clone(&self) -> Self {
-        Self {
-            handler: self.handler.clone(),
-            _msg: self._msg,
-        }
-    }
-}
-
 #[async_trait]
 impl<H, Msg> OpaqueMessageHandler for PhantomHandler<H, Msg>
 where

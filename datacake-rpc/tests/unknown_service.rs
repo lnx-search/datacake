@@ -42,9 +42,7 @@ impl Handler<Payload> for Add5Service {
 pub struct Sub5Service;
 
 impl RpcService for Sub5Service {
-    fn register_handlers(registry: &mut ServiceRegistry<Self>) {
-        registry.add_handler::<Payload>();
-    }
+    fn register_handlers(_registry: &mut ServiceRegistry<Self>) {}
 }
 
 #[datacake_rpc::async_trait]
@@ -59,12 +57,11 @@ impl Handler<Payload> for Sub5Service {
 }
 
 #[tokio::test]
-async fn test_multiple_services() {
-    let addr = "127.0.0.1:8002".parse::<SocketAddr>().unwrap();
+async fn test_unknown_service() {
+    let addr = "127.0.0.1:8004".parse::<SocketAddr>().unwrap();
 
     let server = Server::listen(addr).await.unwrap();
     server.add_service(Add5Service);
-    server.add_service(Sub5Service);
     println!("Listening to address {}!", addr);
 
     let client = Channel::connect(addr).await.unwrap();
@@ -78,10 +75,51 @@ async fn test_multiple_services() {
     let resp = add_client.send(&msg).await.unwrap();
     assert_eq!(resp, 10);
 
-    let resp = subtract_client.send(&msg).await.unwrap();
-    assert_eq!(resp, 0);
+    let res = subtract_client
+        .send(&msg)
+        .await
+        .expect_err("Server should reject unknown service");
+    assert_eq!(
+        res,
+        Status::unavailable(format!(
+            "Unknown service /{}/{}",
+            Sub5Service::service_name(),
+            <Sub5Service as Handler<Payload>>::path(),
+        )),
+        "Server should reject unknown service with message."
+    )
+}
 
-    let mut subtract_client = add_client.new_client::<Sub5Service>();
-    let resp = subtract_client.send(&msg).await.unwrap();
-    assert_eq!(resp, 0);
+#[tokio::test]
+async fn test_unknown_message() {
+    let addr = "127.0.0.1:8005".parse::<SocketAddr>().unwrap();
+
+    let server = Server::listen(addr).await.unwrap();
+    server.add_service(Add5Service);
+    println!("Listening to address {}!", addr);
+
+    let client = Channel::connect(addr).await.unwrap();
+    println!("Connected to address {}!", addr);
+
+    let msg = Payload { value: 5 };
+
+    let mut add_client = RpcClient::<Add5Service>::new(client.clone());
+    let mut subtract_client = RpcClient::<Sub5Service>::new(client);
+
+    let resp = add_client.send(&msg).await.unwrap();
+    assert_eq!(resp, 10);
+
+    let res = subtract_client
+        .send(&msg)
+        .await
+        .expect_err("Server should reject unknown message");
+    assert_eq!(
+        res,
+        Status::unavailable(format!(
+            "Unknown service /{}/{}",
+            Sub5Service::service_name(),
+            <Sub5Service as Handler<Payload>>::path(),
+        )),
+        "Server should reject unknown message with message."
+    )
 }

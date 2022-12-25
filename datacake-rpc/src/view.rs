@@ -154,6 +154,12 @@ mod tests {
     }
 
     #[test]
+    fn test_invalid_view() {
+        let res = DataView::<Demo, _>::using(b"Hello, world!".to_vec());
+        assert!(res.is_err(), "View should be rejected");
+    }
+
+    #[test]
     fn test_deserialize() {
         let demo = Demo {
             a: "Jello".to_string(),

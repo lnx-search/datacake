@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::fmt::{Debug, Formatter};
 use std::net::SocketAddr;
 
 use bytecheck::CheckBytes;
@@ -9,8 +10,9 @@ use rkyv::{Archive, Deserialize, Serialize};
 use crate::view::{DataView, InvalidView};
 
 #[repr(C)]
-#[derive(Serialize, Deserialize, Archive, Debug)]
-#[archive_attr(derive(CheckBytes, Debug, PartialEq, Eq))]
+#[derive(Serialize, Deserialize, Archive, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
+#[archive_attr(derive(CheckBytes))]
 pub struct MessageMetadata {
     #[with(rkyv::with::AsOwned)]
     /// The name of the service being targeted.
@@ -40,6 +42,19 @@ where
 
     #[cfg(not(debug_assertions))]
     pub(crate) view: DataView<Msg>,
+}
+
+impl<Msg> Debug for Request<Msg>
+where
+    Msg: Archive,
+    Msg::Archived: CheckBytes<DefaultValidator<'static>> + Debug + 'static,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Request")
+            .field("view", &self.view)
+            .field("remote_addr", &self.remote_addr)
+            .finish()
+    }
 }
 
 impl<Msg> Request<Msg>
@@ -86,5 +101,42 @@ where
     /// Deserializes the view into it's owned value T.
     pub fn to_owned(&self) -> Result<Msg, InvalidView> {
         self.view.to_owned()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_metadata() {
+        let meta = MessageMetadata {
+            service_name: Cow::Borrowed("test"),
+            path: Cow::Borrowed("demo"),
+        };
+
+        let bytes = rkyv::to_bytes::<_, 1024>(&meta).expect("Serialize");
+        let copy: MessageMetadata = rkyv::from_bytes(&bytes).expect("Deserialize");
+        assert_eq!(meta, copy, "Deserialized value should match");
+    }
+
+    #[test]
+    fn test_request() {
+        let msg = MessageMetadata {
+            service_name: Cow::Borrowed("test"),
+            path: Cow::Borrowed("demo"),
+        };
+
+        let addr = "127.0.0.1:8000".parse().unwrap();
+        let bytes = rkyv::to_bytes::<_, 1024>(&msg).expect("Serialize");
+        let view: DataView<MessageMetadata, _> =
+            DataView::using(bytes).expect("Create view");
+        let req = Request::new(addr, view);
+        assert_eq!(req.remote_addr(), addr, "Remote addr should match.");
+        assert_eq!(
+            req.to_owned().unwrap(),
+            msg,
+            "Deserialized value should match."
+        );
     }
 }

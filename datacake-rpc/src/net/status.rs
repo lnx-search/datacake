@@ -5,8 +5,9 @@ use bytecheck::CheckBytes;
 use rkyv::{Archive, Deserialize, Serialize};
 
 #[repr(C)]
-#[derive(Serialize, Deserialize, Archive)]
-#[archive_attr(derive(CheckBytes))]
+#[derive(Serialize, Deserialize, Archive, PartialEq, Eq)]
+#[archive(compare(PartialEq))]
+#[archive_attr(derive(CheckBytes, PartialEq, Eq, Debug))]
 /// Status information around the cause of a message request failing.
 ///
 /// This includes a generic status code, message and any additional
@@ -103,4 +104,34 @@ pub enum ErrorCode {
     ConnectionError,
     /// The RPC channel was closed before the message could be completed.
     ChannelClosed,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_status_variant(status: Status) {
+        println!("Testing: {:?}", &status);
+        let bytes = rkyv::to_bytes::<_, 1024>(&status).expect("Serialize OK");
+        let archived =
+            rkyv::check_archived_root::<'_, Status>(&bytes).expect("Archive OK");
+        assert_eq!(
+            archived, &status,
+            "Archived value and original value should match"
+        );
+        let copy: Status = rkyv::from_bytes(&bytes).expect("Deserialize OK");
+        assert_eq!(
+            copy, status,
+            "Deserialized value and original value should match"
+        );
+    }
+
+    #[test]
+    fn test_variants() {
+        test_status_variant(Status::invalid());
+        test_status_variant(Status::closed());
+        test_status_variant(Status::connection("Test connection failed."));
+        test_status_variant(Status::unavailable("Test unavailable."));
+        test_status_variant(Status::internal("Test internal error."));
+    }
 }
