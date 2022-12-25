@@ -2,53 +2,46 @@ use std::io::ErrorKind;
 use std::net::SocketAddr;
 use std::ops::Deref;
 use std::sync::Arc;
+use anyhow::bail;
 
 use async_trait::async_trait;
 use chitchat::serialize::Serializable;
 use chitchat::transport::{Socket, Transport};
 use chitchat::ChitchatMessage;
 use futures::io;
-use parking_lot::Mutex;
-use tokio::sync::oneshot;
-use tracing::{info, trace};
+use tracing::trace;
+use datacake_rpc::RpcClient;
 
-use crate::rpc::datacake_api::chitchat_transport_client::ChitchatTransportClient;
-use crate::rpc::datacake_api::ChitchatRpcMessage;
 use crate::rpc::network::RpcNetwork;
-use crate::rpc::server::ServiceRegistry;
 use crate::Clock;
+use crate::rpc::services::chitchat_impl::{ChitchatRpcMessage, ChitchatService};
 
 
 #[derive(Clone)]
 /// Chitchat compatible transport built on top of an existing RPC connection.
 ///
 /// This allows us to maintain a single connection rather than both a UDP and TCP connection.
-pub struct ChitchatTransport<R>(Arc<ChitchatTransportInner<R>>)
-where
-    R: ServiceRegistry + Clone;
+pub struct ChitchatTransport(Arc<ChitchatTransportInner>);
 
-impl<R> ChitchatTransport<R>
-where
-    R: ServiceRegistry + Clone,
-{
+impl ChitchatTransport {
     /// Creates a new GRPC transport instances.
     pub fn new(
-        ctx: super::server::Context<R>,
+        rpc_listen_addr: SocketAddr,
+        clock: Clock,
+        network: RpcNetwork,
         messages: flume::Receiver<(SocketAddr, ChitchatMessage)>,
     ) -> Self {
         Self(Arc::new(ChitchatTransportInner {
-            ctx,
-            shutdown_handles: Default::default(),
+            rpc_listen_addr,
+            clock,
+            network,
             messages,
         }))
     }
 }
 
-impl<R> Deref for ChitchatTransport<R>
-where
-    R: ServiceRegistry + Clone,
-{
-    type Target = ChitchatTransportInner<R>;
+impl Deref for ChitchatTransport {
+    type Target = ChitchatTransportInner;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -56,40 +49,33 @@ where
 }
 
 #[async_trait]
-impl<R> Transport for ChitchatTransport<R>
-where
-    R: ServiceRegistry + Send + Sync + Clone + 'static,
-{
+impl Transport for ChitchatTransport {
     async fn open(
         &self,
         listen_addr: SocketAddr,
     ) -> Result<Box<dyn Socket>, anyhow::Error> {
-        info!(listen_addr = %listen_addr, "Starting RPC server.");
-        let shutdown =
-            super::server::connect_server(listen_addr, self.ctx.clone()).await?;
-
-        {
-            self.shutdown_handles.lock().push(shutdown);
+        if listen_addr != self.rpc_listen_addr {
+            bail!("Listen addr does not match RPC server address. {listen_addr} != {}", self.rpc_listen_addr);
         }
 
         Ok(Box::new(GrpcConnection {
-            clock: self.ctx.clock.clone(),
-            self_addr: listen_addr,
-            network: self.ctx.network.clone(),
+            clock: self.clock.clone(),
+            self_addr: self.rpc_listen_addr,
+            network: self.network.clone(),
             messages: self.messages.clone(),
         }))
     }
 }
 
-pub struct ChitchatTransportInner<R>
-where
-    R: ServiceRegistry + Clone,
-{
-    /// Context to be passed when binding a new RPC server instance.
-    ctx: super::server::Context<R>,
+pub struct ChitchatTransportInner {
+    /// The socket address the RPC server is listening on.
+    rpc_listen_addr: SocketAddr,
 
-    /// The set of server handles that should be kept alive until the system shuts down.
-    shutdown_handles: Mutex<Vec<oneshot::Sender<()>>>,
+    /// The node clock.
+    clock: Clock,
+
+    /// The RPC network of clients.
+    network: RpcNetwork,
 
     /// Received messages to be sent to the Chitchat cluster.
     messages: flume::Receiver<(SocketAddr, ChitchatMessage)>,
@@ -110,24 +96,23 @@ impl Socket for GrpcConnection {
         msg: ChitchatMessage,
     ) -> Result<(), anyhow::Error> {
         trace!(to = %to, msg = ?msg, "Gossip send");
-        let message = msg.serialize_to_vec();
-        let source = self.self_addr.serialize_to_vec();
+        let data = msg.serialize_to_vec();
 
-        let channel =
-            self.network.get_or_connect(to).await.map_err(|e| {
+        let channel = self.network
+            .get_or_connect(to)
+            .map_err(|e| {
                 io::Error::new(ErrorKind::ConnectionRefused, e.to_string())
             })?;
 
-        let ts = self.clock.get_time().await;
-        let mut client = ChitchatTransportClient::new(channel);
-        client
-            .send_msg(ChitchatRpcMessage {
-                message,
-                source,
-                timestamp: Some(ts.into()),
-            })
-            .await
-            .map_err(|e| io::Error::new(ErrorKind::ConnectionAborted, e.to_string()))?;
+        let timestamp = self.clock.get_time().await;
+        let msg = ChitchatRpcMessage {
+            data,
+            source: self.self_addr,
+            timestamp,
+        };
+
+        let mut client = RpcClient::<ChitchatService>::new(channel);
+        client.send(&msg).await?;
 
         Ok(())
     }

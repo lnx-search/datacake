@@ -27,14 +27,14 @@ pub use nodes_selector::{
     NodeSelectorHandle,
 };
 pub use rpc::network::RpcNetwork;
-pub use rpc::server::{DefaultRegistry, ServiceRegistry};
 pub use statistics::ClusterStatistics;
 use tokio::sync::watch;
 use tokio_stream::wrappers::WatchStream;
 use tracing::info;
+use datacake_rpc::{RpcService, Server};
 
 use crate::rpc::chitchat_transport::ChitchatTransport;
-use crate::rpc::server::Context;
+use crate::rpc::services::chitchat_impl::ChitchatService;
 
 pub static DEFAULT_CLUSTER_ID: &str = "datacake-cluster-unknown";
 pub static DEFAULT_DATA_CENTER: &str = "datacake-dc-unknown";
@@ -93,36 +93,12 @@ where
     /// but they are required in order for nodes to discover one-another and share
     /// their basic state.
     pub async fn connect(self) -> Result<DatacakeNode, NodeError> {
-        self.connect_with_registry(DefaultRegistry).await
-    }
-
-    /// Starts the Datacake cluster with a custom service registry, connecting to the targeted seed nodes.
-    ///
-    /// A custom service registry can be used in order to add additional GRPC services to the
-    /// RPC server in order to avoid listening on multiple addresses.
-    ///
-    /// When connecting to the cluster, the `node_id` **must be unique** otherwise
-    /// the cluster will incorrectly propagate state and not become consistent.
-    ///
-    /// Typically you will only have one cluster and therefore only have one `cluster_id`
-    /// which should be the same for each node in the cluster.
-    /// Currently the `cluster_id` is not handled by anything other than
-    /// [chitchat](https://docs.rs/chitchat/0.4.1/chitchat/)
-    ///
-    /// No seed nodes need to be live at the time of connecting for the cluster to start correctly,
-    /// but they are required in order for nodes to discover one-another and share
-    /// their basic state.
-    pub async fn connect_with_registry<R>(
-        self,
-        service_registry: R,
-    ) -> Result<DatacakeNode, NodeError>
-    where
-        R: ServiceRegistry + Send + Sync + Clone + 'static,
-    {
         let clock = Clock::new(crc32fast::hash(self.node_id.as_bytes()));
 
         let statistics = ClusterStatistics::default();
         let network = RpcNetwork::default();
+
+        let rpc_server = Server::listen(self.connection_cfg.listen_addr).await?;
         let selector = nodes_selector::start_node_selector(
             self.connection_cfg.public_addr,
             self.data_center.clone(),
@@ -142,7 +118,7 @@ where
             clock.clone(),
             network.clone(),
             cluster_info,
-            service_registry,
+            &rpc_server,
             statistics.clone(),
         )
         .await?;
@@ -165,6 +141,7 @@ where
         );
 
         Ok(DatacakeNode {
+            rpc_server,
             node,
             network,
             clock,
@@ -218,6 +195,7 @@ impl ConnectionConfig {
 
 pub struct DatacakeNode {
     node: ChitchatNode,
+    rpc_server: Server,
     clock: Clock,
     network: RpcNetwork,
     selector: NodeSelectorHandle,
@@ -229,6 +207,14 @@ impl DatacakeNode {
     /// Shuts down the cluster and cleans up any connections.
     pub async fn shutdown(self) {
         self.node.shutdown().await;
+    }
+
+    /// Add a RPC service to the existing RPC system.
+    pub fn add_rpc_service<Svc>(&self, service: Svc)
+    where
+        Svc: RpcService + Send + Sync + 'static
+    {
+        self.rpc_server.add_service(service);
     }
 
     #[inline]
@@ -352,26 +338,26 @@ struct ClusterInfo<'a> {
 ///
 /// The node will attempt to establish connections to the seed nodes and
 /// will broadcast the node's public address to communicate.
-async fn connect_node<R>(
+async fn connect_node(
     node_id: String,
     cluster_id: String,
     clock: Clock,
     network: RpcNetwork,
     cluster_info: ClusterInfo<'_>,
-    service_registry: R,
+    server: &Server,
     statistics: ClusterStatistics,
-) -> Result<(ChitchatNode, Box<dyn Transport>), NodeError>
-where
-    R: ServiceRegistry + Send + Sync + Clone + 'static,
-{
+) -> Result<(ChitchatNode, Box<dyn Transport>), NodeError> {
     let (chitchat_tx, chitchat_rx) = flume::bounded(1000);
-    let context = Context {
-        chitchat_messages: chitchat_tx,
+
+    let service = ChitchatService::new(clock.clone(), chitchat_tx);
+    server.add_service(service);
+
+    let transport = ChitchatTransport::new(
+        cluster_info.listen_addr,
         clock,
-        service_registry,
         network,
-    };
-    let transport = ChitchatTransport::new(context, chitchat_rx);
+        chitchat_rx,
+    );
 
     let me = ClusterMember::new(
         node_id,

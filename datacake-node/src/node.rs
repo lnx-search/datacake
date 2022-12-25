@@ -109,7 +109,7 @@ impl ChitchatNode {
             transport,
         )
         .await
-        .map_err(|e| NodeError::ChitChatError(e.to_string()))?;
+        .map_err(|e| NodeError::ChitChat(e.to_string()))?;
 
         let chitchat = chitchat_handle.chitchat();
         let (members_tx, members_rx) = watch::channel(BTreeMap::new());
@@ -278,8 +278,8 @@ mod tests {
 
         let members: Vec<SocketAddr> = cluster
             .members()
-            .iter()
-            .map(|(_, member)| member.public_addr)
+            .values()
+            .map(|member| member.public_addr)
             .collect();
         let expected_members = vec![cluster.me.public_addr];
         assert_eq!(members, expected_members);

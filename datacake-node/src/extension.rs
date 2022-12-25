@@ -1,7 +1,6 @@
 use async_trait::async_trait;
-use tonic::transport::server::Router;
 
-use crate::{DatacakeNode, ServiceRegistry};
+use crate::DatacakeNode;
 
 #[async_trait]
 /// An extension of the base node/cluster.
@@ -9,7 +8,7 @@ use crate::{DatacakeNode, ServiceRegistry};
 /// This can be used to extend a base node to include additional
 /// functionality, like the eventually consistent store, multi-raft cluster
 /// or anything else which may want to use the membership, rpc and clock system.
-pub trait ClusterExtension: ServiceRegistry {
+pub trait ClusterExtension {
     type Output;
     type Error;
 
