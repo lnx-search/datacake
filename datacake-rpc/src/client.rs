@@ -12,6 +12,7 @@ use crate::net::{Channel, Status};
 use crate::request::MessageMetadata;
 use crate::{DataView, SCRATCH_SPACE};
 
+/// A type alias for the returned data view of the RPC message reply.
 pub type MessageReply<Svc, Msg> = DataView<<Svc as Handler<Msg>>::Reply>;
 
 /// A RPC client handle for a given service.
@@ -22,8 +23,9 @@ pub type MessageReply<Svc, Msg> = DataView<<Svc as Handler<Msg>>::Reply>;
 /// use std::net::SocketAddr;
 ///
 /// #[repr(C)]
-/// #[derive(Serialize, Deserialize, Archive, Debug)]
-/// #[archive_attr(derive(CheckBytes, Debug))]
+/// #[derive(Serialize, Deserialize, Archive, PartialEq, Debug)]
+/// #[archive(compare(PartialEq))]
+/// #[archive_attr(derive(CheckBytes, PartialEq, Debug))]
 /// pub struct MyMessage {
 ///     name: String,
 ///     age: u32,

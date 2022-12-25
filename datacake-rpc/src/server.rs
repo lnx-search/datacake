@@ -19,8 +19,9 @@ use crate::handler::{HandlerKey, OpaqueMessageHandler, RpcService, ServiceRegist
 /// use std::net::SocketAddr;
 ///
 /// #[repr(C)]
-/// #[derive(Serialize, Deserialize, Archive, Debug)]
-/// #[archive_attr(derive(CheckBytes, Debug))]
+/// #[derive(Serialize, Deserialize, Archive, PartialEq, Debug)]
+/// #[archive(compare(PartialEq))]
+/// #[archive_attr(derive(CheckBytes, PartialEq, Debug))]
 /// pub struct MyMessage {
 ///     name: String,
 ///     age: u32,
