@@ -19,8 +19,8 @@ serde = { version = "1", features = ["derive"] }
 clap = { version = "4", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 rusqlite = { version = "0.28.0", features = ["bundled"] }
-datacake = { version = "0.2", path = "../.." }
+datacake = { version = "0.3", path = "../.." }
 
 [dev-dependencies]
 uuid = { version = "1", features = ["v4"] }
-datacake = { version = "0.2", path = "../..", features = ["test-utils"] }
+datacake = { version = "0.3", path = "../..", features = ["test-utils"] }

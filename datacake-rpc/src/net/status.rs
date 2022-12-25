@@ -10,12 +10,7 @@ use rkyv::{Archive, Deserialize, Serialize};
 #[archive_attr(derive(CheckBytes, PartialEq, Eq, Debug))]
 /// Status information around the cause of a message request failing.
 ///
-/// This includes a generic status code, message and any additional
-/// information provided by the generic context.
-///
-/// Additional context for the error can be provided via the generic,
-/// but both client and server must be expecting the same context `T`,
-/// otherwise this value will be `None`.
+/// This includes a generic status code and message.
 pub struct Status {
     /// The generic error code of the request.
     pub code: ErrorCode,

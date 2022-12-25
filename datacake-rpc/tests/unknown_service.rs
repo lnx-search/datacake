@@ -64,7 +64,7 @@ async fn test_unknown_service() {
     server.add_service(Add5Service);
     println!("Listening to address {}!", addr);
 
-    let client = Channel::connect(addr).await.unwrap();
+    let client = Channel::connect(addr).unwrap();
     println!("Connected to address {}!", addr);
 
     let msg = Payload { value: 5 };
@@ -98,7 +98,7 @@ async fn test_unknown_message() {
     server.add_service(Add5Service);
     println!("Listening to address {}!", addr);
 
-    let client = Channel::connect(addr).await.unwrap();
+    let client = Channel::connect(addr).unwrap();
     println!("Connected to address {}!", addr);
 
     let msg = Payload { value: 5 };
