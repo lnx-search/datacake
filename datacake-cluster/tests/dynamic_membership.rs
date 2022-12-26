@@ -15,28 +15,28 @@ pub async fn test_member_join() -> anyhow::Result<()> {
     let node_1_connection_cfg = ConnectionConfig::new(
         node_1_addr,
         node_1_addr,
-        &[node_2_addr.to_string(), node_3_addr.to_string()],
+        [node_2_addr.to_string(), node_3_addr.to_string()],
     );
     let node_2_connection_cfg = ConnectionConfig::new(
         node_2_addr,
         node_2_addr,
-        &[node_1_addr.to_string(), node_3_addr.to_string()],
+        [node_1_addr.to_string(), node_3_addr.to_string()],
     );
     let node_3_connection_cfg = ConnectionConfig::new(
         node_3_addr,
         node_3_addr,
-        &[node_1_addr.to_string(), node_2_addr.to_string()],
+        [node_1_addr.to_string(), node_2_addr.to_string()],
     );
 
     let node_1 = DatacakeNodeBuilder::<DCAwareSelector>::new("node-1", node_1_connection_cfg).connect().await?;
     let node_2 = DatacakeNodeBuilder::<DCAwareSelector>::new("node-2", node_2_connection_cfg).connect().await?;
 
     node_1
-        .wait_for_nodes(&["node-2", "node-3"], Duration::from_secs(30))
+        .wait_for_nodes(&["node-2"], Duration::from_secs(30))
         .await
         .expect("Nodes should connect within timeout.");
     node_2
-        .wait_for_nodes(&["node-1", "node-3"], Duration::from_secs(30))
+        .wait_for_nodes(&["node-1"], Duration::from_secs(30))
         .await
         .expect("Nodes should connect within timeout.");
     let store_1 = node_1
@@ -91,7 +91,7 @@ pub async fn test_member_join() -> anyhow::Result<()> {
     // Node-3 joins the cluster.
     let node_3 = DatacakeNodeBuilder::<DCAwareSelector>::new("node-3", node_3_connection_cfg).connect().await?;
     node_3
-        .wait_for_nodes(&["node-2", "node-1"], Duration::from_secs(30))
+        .wait_for_nodes(&["node-2", "node-1"], Duration::from_secs(60))
         .await
         .expect("Nodes should connect within timeout.");
     let store_3 = node_3

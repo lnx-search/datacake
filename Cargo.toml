@@ -13,8 +13,8 @@ readme = "README.md"
 
 [dependencies]
 datacake-crdt = { version = "0.3", path = "datacake-crdt", optional = true }
-datacake-cluster = { version = "0.1", path = "datacake-cluster", optional = true }
-datacake-sqlite = { version = "0.1", path = "datacake-sqlite", optional = true }
+datacake-cluster = { version = "0.2", path = "datacake-cluster", optional = true }
+datacake-sqlite = { version = "0.2", path = "datacake-sqlite", optional = true }
 datacake-rpc = { version = "0.2", path = "datacake-rpc", optional = true }
 datacake-node = { version = "0.1", path = "datacake-node", optional = true }
 

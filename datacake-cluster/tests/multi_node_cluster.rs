@@ -382,18 +382,18 @@ async fn connect_cluster(
 
     let node_1 = DatacakeNodeBuilder::<DCAwareSelector>::new("node-1", node_1_connection_cfg).connect().await.unwrap();
     let node_2 = DatacakeNodeBuilder::<DCAwareSelector>::new("node-2", node_2_connection_cfg).connect().await.unwrap();
-    let node_3 = DatacakeNodeBuilder::<DCAwareSelector>::new("node-2", node_3_connection_cfg).connect().await.unwrap();
+    let node_3 = DatacakeNodeBuilder::<DCAwareSelector>::new("node-3", node_3_connection_cfg).connect().await.unwrap();
 
     node_1
-        .wait_for_nodes(&["node-2", "node-3"], Duration::from_secs(30))
+        .wait_for_nodes(&["node-2", "node-3"], Duration::from_secs(60))
         .await
         .expect("Nodes should connect within timeout.");
     node_2
-        .wait_for_nodes(&["node-3", "node-1"], Duration::from_secs(30))
+        .wait_for_nodes(&["node-3", "node-1"], Duration::from_secs(60))
         .await
         .expect("Nodes should connect within timeout.");
     node_3
-        .wait_for_nodes(&["node-2", "node-1"], Duration::from_secs(30))
+        .wait_for_nodes(&["node-2", "node-1"], Duration::from_secs(60))
         .await
         .expect("Nodes should connect within timeout.");
 

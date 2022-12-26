@@ -13,12 +13,12 @@ pub async fn test_member_join() -> anyhow::Result<()> {
     let node_1_connection_cfg = ConnectionConfig::new(
         node_1_addr,
         node_1_addr,
-        [node_2_addr.to_string(), node_3_addr.to_string()],
+        [node_2_addr.to_string()],
     );
     let node_2_connection_cfg = ConnectionConfig::new(
         node_2_addr,
         node_2_addr,
-        [node_1_addr.to_string(), node_3_addr.to_string()],
+        [node_1_addr.to_string()],
     );
     let node_3_connection_cfg = ConnectionConfig::new(
         node_3_addr,
@@ -30,11 +30,11 @@ pub async fn test_member_join() -> anyhow::Result<()> {
     let node_2 = DatacakeNodeBuilder::<DCAwareSelector>::new("node-2", node_2_connection_cfg).connect().await?;
 
     node_1
-        .wait_for_nodes(&["node-2", "node-3"], Duration::from_secs(30))
+        .wait_for_nodes(&["node-2"], Duration::from_secs(30))
         .await
         .expect("Nodes should connect within timeout.");
     node_2
-        .wait_for_nodes(&["node-1", "node-3"], Duration::from_secs(30))
+        .wait_for_nodes(&["node-1"], Duration::from_secs(30))
         .await
         .expect("Nodes should connect within timeout.");
 
@@ -55,6 +55,8 @@ pub async fn test_member_join() -> anyhow::Result<()> {
         .wait_for_nodes(&["node-2", "node-1"], Duration::from_secs(30))
         .await
         .expect("Nodes should connect within timeout.");
+
+    tokio::time::sleep(Duration::from_secs(5)).await;
 
     let stats = node_3.statistics();
     assert_eq!(stats.num_data_centers(), 1);

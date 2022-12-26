@@ -124,5 +124,9 @@ pub(crate) fn hash<H: Hash + ?Sized>(v: &H) -> u64 {
 }
 
 pub(crate) fn to_uri_path(service: &str, path: &str) -> String {
-    format!("/{}/{}", service, path)
+    format!("/{}/{}", sanitise(service), sanitise(path))
+}
+
+fn sanitise(parameter: &str) -> String {
+    parameter.replace(['<', '>'], "-")
 }
