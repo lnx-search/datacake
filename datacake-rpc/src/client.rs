@@ -18,6 +18,7 @@ pub type MessageReply<Svc, Msg> = DataView<<Svc as Handler<Msg>>::Reply>;
 /// A RPC client handle for a given service.
 ///
 /// ```rust
+/// use bytecheck::CheckBytes;
 /// use rkyv::{Archive, Deserialize, Serialize};
 /// use datacake_rpc::{Handler, Request, RpcService, ServiceRegistry, Status, RpcClient, Channel};
 /// use std::net::SocketAddr;

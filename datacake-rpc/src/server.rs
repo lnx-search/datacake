@@ -14,6 +14,7 @@ use crate::handler::{HandlerKey, OpaqueMessageHandler, RpcService, ServiceRegist
 /// coming from clients.
 ///
 /// ```rust
+/// use bytecheck::CheckBytes;
 /// use rkyv::{Archive, Deserialize, Serialize};
 /// use datacake_rpc::{Server, Handler, Request, RpcService, ServiceRegistry, Status};
 /// use std::net::SocketAddr;
