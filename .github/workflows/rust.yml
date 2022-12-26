@@ -38,4 +38,4 @@ jobs:
       - uses: actions/checkout@v2
       - uses: Swatinem/rust-cache@v1
       - name: Run main tests
-        run: cargo +nightly test --all --all-features -j 4 --keep-going
+        run: cargo test --all --all-features -j 4 --keep-going
