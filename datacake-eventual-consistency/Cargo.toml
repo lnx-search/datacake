@@ -1,5 +1,5 @@
 [package]
-name = "datacake-cluster"
+name = "datacake-eventual-consistency"
 version = "0.2.0"
 edition = "2021"
 description = "Eventually consistent state replication as a library (consensus, RPC and conflict resolution) for building your own eventually consistent databases."

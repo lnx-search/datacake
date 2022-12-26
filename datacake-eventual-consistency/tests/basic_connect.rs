@@ -1,8 +1,8 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use datacake_cluster::test_utils::MemStore;
-use datacake_cluster::EventuallyConsistentStoreExtension;
+use datacake_eventual_consistency::test_utils::MemStore;
+use datacake_eventual_consistency::EventuallyConsistentStoreExtension;
 use datacake_node::{ConnectionConfig, DCAwareSelector, DatacakeNodeBuilder};
 
 #[tokio::test]

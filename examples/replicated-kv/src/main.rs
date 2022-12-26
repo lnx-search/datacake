@@ -12,7 +12,10 @@ use axum::http::StatusCode;
 use axum::routing::get;
 use axum::{Json, Router};
 use clap::Parser;
-use datacake::cluster::{EventuallyConsistentStoreExtension, ReplicatedStoreHandle};
+use datacake::eventual_consistency::{
+    EventuallyConsistentStoreExtension,
+    ReplicatedStoreHandle,
+};
 use datacake::node::{
     ConnectionConfig,
     Consistency,

@@ -4,8 +4,13 @@ mod from_row_impl;
 use std::path::Path;
 
 use async_trait::async_trait;
-use datacake_cluster::{BulkMutationError, Document, DocumentMetadata, Storage};
 use datacake_crdt::{HLCTimestamp, Key};
+use datacake_eventual_consistency::{
+    BulkMutationError,
+    Document,
+    DocumentMetadata,
+    Storage,
+};
 pub use db::FromRow;
 
 pub use crate::db::StorageHandle;
@@ -252,8 +257,8 @@ mod queries {
 mod models {
     use std::str::FromStr;
 
-    use datacake_cluster::Document;
     use datacake_crdt::{HLCTimestamp, Key};
+    use datacake_eventual_consistency::Document;
     use rusqlite::Row;
 
     use crate::FromRow;
@@ -304,7 +309,7 @@ async fn setup_db(handle: StorageHandle) -> rusqlite::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use datacake_cluster::test_suite;
+    use datacake_eventual_consistency::test_suite;
 
     use crate::SqliteStorage;
 

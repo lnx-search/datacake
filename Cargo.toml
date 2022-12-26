@@ -13,18 +13,18 @@ readme = "README.md"
 
 [dependencies]
 datacake-crdt = { version = "0.3", path = "datacake-crdt", optional = true }
-datacake-cluster = { version = "0.2", path = "datacake-cluster", optional = true }
+datacake-eventual-consistency = { version = "0.2", path = "datacake-eventual-consistency", optional = true }
 datacake-sqlite = { version = "0.2", path = "datacake-sqlite", optional = true }
 datacake-rpc = { version = "0.2", path = "datacake-rpc", optional = true }
 datacake-node = { version = "0.1", path = "datacake-node", optional = true }
 
 [features]
-test-utils = ["datacake-cluster/test-utils"]
+test-utils = ["datacake-eventual-consistency/test-utils"]
 rkyv = ["datacake-crdt/rkyv-support"]
 default = [
     "datacake-crdt",
     "datacake-rpc",
-    "datacake-cluster",
+    "datacake-eventual-consistency",
     "datacake-sqlite",
     "datacake-node",
 ]
@@ -32,7 +32,7 @@ default = [
 [workspace]
 members = [
     "datacake-node",
-    "datacake-cluster",
+    "datacake-eventual-consistency",
     "datacake-crdt",
     "datacake-sqlite",
     "datacake-rpc",

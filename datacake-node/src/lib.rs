@@ -37,7 +37,7 @@ use tracing::info;
 use crate::rpc::chitchat_transport::ChitchatTransport;
 use crate::rpc::services::chitchat_impl::ChitchatService;
 
-pub static DEFAULT_CLUSTER_ID: &str = "datacake-cluster-unknown";
+pub static DEFAULT_CLUSTER_ID: &str = "datacake-eventual-consistency-unknown";
 pub static DEFAULT_DATA_CENTER: &str = "datacake-dc-unknown";
 
 /// Build a datacake node using provided settings.

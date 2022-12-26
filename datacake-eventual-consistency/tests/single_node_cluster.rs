@@ -1,7 +1,10 @@
 use std::net::SocketAddr;
 
-use datacake_cluster::test_utils::MemStore;
-use datacake_cluster::{EventuallyConsistentStore, EventuallyConsistentStoreExtension};
+use datacake_eventual_consistency::test_utils::MemStore;
+use datacake_eventual_consistency::{
+    EventuallyConsistentStore,
+    EventuallyConsistentStoreExtension,
+};
 use datacake_node::{
     ConnectionConfig,
     Consistency,

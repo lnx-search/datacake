@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
 use anyhow::Result;
-use datacake_cluster::EventuallyConsistentStoreExtension;
+use datacake_eventual_consistency::EventuallyConsistentStoreExtension;
 use datacake_node::{
     ConnectionConfig,
     Consistency,

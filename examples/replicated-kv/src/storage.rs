@@ -5,8 +5,13 @@ use std::path::Path;
 
 use anyhow::Result;
 use axum::async_trait;
-use datacake::cluster::{BulkMutationError, Document, DocumentMetadata, Storage};
 use datacake::crdt::{HLCTimestamp, Key};
+use datacake::eventual_consistency::{
+    BulkMutationError,
+    Document,
+    DocumentMetadata,
+    Storage,
+};
 use datacake::sqlite::SqliteStorage;
 
 /// A wrapper around several [SqliteStorage] which
@@ -272,6 +277,6 @@ mod tests {
             .await
             .expect("Create storage");
 
-        datacake::cluster::test_suite::run_test_suite(store).await;
+        datacake::eventual_consistency::test_suite::run_test_suite(store).await;
     }
 }
