@@ -10,10 +10,15 @@ use datacake_node::{Clock, MembershipChange, RpcNetwork};
 use tokio::sync::Semaphore;
 use tokio::time::{interval, MissedTickBehavior};
 
-use crate::replication::MAX_CONCURRENT_REQUESTS;
-use crate::{ConsistencyClient, Document, Storage};
 use crate::core::DocumentMetadata;
-use crate::rpc::services::consistency_impl::{BatchPayload, Context, MultiPutPayload, MultiRemovePayload};
+use crate::replication::MAX_CONCURRENT_REQUESTS;
+use crate::rpc::services::consistency_impl::{
+    BatchPayload,
+    Context,
+    MultiPutPayload,
+    MultiRemovePayload,
+};
+use crate::{ConsistencyClient, Document, Storage};
 
 const BATCHING_INTERVAL: Duration = Duration::from_secs(1);
 
@@ -104,8 +109,7 @@ async fn task_distributor_service<S>(
     ctx: TaskServiceContext,
     rx: Receiver<Op>,
     kill_switch: Arc<AtomicBool>,
-)
-where
+) where
     S: Storage + Send + Sync + 'static,
 {
     info!("Task distributor service is running.");
@@ -182,19 +186,10 @@ fn register_mutation(
             put_payloads.entry(keyspace).or_default().push(doc.into());
         },
         Mutation::MultiPut { keyspace, docs } => {
-            put_payloads
-                .entry(keyspace)
-                .or_default()
-                .extend(docs);
+            put_payloads.entry(keyspace).or_default().extend(docs);
         },
-        Mutation::Del {
-            keyspace,
-            doc,
-        } => {
-            del_payloads
-                .entry(keyspace)
-                .or_default()
-                .push(doc);
+        Mutation::Del { keyspace, doc } => {
+            del_payloads.entry(keyspace).or_default().push(doc);
         },
         Mutation::MultiDel { keyspace, docs } => {
             del_payloads.entry(keyspace).or_default().extend(docs);

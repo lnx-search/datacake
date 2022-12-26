@@ -2,7 +2,12 @@ use std::net::SocketAddr;
 
 use anyhow::Result;
 use datacake_cluster::EventuallyConsistentStoreExtension;
-use datacake_node::{ConnectionConfig, Consistency, DatacakeNodeBuilder, DCAwareSelector};
+use datacake_node::{
+    ConnectionConfig,
+    Consistency,
+    DCAwareSelector,
+    DatacakeNodeBuilder,
+};
 use datacake_sqlite::SqliteStorage;
 
 static KEYSPACE: &str = "sqlite-store";
@@ -16,8 +21,12 @@ async fn test_basic_sqlite_cluster() -> Result<()> {
     let addr = "127.0.0.1:9000".parse::<SocketAddr>().unwrap();
     let connection_cfg = ConnectionConfig::new(addr, addr, Vec::<String>::new());
 
-    let node = DatacakeNodeBuilder::<DCAwareSelector>::new("node-1", connection_cfg).connect().await?;
-    let store = node.add_extension(EventuallyConsistentStoreExtension::new(store)).await?;
+    let node = DatacakeNodeBuilder::<DCAwareSelector>::new("node-1", connection_cfg)
+        .connect()
+        .await?;
+    let store = node
+        .add_extension(EventuallyConsistentStoreExtension::new(store))
+        .await?;
 
     let handle = store.handle();
 
@@ -49,6 +58,6 @@ async fn test_basic_sqlite_cluster() -> Result<()> {
     assert!(doc.is_none(), "No document should not exist!");
 
     node.shutdown().await;
-    
+
     Ok(())
 }

@@ -167,8 +167,7 @@ where
                 doc
             });
 
-        let res = self.storage
-            .mark_many_as_tombstone(&self.name, docs).await;
+        let res = self.storage.mark_many_as_tombstone(&self.name, docs).await;
 
         // Ensure the insertion order into the set is correct.
         valid_entries.sort_by_key(|entry| entry.1);
@@ -254,9 +253,9 @@ mod tests {
     use std::cmp::Reverse;
 
     use datacake_crdt::get_unix_timestamp_ms;
-    use crate::core::DocumentMetadata;
 
     use super::*;
+    use crate::core::DocumentMetadata;
     use crate::test_utils::MockStorage;
     use crate::Document;
 
@@ -389,8 +388,7 @@ mod tests {
 
         let docs = [doc_1.clone(), doc_2.clone(), doc_3.clone()];
 
-        let mock_store = MockStorage::default()
-            .expect_multi_put_with_ctx(
+        let mock_store = MockStorage::default().expect_multi_put_with_ctx(
             1,
             move |keyspace, mut docs_iter, ctx| {
                 assert_eq!(keyspace, "my-keyspace");

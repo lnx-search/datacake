@@ -237,7 +237,7 @@ impl DatacakeNode {
     /// additional functionality like storage, messaging, etc...
     pub async fn add_extension<Ext>(&self, ext: Ext) -> Result<Ext::Output, Ext::Error>
     where
-        Ext: ClusterExtension
+        Ext: ClusterExtension,
     {
         ext.init_extension(self).await
     }

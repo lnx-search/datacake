@@ -5,14 +5,14 @@ use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use bytecheck::CheckBytes;
 use crossbeam_utils::atomic::AtomicCell;
 use datacake_crdt::{HLCTimestamp, Key, OrSWotSet};
 use datacake_node::Clock;
 use parking_lot::RwLock;
 use puppet::ActorMailbox;
-use tokio::time::interval;
-use bytecheck::CheckBytes;
 use rkyv::{Archive, Deserialize, Serialize};
+use tokio::time::interval;
 
 use super::NUM_SOURCES;
 use crate::keyspace::messages::PurgeDeletes;
@@ -283,7 +283,10 @@ impl KeyspaceTimestamps {
         entries
     }
 
-    pub fn diff(&self, other: &BTreeMap<String, HLCTimestamp>) -> impl Iterator<Item = Cow<'static, str>> {
+    pub fn diff(
+        &self,
+        other: &BTreeMap<String, HLCTimestamp>,
+    ) -> impl Iterator<Item = Cow<'static, str>> {
         let mut processed = HashMap::with_capacity(self.len());
 
         for (key, v) in self.iter() {

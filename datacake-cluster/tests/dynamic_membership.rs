@@ -3,7 +3,12 @@ use std::time::Duration;
 
 use datacake_cluster::test_utils::MemStore;
 use datacake_cluster::EventuallyConsistentStoreExtension;
-use datacake_node::{Consistency, ConnectionConfig, DatacakeNodeBuilder, DCAwareSelector};
+use datacake_node::{
+    ConnectionConfig,
+    Consistency,
+    DCAwareSelector,
+    DatacakeNodeBuilder,
+};
 
 #[tokio::test]
 pub async fn test_member_join() -> anyhow::Result<()> {
@@ -28,8 +33,14 @@ pub async fn test_member_join() -> anyhow::Result<()> {
         [node_1_addr.to_string(), node_2_addr.to_string()],
     );
 
-    let node_1 = DatacakeNodeBuilder::<DCAwareSelector>::new("node-1", node_1_connection_cfg).connect().await?;
-    let node_2 = DatacakeNodeBuilder::<DCAwareSelector>::new("node-2", node_2_connection_cfg).connect().await?;
+    let node_1 =
+        DatacakeNodeBuilder::<DCAwareSelector>::new("node-1", node_1_connection_cfg)
+            .connect()
+            .await?;
+    let node_2 =
+        DatacakeNodeBuilder::<DCAwareSelector>::new("node-2", node_2_connection_cfg)
+            .connect()
+            .await?;
 
     node_1
         .wait_for_nodes(&["node-2"], Duration::from_secs(30))
@@ -89,7 +100,10 @@ pub async fn test_member_join() -> anyhow::Result<()> {
     assert_eq!(doc.data(), b"Hello, world from node-2");
 
     // Node-3 joins the cluster.
-    let node_3 = DatacakeNodeBuilder::<DCAwareSelector>::new("node-3", node_3_connection_cfg).connect().await?;
+    let node_3 =
+        DatacakeNodeBuilder::<DCAwareSelector>::new("node-3", node_3_connection_cfg)
+            .connect()
+            .await?;
     node_3
         .wait_for_nodes(&["node-2", "node-1"], Duration::from_secs(60))
         .await
@@ -149,4 +163,3 @@ pub async fn test_member_join() -> anyhow::Result<()> {
 
     Ok(())
 }
-

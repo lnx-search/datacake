@@ -3,7 +3,13 @@ use std::time::Duration;
 
 use datacake_cluster::test_utils::MemStore;
 use datacake_cluster::EventuallyConsistentStoreExtension;
-use datacake_node::{ConnectionConfig, DatacakeNode, DatacakeNodeBuilder, Consistency, DCAwareSelector};
+use datacake_node::{
+    ConnectionConfig,
+    Consistency,
+    DCAwareSelector,
+    DatacakeNode,
+    DatacakeNodeBuilder,
+};
 
 #[tokio::test]
 async fn test_consistency_all() -> anyhow::Result<()> {
@@ -291,20 +297,14 @@ async fn test_async_operations() -> anyhow::Result<()> {
         .expect("Get value.")
         .expect("Document should not be none");
     assert_eq!(doc.id(), 1);
-    assert_eq!(
-        doc.data(),
-        b"Hello, world from node-3"
-    );
+    assert_eq!(doc.data(), b"Hello, world from node-3");
     let doc = node_3_handle
         .get(1)
         .await
         .expect("Get value.")
         .expect("Document should not be none");
     assert_eq!(doc.id(), 1);
-    assert_eq!(
-        doc.data(),
-        b"Hello, world from node-3"
-    );
+    assert_eq!(doc.data(), b"Hello, world from node-3");
 
     // This goes for all operations.
     // Node 2 will win, even though they're technically happening at the exact same time.
@@ -329,10 +329,7 @@ async fn test_async_operations() -> anyhow::Result<()> {
         .expect("Get value.")
         .expect("Document should not be none");
     assert_eq!(doc.id(), 1);
-    assert_eq!(
-        doc.data(),
-        b"Hello, world from node-1 but updated"
-    );
+    assert_eq!(doc.data(), b"Hello, world from node-1 but updated");
 
     // Node 2 has only seen it's delete so far, so it assumes it's correct.
     let doc = node_2_handle.get(1).await.expect("Get value.");
@@ -355,9 +352,7 @@ async fn test_async_operations() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn connect_cluster(
-    addrs: [SocketAddr; 3],
-) -> [DatacakeNode; 3] {
+async fn connect_cluster(addrs: [SocketAddr; 3]) -> [DatacakeNode; 3] {
     dbg!(
         crc32fast::hash("node-1".as_bytes()),
         crc32fast::hash("node-2".as_bytes()),
@@ -380,9 +375,21 @@ async fn connect_cluster(
         [addrs[0].to_string(), addrs[1].to_string()],
     );
 
-    let node_1 = DatacakeNodeBuilder::<DCAwareSelector>::new("node-1", node_1_connection_cfg).connect().await.unwrap();
-    let node_2 = DatacakeNodeBuilder::<DCAwareSelector>::new("node-2", node_2_connection_cfg).connect().await.unwrap();
-    let node_3 = DatacakeNodeBuilder::<DCAwareSelector>::new("node-3", node_3_connection_cfg).connect().await.unwrap();
+    let node_1 =
+        DatacakeNodeBuilder::<DCAwareSelector>::new("node-1", node_1_connection_cfg)
+            .connect()
+            .await
+            .unwrap();
+    let node_2 =
+        DatacakeNodeBuilder::<DCAwareSelector>::new("node-2", node_2_connection_cfg)
+            .connect()
+            .await
+            .unwrap();
+    let node_3 =
+        DatacakeNodeBuilder::<DCAwareSelector>::new("node-3", node_3_connection_cfg)
+            .connect()
+            .await
+            .unwrap();
 
     node_1
         .wait_for_nodes(&["node-2", "node-3"], Duration::from_secs(60))

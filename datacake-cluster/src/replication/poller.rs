@@ -11,11 +11,12 @@ use crossbeam_channel::{Receiver, Sender};
 use crossbeam_utils::atomic::AtomicCell;
 use datacake_crdt::HLCTimestamp;
 use datacake_node::{Clock, MembershipChange, RpcNetwork};
+use datacake_rpc::Status;
 use puppet::ActorMailbox;
 use tokio::sync::Semaphore;
 use tokio::time::{interval, MissedTickBehavior};
-use datacake_rpc::Status;
 
+use crate::core::DocumentMetadata;
 use crate::keyspace::{
     Del,
     Diff,
@@ -30,7 +31,6 @@ use crate::replication::MAX_CONCURRENT_REQUESTS;
 use crate::rpc::ReplicationClient;
 use crate::storage::ProgressWatcher;
 use crate::{ProgressTracker, PutContext, Storage};
-use crate::core::DocumentMetadata;
 
 const INITIAL_KEYSPACE_WAIT: Duration = if cfg!(any(test, feature = "test-utils")) {
     Duration::from_millis(500)
@@ -367,8 +367,14 @@ where
 
     Ok(KeyspaceDiff {
         keyspace: keyspace_name.clone(),
-        modified: modified.into_iter().map(|(id, ts)| DocumentMetadata::new(id, ts)).collect(),
-        removed: removed.into_iter().map(|(id, ts)| DocumentMetadata::new(id, ts)).collect(),
+        modified: modified
+            .into_iter()
+            .map(|(id, ts)| DocumentMetadata::new(id, ts))
+            .collect(),
+        removed: removed
+            .into_iter()
+            .map(|(id, ts)| DocumentMetadata::new(id, ts))
+            .collect(),
         last_updated,
     })
 }
@@ -448,9 +454,7 @@ where
         .map(|entries| entries.iter().map(|doc| doc.id).collect::<Vec<_>>());
 
     for doc_ids in doc_id_chunks {
-        let docs = client
-            .fetch_docs(keyspace.name(), doc_ids)
-            .await?;
+        let docs = client.fetch_docs(keyspace.name(), doc_ids).await?;
 
         let msg = MultiSet {
             source: READ_REPAIR_SOURCE_ID,

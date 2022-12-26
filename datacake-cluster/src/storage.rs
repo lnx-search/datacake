@@ -351,9 +351,9 @@ pub mod test_suite {
     use datacake_crdt::{get_unix_timestamp_ms, HLCTimestamp, Key};
 
     use crate::core::Document;
-    use crate::DocumentMetadata;
     use crate::storage::Storage;
     use crate::test_utils::InstrumentedStorage;
+    use crate::DocumentMetadata;
 
     #[tokio::test]
     async fn test_suite_semantics() {
@@ -493,11 +493,7 @@ pub mod test_suite {
         storage
             .mark_many_as_tombstone(
                 KEYSPACE,
-                [
-                    doc_1.metadata,
-                    doc_2.metadata,
-                ]
-                .into_iter(),
+                [doc_1.metadata, doc_2.metadata].into_iter(),
             )
             .await
             .expect("Mark documents as tombstones.");
@@ -562,12 +558,7 @@ pub mod test_suite {
         storage
             .mark_many_as_tombstone(
                 KEYSPACE,
-                [
-                    doc_1.metadata,
-                    doc_2.metadata,
-                    doc_3.metadata,
-                ]
-                .into_iter(),
+                [doc_1.metadata, doc_2.metadata, doc_3.metadata].into_iter(),
             )
             .await
             .expect("Mark documents as tombstones.");

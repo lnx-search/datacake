@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 use std::time::Duration;
-use datacake_node::{ConnectionConfig, DatacakeNodeBuilder, DCAwareSelector};
+
+use datacake_node::{ConnectionConfig, DCAwareSelector, DatacakeNodeBuilder};
 
 #[tokio::test]
 // TODO: Improve this test so it's not really flaky
@@ -10,24 +11,24 @@ pub async fn test_member_join() -> anyhow::Result<()> {
     let node_1_addr = "127.0.0.1:8018".parse::<SocketAddr>().unwrap();
     let node_2_addr = "127.0.0.1:8019".parse::<SocketAddr>().unwrap();
     let node_3_addr = "127.0.0.1:8020".parse::<SocketAddr>().unwrap();
-    let node_1_connection_cfg = ConnectionConfig::new(
-        node_1_addr,
-        node_1_addr,
-        [node_2_addr.to_string()],
-    );
-    let node_2_connection_cfg = ConnectionConfig::new(
-        node_2_addr,
-        node_2_addr,
-        [node_1_addr.to_string()],
-    );
+    let node_1_connection_cfg =
+        ConnectionConfig::new(node_1_addr, node_1_addr, [node_2_addr.to_string()]);
+    let node_2_connection_cfg =
+        ConnectionConfig::new(node_2_addr, node_2_addr, [node_1_addr.to_string()]);
     let node_3_connection_cfg = ConnectionConfig::new(
         node_3_addr,
         node_3_addr,
         [node_1_addr.to_string(), node_2_addr.to_string()],
     );
 
-    let node_1 = DatacakeNodeBuilder::<DCAwareSelector>::new("node-1", node_1_connection_cfg).connect().await?;
-    let node_2 = DatacakeNodeBuilder::<DCAwareSelector>::new("node-2", node_2_connection_cfg).connect().await?;
+    let node_1 =
+        DatacakeNodeBuilder::<DCAwareSelector>::new("node-1", node_1_connection_cfg)
+            .connect()
+            .await?;
+    let node_2 =
+        DatacakeNodeBuilder::<DCAwareSelector>::new("node-2", node_2_connection_cfg)
+            .connect()
+            .await?;
 
     node_1
         .wait_for_nodes(&["node-2"], Duration::from_secs(30))
@@ -48,8 +49,10 @@ pub async fn test_member_join() -> anyhow::Result<()> {
     assert_eq!(stats.num_live_members(), 2);
     assert_eq!(stats.num_dead_members(), 0);
 
-
-    let node_3 = DatacakeNodeBuilder::<DCAwareSelector>::new("node-3", node_3_connection_cfg).connect().await?;
+    let node_3 =
+        DatacakeNodeBuilder::<DCAwareSelector>::new("node-3", node_3_connection_cfg)
+            .connect()
+            .await?;
 
     node_3
         .wait_for_nodes(&["node-2", "node-1"], Duration::from_secs(30))
@@ -72,7 +75,6 @@ pub async fn test_member_join() -> anyhow::Result<()> {
 
     Ok(())
 }
-
 
 #[tokio::test]
 // TODO: Improve this test so it's not really flaky
@@ -98,9 +100,18 @@ pub async fn test_member_leave() -> anyhow::Result<()> {
         [node_1_addr.to_string(), node_2_addr.to_string()],
     );
 
-    let node_1 = DatacakeNodeBuilder::<DCAwareSelector>::new("node-1", node_1_connection_cfg).connect().await?;
-    let node_2 = DatacakeNodeBuilder::<DCAwareSelector>::new("node-2", node_2_connection_cfg).connect().await?;
-    let node_3 = DatacakeNodeBuilder::<DCAwareSelector>::new("node-3", node_3_connection_cfg).connect().await?;
+    let node_1 =
+        DatacakeNodeBuilder::<DCAwareSelector>::new("node-1", node_1_connection_cfg)
+            .connect()
+            .await?;
+    let node_2 =
+        DatacakeNodeBuilder::<DCAwareSelector>::new("node-2", node_2_connection_cfg)
+            .connect()
+            .await?;
+    let node_3 =
+        DatacakeNodeBuilder::<DCAwareSelector>::new("node-3", node_3_connection_cfg)
+            .connect()
+            .await?;
 
     node_1
         .wait_for_nodes(&["node-2", "node-3"], Duration::from_secs(30))

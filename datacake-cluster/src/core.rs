@@ -2,11 +2,10 @@ use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
-use datacake_crdt::{HLCTimestamp, Key};
 use bytecheck::CheckBytes;
-use rkyv::{Archive, Deserialize, Serialize};
+use datacake_crdt::{HLCTimestamp, Key};
 use rkyv::with::CopyOptimize;
-
+use rkyv::{Archive, Deserialize, Serialize};
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive, Copy, Clone, Debug, PartialEq)]
@@ -21,10 +20,7 @@ pub struct DocumentMetadata {
 
 impl DocumentMetadata {
     pub fn new(id: Key, last_updated: HLCTimestamp) -> Self {
-        Self {
-            id,
-            last_updated,
-        }
+        Self { id, last_updated }
     }
 }
 
@@ -43,11 +39,10 @@ impl Document {
     /// A convenience method for passing data values which can be sent as bytes.
     pub fn new(id: Key, last_updated: HLCTimestamp, data: impl Into<Vec<u8>>) -> Self {
         Self {
-            metadata: DocumentMetadata {
-                id,
-                last_updated,
-            },
-            data: Arc::new(Bytes { buffer: data.into() }),
+            metadata: DocumentMetadata { id, last_updated },
+            data: Arc::new(Bytes {
+                buffer: data.into(),
+            }),
         }
     }
 

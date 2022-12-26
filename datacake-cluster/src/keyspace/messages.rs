@@ -3,9 +3,9 @@ use std::marker::PhantomData;
 use datacake_crdt::{HLCTimestamp, OrSWotSet, StateChanges};
 use puppet::{derive_message, Message};
 
+use crate::core::DocumentMetadata;
 use crate::storage::BulkMutationError;
 use crate::{Document, PutContext, Storage};
-use crate::core::DocumentMetadata;
 
 #[derive(Debug, thiserror::Error)]
 #[error("Failed to (de)serialize state.")]

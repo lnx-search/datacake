@@ -3,11 +3,25 @@ use std::net::SocketAddr;
 
 use datacake_crdt::{HLCTimestamp, Key, OrSWotSet};
 use datacake_node::Clock;
-use rkyv::AlignedVec;
 use datacake_rpc::{Channel, RpcClient, Status};
+use rkyv::AlignedVec;
+
 use crate::core::{Document, DocumentMetadata};
-use crate::rpc::services::consistency_impl::{BatchPayload, ConsistencyService, Context, MultiPutPayload, MultiRemovePayload, PutPayload, RemovePayload};
-use crate::rpc::services::replication_impl::{FetchDocs, GetState, PollKeyspace, ReplicationService};
+use crate::rpc::services::consistency_impl::{
+    BatchPayload,
+    ConsistencyService,
+    Context,
+    MultiPutPayload,
+    MultiRemovePayload,
+    PutPayload,
+    RemovePayload,
+};
+use crate::rpc::services::replication_impl::{
+    FetchDocs,
+    GetState,
+    PollKeyspace,
+    ReplicationService,
+};
 use crate::Storage;
 
 /// A high level wrapper around the consistency GRPC service.
@@ -132,11 +146,9 @@ where
         Ok(())
     }
 
-    pub async fn apply_batch(
-        &mut self,
-        batch: &BatchPayload,
-    ) -> Result<(), Status> {
-        let ts = self.inner
+    pub async fn apply_batch(&mut self, batch: &BatchPayload) -> Result<(), Status> {
+        let ts = self
+            .inner
             .send(batch)
             .await?
             .to_owned()
@@ -172,7 +184,9 @@ where
     S: Storage + Send + Sync + 'static,
 {
     /// Fetches the newest version of the node's keyspace timestamps.
-    pub async fn poll_keyspace(&mut self) -> Result<BTreeMap<String, HLCTimestamp>, Status> {
+    pub async fn poll_keyspace(
+        &mut self,
+    ) -> Result<BTreeMap<String, HLCTimestamp>, Status> {
         let timestamp = self.clock.get_time().await;
         let inner = self
             .inner
@@ -232,9 +246,7 @@ where
             })
             .await?;
 
-        let payload = inner
-            .to_owned()
-            .unwrap();
+        let payload = inner.to_owned().unwrap();
 
         self.clock.register_ts(payload.timestamp).await;
         Ok(payload.documents)

@@ -13,8 +13,13 @@ use axum::routing::get;
 use axum::{Json, Router};
 use clap::Parser;
 use datacake::cluster::{EventuallyConsistentStoreExtension, ReplicatedStoreHandle};
+use datacake::node::{
+    ConnectionConfig,
+    Consistency,
+    DCAwareSelector,
+    DatacakeNodeBuilder,
+};
 use serde_json::json;
-use datacake::node::{ConnectionConfig, Consistency, DatacakeNodeBuilder, DCAwareSelector};
 
 use crate::storage::ShardedStorage;
 
@@ -30,8 +35,12 @@ async fn main() -> Result<()> {
         args.seeds.into_iter(),
     );
 
-    let node = DatacakeNodeBuilder::<DCAwareSelector>::new("node-1", connection_cfg).connect().await?;
-    let store = node.add_extension(EventuallyConsistentStoreExtension::new(storage)).await?;
+    let node = DatacakeNodeBuilder::<DCAwareSelector>::new("node-1", connection_cfg)
+        .connect()
+        .await?;
+    let store = node
+        .add_extension(EventuallyConsistentStoreExtension::new(storage))
+        .await?;
 
     let handle = store.handle();
 

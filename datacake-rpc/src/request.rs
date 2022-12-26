@@ -73,7 +73,6 @@ where
         }
     }
 
-
     #[cfg(debug_assertions)]
     /// Consumes the request into the data view of the message.
     pub fn into_view(self) -> DataView<Msg> {
@@ -103,11 +102,11 @@ where
     }
 }
 
-
 #[cfg(feature = "test-utils")]
 impl<Msg> Request<Msg>
 where
-    Msg: Archive + Serialize<rkyv::ser::serializers::AllocSerializer<{ crate::SCRATCH_SPACE }>>,
+    Msg: Archive
+        + Serialize<rkyv::ser::serializers::AllocSerializer<{ crate::SCRATCH_SPACE }>>,
     Msg::Archived: CheckBytes<DefaultValidator<'static>> + 'static,
 {
     /// A test utility for creating a mocked request.

@@ -3,7 +3,12 @@ use std::time::Duration;
 
 use datacake_cluster::test_utils::MemStore;
 use datacake_cluster::EventuallyConsistentStoreExtension;
-use datacake_node::{ConnectionConfig, DatacakeNodeBuilder, Consistency, DCAwareSelector};
+use datacake_node::{
+    ConnectionConfig,
+    Consistency,
+    DCAwareSelector,
+    DatacakeNodeBuilder,
+};
 
 static KEYSPACE_1: &str = "my-first-keyspace";
 static KEYSPACE_2: &str = "my-second-keyspace";
@@ -17,7 +22,9 @@ async fn test_single_node() -> anyhow::Result<()> {
     let connection_cfg =
         ConnectionConfig::new(node_addr, node_addr, Vec::<String>::new());
 
-    let node_1 = DatacakeNodeBuilder::<DCAwareSelector>::new("node-1", connection_cfg).connect().await?;
+    let node_1 = DatacakeNodeBuilder::<DCAwareSelector>::new("node-1", connection_cfg)
+        .connect()
+        .await?;
     let store_1 = node_1
         .add_extension(EventuallyConsistentStoreExtension::new(MemStore::default()))
         .await?;
@@ -82,9 +89,18 @@ async fn test_multi_node() -> anyhow::Result<()> {
         [node_1_addr.to_string(), node_2_addr.to_string()],
     );
 
-    let node_1 = DatacakeNodeBuilder::<DCAwareSelector>::new("node-1", node_1_connection_cfg).connect().await?;
-    let node_2 = DatacakeNodeBuilder::<DCAwareSelector>::new("node-2", node_2_connection_cfg).connect().await?;
-    let node_3 = DatacakeNodeBuilder::<DCAwareSelector>::new("node-3", node_3_connection_cfg).connect().await?;
+    let node_1 =
+        DatacakeNodeBuilder::<DCAwareSelector>::new("node-1", node_1_connection_cfg)
+            .connect()
+            .await?;
+    let node_2 =
+        DatacakeNodeBuilder::<DCAwareSelector>::new("node-2", node_2_connection_cfg)
+            .connect()
+            .await?;
+    let node_3 =
+        DatacakeNodeBuilder::<DCAwareSelector>::new("node-3", node_3_connection_cfg)
+            .connect()
+            .await?;
 
     node_1
         .wait_for_nodes(&["node-2", "node-3"], Duration::from_secs(30))

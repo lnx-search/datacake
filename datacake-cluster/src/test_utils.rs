@@ -6,9 +6,9 @@ use std::ops::AddAssign;
 use datacake_crdt::{HLCTimestamp, Key};
 use parking_lot::{Mutex, RwLock};
 
+use crate::core::DocumentMetadata;
 use crate::storage::BulkMutationError;
 use crate::{Document, PutContext, Storage};
-use crate::core::DocumentMetadata;
 
 /// A wrapping type around another `Storage` implementation that
 /// logs all the activity going into and out of the store.
@@ -499,8 +499,14 @@ impl Storage for MemStore {
     ) -> Result<(), Self::Error> {
         self.mark_many_as_tombstone(
             keyspace,
-            [DocumentMetadata { id: doc_id, last_updated: timestamp }].into_iter()
-        ).await.map_err(|e| e.inner)
+            [DocumentMetadata {
+                id: doc_id,
+                last_updated: timestamp,
+            }]
+            .into_iter(),
+        )
+        .await
+        .map_err(|e| e.inner)
     }
 
     async fn mark_many_as_tombstone(

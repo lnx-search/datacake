@@ -2,11 +2,11 @@ use std::borrow::Cow;
 use std::marker::PhantomData;
 use std::net::SocketAddr;
 
+use bytecheck::CheckBytes;
 use datacake_crdt::HLCTimestamp;
 use datacake_node::RpcNetwork;
-use bytecheck::CheckBytes;
-use rkyv::{Archive, Deserialize, Serialize};
 use datacake_rpc::{Handler, Request, RpcService, ServiceRegistry, Status};
+use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::core::{Document, DocumentMetadata};
 use crate::keyspace::{KeyspaceGroup, CONSISTENCY_SOURCE_ID};
@@ -42,8 +42,9 @@ where
 
     fn get_put_ctx(&self, ctx: Option<Context>) -> Result<Option<PutContext>, Status> {
         let ctx = if let Some(info) = ctx {
-            let remote_rpc_channel = self.network
-                .get_or_connect( info.node_addr)
+            let remote_rpc_channel = self
+                .network
+                .get_or_connect(info.node_addr)
                 .map_err(Status::internal)?;
 
             Some(PutContext {
@@ -84,8 +85,7 @@ where
         &self,
         msg: Request<PutPayload>,
     ) -> Result<HLCTimestamp, Status> {
-        let payload = msg.to_owned()
-            .map_err(Status::internal)?;
+        let payload = msg.to_owned().map_err(Status::internal)?;
 
         let doc = payload.document;
         let ctx = self.get_put_ctx(payload.ctx)?;
@@ -99,8 +99,7 @@ where
             _marker: PhantomData::<S>::default(),
         };
 
-        let keyspace = self.group
-            .get_or_create_keyspace(&payload.keyspace).await;
+        let keyspace = self.group.get_or_create_keyspace(&payload.keyspace).await;
         try_send!(keyspace, msg)?;
         Ok(self.group.clock().get_time().await)
     }
@@ -113,9 +112,11 @@ where
 {
     type Reply = HLCTimestamp;
 
-    async fn on_message(&self, msg: Request<MultiPutPayload>) -> Result<Self::Reply, Status> {
-        let payload = msg.to_owned()
-            .map_err(Status::internal)?;
+    async fn on_message(
+        &self,
+        msg: Request<MultiPutPayload>,
+    ) -> Result<Self::Reply, Status> {
+        let payload = msg.to_owned().map_err(Status::internal)?;
 
         let ctx = self.get_put_ctx(payload.ctx)?;
         self.group.clock().register_ts(payload.timestamp).await;
@@ -127,8 +128,7 @@ where
             _marker: PhantomData::<S>::default(),
         };
 
-        let keyspace = self.group
-            .get_or_create_keyspace(&payload.keyspace).await;
+        let keyspace = self.group.get_or_create_keyspace(&payload.keyspace).await;
         try_send!(keyspace, msg)?;
         Ok(self.group.clock().get_time().await)
     }
@@ -141,9 +141,11 @@ where
 {
     type Reply = HLCTimestamp;
 
-    async fn on_message(&self, msg: Request<RemovePayload>) -> Result<Self::Reply, Status> {
-        let payload = msg.to_owned()
-            .map_err(Status::internal)?;
+    async fn on_message(
+        &self,
+        msg: Request<RemovePayload>,
+    ) -> Result<Self::Reply, Status> {
+        let payload = msg.to_owned().map_err(Status::internal)?;
 
         self.group.clock().register_ts(payload.timestamp).await;
 
@@ -153,8 +155,7 @@ where
             _marker: PhantomData::<S>::default(),
         };
 
-        let keyspace = self.group
-            .get_or_create_keyspace(&payload.keyspace).await;
+        let keyspace = self.group.get_or_create_keyspace(&payload.keyspace).await;
         try_send!(keyspace, msg)?;
         Ok(self.group.clock().get_time().await)
     }
@@ -167,9 +168,11 @@ where
 {
     type Reply = HLCTimestamp;
 
-    async fn on_message(&self, msg: Request<MultiRemovePayload>) -> Result<Self::Reply, Status> {
-        let payload = msg.to_owned()
-            .map_err(Status::internal)?;
+    async fn on_message(
+        &self,
+        msg: Request<MultiRemovePayload>,
+    ) -> Result<Self::Reply, Status> {
+        let payload = msg.to_owned().map_err(Status::internal)?;
 
         self.group.clock().register_ts(payload.timestamp).await;
 
@@ -179,8 +182,7 @@ where
             _marker: PhantomData::<S>::default(),
         };
 
-        let keyspace = self.group
-            .get_or_create_keyspace(&payload.keyspace).await;
+        let keyspace = self.group.get_or_create_keyspace(&payload.keyspace).await;
         try_send!(keyspace, msg)?;
         Ok(self.group.clock().get_time().await)
     }
@@ -193,9 +195,11 @@ where
 {
     type Reply = HLCTimestamp;
 
-    async fn on_message(&self, msg: Request<BatchPayload>) -> Result<Self::Reply, Status> {
-        let msg = msg.to_owned()
-            .map_err(Status::internal)?;
+    async fn on_message(
+        &self,
+        msg: Request<BatchPayload>,
+    ) -> Result<Self::Reply, Status> {
+        let msg = msg.to_owned().map_err(Status::internal)?;
 
         self.group.clock().register_ts(msg.timestamp).await;
 
@@ -206,8 +210,7 @@ where
                 _marker: PhantomData::<S>::default(),
             };
 
-            let keyspace = self.group
-                .get_or_create_keyspace(&payload.keyspace).await;
+            let keyspace = self.group.get_or_create_keyspace(&payload.keyspace).await;
             try_send!(keyspace, msg)?;
         }
 
@@ -221,8 +224,7 @@ where
                 _marker: PhantomData::<S>::default(),
             };
 
-            let keyspace = self.group
-                .get_or_create_keyspace(&payload.keyspace).await;
+            let keyspace = self.group.get_or_create_keyspace(&payload.keyspace).await;
             try_send!(keyspace, msg)?;
         }
         Ok(self.group.clock().get_time().await)
@@ -283,7 +285,6 @@ pub struct Context {
     pub node_id: String,
     pub node_addr: SocketAddr,
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -356,7 +357,10 @@ mod tests {
             .expect("Put request should succeed.");
 
         let saved_docs = storage
-            .multi_get(KEYSPACE, vec![doc_1.id(), doc_2.id(), doc_3.id()].into_iter())
+            .multi_get(
+                KEYSPACE,
+                vec![doc_1.id(), doc_2.id(), doc_3.id()].into_iter(),
+            )
             .await
             .expect("Get new doc.")
             .collect::<Vec<_>>();
@@ -395,8 +399,9 @@ mod tests {
             KEYSPACE,
             vec![doc.clone()],
             clock.get_time().await,
-            &service
-        ).await;
+            &service,
+        )
+        .await;
 
         let saved_doc = storage
             .get(KEYSPACE, doc.id())
@@ -412,11 +417,12 @@ mod tests {
             timestamp: clock.get_time().await,
         });
 
-        service.on_message(remove_req).await.expect("Remove document.");
-
-        let saved_doc = storage.get(KEYSPACE, doc.id())
+        service
+            .on_message(remove_req)
             .await
-            .expect("Get new doc.");
+            .expect("Remove document.");
+
+        let saved_doc = storage.get(KEYSPACE, doc.id()).await.expect("Get new doc.");
         assert!(saved_doc.is_none(), "Documents should no longer exist.");
 
         let metadata = storage
@@ -449,7 +455,10 @@ mod tests {
         .await;
 
         let saved_docs = storage
-            .multi_get(KEYSPACE, vec![doc_1.id(), doc_2.id(), doc_3.id()].into_iter())
+            .multi_get(
+                KEYSPACE,
+                vec![doc_1.id(), doc_2.id(), doc_3.id()].into_iter(),
+            )
             .await
             .expect("Get new doc.")
             .collect::<Vec<_>>();
@@ -463,10 +472,7 @@ mod tests {
         doc_2.metadata.last_updated = clock.get_time().await;
         let remove_req = Request::using_owned(MultiRemovePayload {
             keyspace: KEYSPACE.to_string(),
-            documents: vec![
-                doc_1.metadata,
-                doc_2.metadata,
-            ],
+            documents: vec![doc_1.metadata, doc_2.metadata],
             timestamp: clock.get_time().await,
         });
 
@@ -476,7 +482,10 @@ mod tests {
             .expect("Remove documents.");
 
         let saved_docs = storage
-            .multi_get(KEYSPACE, vec![doc_1.id(), doc_2.id(), doc_3.id()].into_iter())
+            .multi_get(
+                KEYSPACE,
+                vec![doc_1.id(), doc_2.id(), doc_3.id()].into_iter(),
+            )
             .await
             .expect("Get new doc.")
             .collect::<Vec<_>>();

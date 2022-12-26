@@ -176,7 +176,13 @@ impl Storage for SqliteStorage {
         documents: impl Iterator<Item = DocumentMetadata> + Send,
     ) -> Result<(), BulkMutationError<Self::Error>> {
         let params = documents
-            .map(|doc| (keyspace.to_string(), doc.id as i64, doc.last_updated.to_string()))
+            .map(|doc| {
+                (
+                    keyspace.to_string(),
+                    doc.id as i64,
+                    doc.last_updated.to_string(),
+                )
+            })
             .collect::<Vec<_>>();
         self.inner
             .execute_many(queries::SET_TOMBSTONE, params)

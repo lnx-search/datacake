@@ -50,9 +50,9 @@ use crate::replication::{
     TaskDistributor,
     TaskServiceContext,
 };
-use crate::rpc::ConsistencyClient;
 use crate::rpc::services::consistency_impl::ConsistencyService;
 use crate::rpc::services::replication_impl::ReplicationService;
+use crate::rpc::ConsistencyClient;
 
 const TIMEOUT: Duration = Duration::from_secs(2);
 const DEFAULT_REPAIR_INTERVAL: Duration = if cfg!(any(test, feature = "test-utils")) {
@@ -110,7 +110,8 @@ where
         self,
         node: &DatacakeNode,
     ) -> Result<Self::Output, Self::Error> {
-        EventuallyConsistentStore::create(self.datastore, self.repair_interval, node).await
+        EventuallyConsistentStore::create(self.datastore, self.repair_interval, node)
+            .await
     }
 }
 
@@ -162,7 +163,8 @@ where
             group: group.clone(),
             network: node.network().clone(),
         };
-        let task_service = replication::start_task_distributor_service::<S>(task_ctx).await;
+        let task_service =
+            replication::start_task_distributor_service::<S>(task_ctx).await;
         let repair_service = replication::start_replication_cycle(replication_ctx).await;
 
         tokio::spawn(watch_membership_changes(
@@ -171,7 +173,10 @@ where
             node.handle(),
         ));
 
-        node.add_rpc_service(ConsistencyService::new(group.clone(), node.network().clone()));
+        node.add_rpc_service(ConsistencyService::new(
+            group.clone(),
+            node.network().clone(),
+        ));
         node.add_rpc_service(ReplicationService::new(group.clone()));
 
         Ok(Self {
@@ -512,12 +517,7 @@ where
         let last_updated = self.node.clock().get_time().await;
         let docs = doc_ids
             .into_iter()
-            .map(|id|  {
-                DocumentMetadata {
-                    id,
-                    last_updated,
-                }
-            })
+            .map(|id| DocumentMetadata { id, last_updated })
             .collect::<Vec<_>>();
 
         let keyspace = self.group.get_or_create_keyspace(keyspace).await;

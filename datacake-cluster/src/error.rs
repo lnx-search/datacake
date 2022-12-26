@@ -4,8 +4,8 @@ use std::io;
 use std::net::SocketAddr;
 
 use datacake_node::ConsistencyError;
-use thiserror::Error;
 use datacake_rpc::Status;
+use thiserror::Error;
 
 use crate::storage::BulkMutationError;
 

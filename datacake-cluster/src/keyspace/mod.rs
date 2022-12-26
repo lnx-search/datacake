@@ -3,7 +3,7 @@ mod group;
 mod messages;
 
 pub use actor::{spawn_keyspace, KeyspaceActor};
-pub use group::{KeyspaceGroup, KeyspaceTimestamps, KeyspaceInfo};
+pub use group::{KeyspaceGroup, KeyspaceInfo, KeyspaceTimestamps};
 pub use messages::{
     CorruptedState,
     Del,

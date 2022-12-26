@@ -1,12 +1,11 @@
+use bytecheck::CheckBytes;
 use datacake_crdt::{HLCTimestamp, Key};
 use datacake_rpc::{Handler, Request, RpcService, ServiceRegistry, Status};
-use bytecheck::CheckBytes;
 use rkyv::{Archive, Deserialize, Serialize};
 
-use crate::keyspace::KeyspaceInfo;
-use crate::Document;
-use crate::keyspace::{KeyspaceGroup, LastUpdated};
+use crate::keyspace::{KeyspaceGroup, KeyspaceInfo, LastUpdated};
 use crate::storage::Storage;
+use crate::Document;
 
 pub struct ReplicationService<S>
 where
@@ -42,9 +41,11 @@ where
 {
     type Reply = KeyspaceInfo;
 
-    async fn on_message(&self, msg: Request<PollKeyspace>) -> Result<Self::Reply, Status> {
-        let msg = msg.to_owned()
-            .map_err(Status::internal)?;
+    async fn on_message(
+        &self,
+        msg: Request<PollKeyspace>,
+    ) -> Result<Self::Reply, Status> {
+        let msg = msg.to_owned().map_err(Status::internal)?;
         self.group.clock().register_ts(msg.0).await;
 
         let payload = self.group.get_keyspace_info().await;
@@ -60,8 +61,7 @@ where
     type Reply = KeyspaceOrSwotSet;
 
     async fn on_message(&self, msg: Request<GetState>) -> Result<Self::Reply, Status> {
-        let msg = msg.to_owned()
-            .map_err(Status::internal)?;
+        let msg = msg.to_owned().map_err(Status::internal)?;
         self.group.clock().register_ts(msg.timestamp).await;
 
         let keyspace = self.group.get_or_create_keyspace(&msg.keyspace).await;
@@ -89,8 +89,7 @@ where
     type Reply = FetchedDocs;
 
     async fn on_message(&self, msg: Request<FetchDocs>) -> Result<Self::Reply, Status> {
-        let msg = msg.to_owned()
-            .map_err(Status::internal)?;
+        let msg = msg.to_owned().map_err(Status::internal)?;
         let clock = self.group.clock();
         clock.register_ts(msg.timestamp).await;
 
@@ -131,7 +130,6 @@ where
 #[derive(Serialize, Deserialize, Archive)]
 #[archive_attr(derive(CheckBytes))]
 pub struct PollKeyspace(pub HLCTimestamp);
-
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive)]
@@ -175,7 +173,7 @@ mod tests {
     use std::marker::PhantomData;
 
     use super::*;
-    use crate::keyspace::{KeyspaceTimestamps, Set, READ_REPAIR_SOURCE_ID, Serialize};
+    use crate::keyspace::{KeyspaceTimestamps, Serialize, Set, READ_REPAIR_SOURCE_ID};
     use crate::test_utils::MemStore;
     use crate::Document;
 
@@ -206,7 +204,9 @@ mod tests {
             .expect("Get keyspace info");
 
         let blank_timestamps = KeyspaceTimestamps::default();
-        let diff = blank_timestamps.diff(&resp.keyspace_timestamps).collect::<Vec<_>>();
+        let diff = blank_timestamps
+            .diff(&resp.keyspace_timestamps)
+            .collect::<Vec<_>>();
         assert_eq!(
             diff,
             vec![Cow::Borrowed(KEYSPACE)],
@@ -251,8 +251,7 @@ mod tests {
             .expect("Get keyspace state.");
 
         assert_eq!(
-            resp.last_updated,
-            last_updated,
+            resp.last_updated, last_updated,
             "Last updated timestamps should match."
         );
         assert_eq!(resp.set, set_data, "State data should match.");

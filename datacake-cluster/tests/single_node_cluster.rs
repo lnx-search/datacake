@@ -2,7 +2,12 @@ use std::net::SocketAddr;
 
 use datacake_cluster::test_utils::MemStore;
 use datacake_cluster::{EventuallyConsistentStore, EventuallyConsistentStoreExtension};
-use datacake_node::{ConnectionConfig, DatacakeNodeBuilder, Consistency, DCAwareSelector};
+use datacake_node::{
+    ConnectionConfig,
+    Consistency,
+    DCAwareSelector,
+    DatacakeNodeBuilder,
+};
 
 static KEYSPACE: &str = "my-keyspace";
 
@@ -186,7 +191,6 @@ async fn test_single_node_cluster_bulk_op_with_keyspace_handle() -> anyhow::Resu
 
     Ok(())
 }
-
 
 async fn create_store(addr: &str) -> EventuallyConsistentStore<MemStore> {
     let addr = addr.parse::<SocketAddr>().unwrap();
