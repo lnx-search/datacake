@@ -12,6 +12,7 @@ use datacake_rpc::{
     Status,
 };
 use rkyv::{Archive, Deserialize, Serialize};
+use tracing::info;
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive, Debug)]
@@ -41,16 +42,17 @@ impl Handler<MyMessage> for MyService {
 
 #[tokio::test]
 async fn test_basic() {
+    std::env::set_var("RUST_LOG", "info");
     let _ = tracing_subscriber::fmt::try_init();
 
     let addr = "127.0.0.1:9111".parse::<SocketAddr>().unwrap();
 
     let server = Server::listen(addr).await.unwrap();
     server.add_service(MyService);
-    println!("Listening to address {}!", addr);
+    info!("Listening to address {}!", addr);
 
     let client = Channel::connect(addr).unwrap();
-    println!("Connected to address {}!", addr);
+    info!("Connected to address {}!", addr);
 
     let mut rpc_client = RpcClient::<MyService>::new(client);
 
