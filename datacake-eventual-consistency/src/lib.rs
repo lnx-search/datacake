@@ -189,7 +189,7 @@ where
     }
 
     #[inline]
-    /// Gets the live cluster statistics.
+    /// Gets the live store statistics.
     pub fn statistics(&self) -> &SystemStatistics {
         &self.statistics
     }
@@ -260,7 +260,7 @@ where
     S: Storage + Send + Sync + 'static,
 {
     #[inline]
-    /// Gets the live cluster statistics.
+    /// Gets the live store statistics.
     pub fn statistics(&self) -> &SystemStatistics {
         &self.statistics
     }

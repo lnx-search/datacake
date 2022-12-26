@@ -92,7 +92,7 @@ async fn test_unknown_service() {
 
 #[tokio::test]
 async fn test_unknown_message() {
-    let addr = "127.0.0.1:8005".parse::<SocketAddr>().unwrap();
+    let addr = "127.0.0.1:7005".parse::<SocketAddr>().unwrap();
 
     let server = Server::listen(addr).await.unwrap();
     server.add_service(Add5Service);

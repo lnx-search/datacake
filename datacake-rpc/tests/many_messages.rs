@@ -75,7 +75,7 @@ impl Handler<DecCounter> for CountingService {
 
 #[tokio::test]
 async fn test_multiple_msgs() {
-    let addr = "127.0.0.1:8002".parse::<SocketAddr>().unwrap();
+    let addr = "127.0.0.1:7002".parse::<SocketAddr>().unwrap();
 
     let server = Server::listen(addr).await.unwrap();
     server.add_service(CountingService::default());

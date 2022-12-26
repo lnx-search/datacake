@@ -60,7 +60,7 @@ impl Handler<Payload> for Sub5Service {
 
 #[tokio::test]
 async fn test_multiple_services() {
-    let addr = "127.0.0.1:8002".parse::<SocketAddr>().unwrap();
+    let addr = "127.0.0.1:7003".parse::<SocketAddr>().unwrap();
 
     let server = Server::listen(addr).await.unwrap();
     server.add_service(Add5Service);

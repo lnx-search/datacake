@@ -51,23 +51,18 @@ impl<S: Storage> Message for MultiDel<S> {
     type Output = Result<(), BulkMutationError<S::Error>>;
 }
 
-#[derive(Copy, Clone)]
 pub struct Serialize;
 derive_message!(Serialize, Result<Vec<u8>, CorruptedState>);
 
-#[derive(Copy, Clone)]
 pub struct LastUpdated;
 derive_message!(LastUpdated, HLCTimestamp);
 
-#[derive(Clone)]
 pub struct Diff(pub OrSWotSet<NUM_SOURCES>);
 derive_message!(Diff, (StateChanges, StateChanges));
 
-#[derive(Clone)]
 pub struct SymDiff(pub OrSWotSet<NUM_SOURCES>);
 derive_message!(SymDiff, (StateChanges, StateChanges));
 
-#[derive(Copy, Clone)]
 pub struct PurgeDeletes<S>(pub PhantomData<S>);
 impl<S: Storage> Message for PurgeDeletes<S> {
     type Output = Result<(), S::Error>;
