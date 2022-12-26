@@ -11,6 +11,7 @@ puppet = "0.4.0"
 bytecheck = "0.6.9"
 thiserror = "1"
 
+raft = { version = "0.6.0", default-features = false }
 tokio = { version = "1", default-features = false, features = ["sync", "time"] }
 rkyv = { version = "0.7.9", features = ["validation"] }
 
