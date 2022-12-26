@@ -14,6 +14,7 @@ Datacake provides several utility libraries as well as some pre-made data store 
 
 - `datacake-crdt` - A CRDT implementation based on a hybrid logical clock (HLC) 
   provided in the form of the `HLCTimestamp`.
+- `datacake-node` - A cluster membership system and managed RPC built on top of chitchat.
 - `datacake-eventual-consistency` - Built on top of `datacake-crdt`, a batteries included framework
   for building eventually consistent, replicated systems where you only need to implement a basic
   storage trait.
