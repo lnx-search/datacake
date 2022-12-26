@@ -1,12 +1,12 @@
 use std::net::SocketAddr;
 
 use anyhow::Result;
-use datacake_cluster::{
-    ClusterOptions,
+use datacake_eventual_consistency::EventuallyConsistentStoreExtension;
+use datacake_node::{
     ConnectionConfig,
     Consistency,
     DCAwareSelector,
-    DatacakeCluster,
+    DatacakeNodeBuilder,
 };
 use datacake_sqlite::SqliteStorage;
 
@@ -21,16 +21,14 @@ async fn test_basic_sqlite_cluster() -> Result<()> {
     let addr = "127.0.0.1:9000".parse::<SocketAddr>().unwrap();
     let connection_cfg = ConnectionConfig::new(addr, addr, Vec::<String>::new());
 
-    let cluster = DatacakeCluster::connect(
-        "node-1",
-        connection_cfg,
-        store,
-        DCAwareSelector::default(),
-        ClusterOptions::default(),
-    )
-    .await?;
+    let node = DatacakeNodeBuilder::<DCAwareSelector>::new("node-1", connection_cfg)
+        .connect()
+        .await?;
+    let store = node
+        .add_extension(EventuallyConsistentStoreExtension::new(store))
+        .await?;
 
-    let handle = cluster.handle();
+    let handle = store.handle();
 
     handle
         .put(KEYSPACE, 1, b"Hello, world".to_vec(), Consistency::All)
@@ -42,8 +40,8 @@ async fn test_basic_sqlite_cluster() -> Result<()> {
         .await
         .expect("Get value.")
         .expect("Document should not be none");
-    assert_eq!(doc.id, 1);
-    assert_eq!(doc.data.as_ref(), b"Hello, world");
+    assert_eq!(doc.id(), 1);
+    assert_eq!(doc.data(), b"Hello, world");
 
     handle
         .del(KEYSPACE, 1, Consistency::All)
@@ -59,7 +57,7 @@ async fn test_basic_sqlite_cluster() -> Result<()> {
     let doc = handle.get(KEYSPACE, 2).await.expect("Get value.");
     assert!(doc.is_none(), "No document should not exist!");
 
-    cluster.shutdown().await;
+    node.shutdown().await;
 
     Ok(())
 }

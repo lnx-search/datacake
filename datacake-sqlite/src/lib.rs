@@ -4,13 +4,18 @@ mod from_row_impl;
 use std::path::Path;
 
 use async_trait::async_trait;
-use datacake_cluster::{BulkMutationError, Document, Storage};
 use datacake_crdt::{HLCTimestamp, Key};
+use datacake_eventual_consistency::{
+    BulkMutationError,
+    Document,
+    DocumentMetadata,
+    Storage,
+};
 pub use db::FromRow;
 
 pub use crate::db::StorageHandle;
 
-/// A [datacake_cluster::Storage] implementation based on an SQLite database.
+/// A [Storage] implementation based on an SQLite database.
 pub struct SqliteStorage {
     inner: StorageHandle,
 }
@@ -124,9 +129,9 @@ impl Storage for SqliteStorage {
                 queries::INSERT,
                 (
                     keyspace.to_string(),
-                    doc.id as i64,
-                    doc.last_updated.to_string(),
-                    doc.data.to_vec(),
+                    doc.id() as i64,
+                    doc.last_updated().to_string(),
+                    doc.data().to_vec(),
                 ),
             )
             .await?;
@@ -142,9 +147,9 @@ impl Storage for SqliteStorage {
             .map(|doc| {
                 (
                     keyspace.to_string(),
-                    doc.id as i64,
-                    doc.last_updated.to_string(),
-                    doc.data.to_vec(),
+                    doc.id() as i64,
+                    doc.last_updated().to_string(),
+                    doc.data().to_vec(),
                 )
             })
             .collect::<Vec<_>>();
@@ -173,10 +178,16 @@ impl Storage for SqliteStorage {
     async fn mark_many_as_tombstone(
         &self,
         keyspace: &str,
-        documents: impl Iterator<Item = (Key, HLCTimestamp)> + Send,
+        documents: impl Iterator<Item = DocumentMetadata> + Send,
     ) -> Result<(), BulkMutationError<Self::Error>> {
         let params = documents
-            .map(|(doc_id, ts)| (keyspace.to_string(), doc_id as i64, ts.to_string()))
+            .map(|doc| {
+                (
+                    keyspace.to_string(),
+                    doc.id as i64,
+                    doc.last_updated.to_string(),
+                )
+            })
             .collect::<Vec<_>>();
         self.inner
             .execute_many(queries::SET_TOMBSTONE, params)
@@ -246,8 +257,8 @@ mod queries {
 mod models {
     use std::str::FromStr;
 
-    use datacake_cluster::Document;
     use datacake_crdt::{HLCTimestamp, Key};
+    use datacake_eventual_consistency::Document;
     use rusqlite::Row;
 
     use crate::FromRow;
@@ -298,7 +309,7 @@ async fn setup_db(handle: StorageHandle) -> rusqlite::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use datacake_cluster::test_suite;
+    use datacake_eventual_consistency::test_suite;
 
     use crate::SqliteStorage;
 

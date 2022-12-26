@@ -7,6 +7,6 @@ group_imports = "StdExternalCrate"
 max_width = 89
 
 ignore = [
-    "datacake-cluster/src/rpc/chitchat_transport_api.rs.rs",
-    "datacake-cluster/src/rpc/datacake_api.rs.rs",
+    "datacake-eventual-consistency/src/rpc/chitchat_transport_api.rs.rs",
+    "datacake-eventual-consistency/src/rpc/datacake_api.rs.rs",
 ]

@@ -12,13 +12,15 @@ use axum::http::StatusCode;
 use axum::routing::get;
 use axum::{Json, Router};
 use clap::Parser;
-use datacake::cluster::{
-    ClusterOptions,
+use datacake::eventual_consistency::{
+    EventuallyConsistentStoreExtension,
+    ReplicatedStoreHandle,
+};
+use datacake::node::{
     ConnectionConfig,
     Consistency,
     DCAwareSelector,
-    DatacakeCluster,
-    DatacakeHandle,
+    DatacakeNodeBuilder,
 };
 use serde_json::json;
 
@@ -35,16 +37,15 @@ async fn main() -> Result<()> {
         args.public_addr.unwrap_or(args.cluster_listen_addr),
         args.seeds.into_iter(),
     );
-    let cluster = DatacakeCluster::connect(
-        args.node_id,
-        connection_cfg,
-        storage,
-        DCAwareSelector::default(),
-        ClusterOptions::default(),
-    )
-    .await?;
 
-    let handle = cluster.handle();
+    let node = DatacakeNodeBuilder::<DCAwareSelector>::new("node-1", connection_cfg)
+        .connect()
+        .await?;
+    let store = node
+        .add_extension(EventuallyConsistentStoreExtension::new(storage))
+        .await?;
+
+    let handle = store.handle();
 
     let app = Router::new()
         .route("/:keyspace/:key", get(get_value).post(set_value))
@@ -55,7 +56,7 @@ async fn main() -> Result<()> {
         .serve(app.into_make_service())
         .await;
 
-    cluster.shutdown().await;
+    node.shutdown().await;
 
     Ok(())
 }
@@ -103,7 +104,7 @@ struct Params {
 
 async fn get_value(
     Path(params): Path<Params>,
-    State(handle): State<DatacakeHandle<ShardedStorage>>,
+    State(handle): State<ReplicatedStoreHandle<ShardedStorage>>,
 ) -> Result<Bytes, StatusCode> {
     info!(
         doc_id = params.key,
@@ -121,13 +122,13 @@ async fn get_value(
 
     match doc {
         None => Err(StatusCode::NOT_FOUND),
-        Some(doc) => Ok(doc.data),
+        Some(doc) => Ok(Bytes::copy_from_slice(doc.data())),
     }
 }
 
 async fn set_value(
     Path(params): Path<Params>,
-    State(handle): State<DatacakeHandle<ShardedStorage>>,
+    State(handle): State<ReplicatedStoreHandle<ShardedStorage>>,
     data: Bytes,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     info!(

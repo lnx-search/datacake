@@ -88,7 +88,7 @@
 //!     // Clients only need references to the message which helps
 //!     // reduce allocations.
 //!     let resp = rpc_client.send(&msg1).await?;
-//!     assert_eq!(resp, &msg1);
+//!     assert_eq!(resp, msg1.name);
 //!     Ok(())
 //! }
 //! ```
@@ -124,5 +124,9 @@ pub(crate) fn hash<H: Hash + ?Sized>(v: &H) -> u64 {
 }
 
 pub(crate) fn to_uri_path(service: &str, path: &str) -> String {
-    format!("/{}/{}", service, path)
+    format!("/{}/{}", sanitise(service), sanitise(path))
+}
+
+fn sanitise(parameter: &str) -> String {
+    parameter.replace(['<', '>'], "-")
 }

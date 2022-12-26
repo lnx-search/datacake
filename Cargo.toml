@@ -1,6 +1,6 @@
 [package]
 name = "datacake"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 description = "A batteries included framework for building fault-tolerance distributed data systems."
 license = "MIT"
@@ -13,23 +13,26 @@ readme = "README.md"
 
 [dependencies]
 datacake-crdt = { version = "0.3", path = "datacake-crdt", optional = true }
-datacake-cluster = { version = "0.1", path = "datacake-cluster", optional = true }
-datacake-sqlite = { version = "0.1", path = "datacake-sqlite", optional = true }
+datacake-eventual-consistency = { version = "0.2", path = "datacake-eventual-consistency", optional = true }
+datacake-sqlite = { version = "0.2", path = "datacake-sqlite", optional = true }
 datacake-rpc = { version = "0.2", path = "datacake-rpc", optional = true }
+datacake-node = { version = "0.1", path = "datacake-node", optional = true }
 
 [features]
-test-utils = ["datacake-cluster/test-utils"]
+test-utils = ["datacake-eventual-consistency/test-utils"]
 rkyv = ["datacake-crdt/rkyv-support"]
 default = [
     "datacake-crdt",
     "datacake-rpc",
-    "datacake-cluster",
+    "datacake-eventual-consistency",
     "datacake-sqlite",
+    "datacake-node",
 ]
 
 [workspace]
 members = [
-    "datacake-cluster",
+    "datacake-node",
+    "datacake-eventual-consistency",
     "datacake-crdt",
     "datacake-sqlite",
     "datacake-rpc",

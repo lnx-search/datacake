@@ -5,11 +5,16 @@ use std::path::Path;
 
 use anyhow::Result;
 use axum::async_trait;
-use datacake::cluster::{BulkMutationError, Document, Storage};
 use datacake::crdt::{HLCTimestamp, Key};
+use datacake::eventual_consistency::{
+    BulkMutationError,
+    Document,
+    DocumentMetadata,
+    Storage,
+};
 use datacake::sqlite::SqliteStorage;
 
-/// A wrapper around several [datacake::sqlite::SqliteStorage] which
+/// A wrapper around several [SqliteStorage] which
 /// evenly distributes the workload across all of the stores.
 pub struct ShardedStorage {
     shards: Vec<SqliteStorage>,
@@ -125,7 +130,7 @@ impl Storage for ShardedStorage {
         keyspace: &str,
         document: Document,
     ) -> std::result::Result<(), Self::Error> {
-        let shard_id = self.get_shard_id(document.id);
+        let shard_id = self.get_shard_id(document.id());
         self.shards[shard_id].put(keyspace, document).await
     }
 
@@ -142,8 +147,8 @@ impl Storage for ShardedStorage {
 
         for doc in documents {
             total_docs += 1;
-            let shard_id = self.get_shard_id(doc.id);
-            doc_id_blocks[shard_id].push(doc.id);
+            let shard_id = self.get_shard_id(doc.id());
+            doc_id_blocks[shard_id].push(doc.id());
             shard_blocks[shard_id].push(doc);
         }
 
@@ -186,7 +191,7 @@ impl Storage for ShardedStorage {
     async fn mark_many_as_tombstone(
         &self,
         keyspace: &str,
-        documents: impl Iterator<Item = (Key, HLCTimestamp)> + Send,
+        documents: impl Iterator<Item = DocumentMetadata> + Send,
     ) -> std::result::Result<(), BulkMutationError<Self::Error>> {
         let mut total_docs = 0;
         let mut shard_blocks = Vec::new();
@@ -194,11 +199,11 @@ impl Storage for ShardedStorage {
         shard_blocks.resize_with(self.shards.len(), Vec::new);
         doc_id_blocks.resize_with(self.shards.len(), Vec::new);
 
-        for (doc_id, ts) in documents {
+        for doc in documents {
             total_docs += 1;
-            let shard_id = self.get_shard_id(doc_id);
-            doc_id_blocks[shard_id].push(doc_id);
-            shard_blocks[shard_id].push((doc_id, ts));
+            let shard_id = self.get_shard_id(doc.id);
+            doc_id_blocks[shard_id].push(doc.id);
+            shard_blocks[shard_id].push(doc);
         }
 
         let mut error = None;
@@ -272,6 +277,6 @@ mod tests {
             .await
             .expect("Create storage");
 
-        datacake::cluster::test_suite::run_test_suite(store).await;
+        datacake::eventual_consistency::test_suite::run_test_suite(store).await;
     }
 }

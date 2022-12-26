@@ -30,6 +30,7 @@ pub type HandlerKey = u64;
 ///
 ///
 /// ```rust
+/// use bytecheck::CheckBytes;
 /// use rkyv::{Archive, Deserialize, Serialize};
 /// use datacake_rpc::{Handler, Request, RpcService, ServiceRegistry, Status, RpcClient, Channel};
 /// use std::net::SocketAddr;
@@ -167,6 +168,7 @@ pub trait RpcService: Sized {
 /// A generic RPC message handler.
 ///
 /// ```rust
+/// use bytecheck::CheckBytes;
 /// use rkyv::{Archive, Deserialize, Serialize};
 /// use datacake_rpc::{Handler, Request, RpcService, ServiceRegistry, Status, RpcClient, Channel};
 /// use std::net::SocketAddr;

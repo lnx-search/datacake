@@ -30,7 +30,7 @@ pub struct MessageMetadata {
 pub struct Request<Msg>
 where
     Msg: Archive,
-    Msg::Archived: CheckBytes<DefaultValidator<'static>> + 'static,
+    Msg::Archived: 'static,
 {
     pub(crate) remote_addr: SocketAddr,
 
@@ -94,13 +94,33 @@ where
 impl<Msg> Request<Msg>
 where
     Msg: Archive,
-    Msg::Archived: CheckBytes<DefaultValidator<'static>>
-        + Deserialize<Msg, SharedDeserializeMap>
-        + 'static,
+    Msg::Archived: Deserialize<Msg, SharedDeserializeMap> + 'static,
 {
     /// Deserializes the view into it's owned value T.
     pub fn to_owned(&self) -> Result<Msg, InvalidView> {
         self.view.to_owned()
+    }
+}
+
+#[cfg(feature = "test-utils")]
+impl<Msg> Request<Msg>
+where
+    Msg: Archive
+        + Serialize<rkyv::ser::serializers::AllocSerializer<{ crate::SCRATCH_SPACE }>>,
+    Msg::Archived: CheckBytes<DefaultValidator<'static>> + 'static,
+{
+    /// A test utility for creating a mocked request.
+    ///
+    /// This takes the owned value of the msg and acts like the target request.
+    ///
+    /// This should be used for testing only.
+    pub fn using_owned(msg: Msg) -> Self {
+        use std::net::{Ipv4Addr, SocketAddrV4};
+
+        let buf = rkyv::to_bytes::<_, { crate::SCRATCH_SPACE }>(&msg).unwrap();
+        let view = DataView::using(buf).unwrap();
+        let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::from([127, 0, 0, 1]), 80));
+        Self::new(addr, view)
     }
 }
 

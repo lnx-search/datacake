@@ -14,7 +14,7 @@ Datacake provides several utility libraries as well as some pre-made data store 
 
 - `datacake-crdt` - A CRDT implementation based on a hybrid logical clock (HLC) 
   provided in the form of the `HLCTimestamp`.
-- `datacake-cluster` - Built on top of `datacake-crdt`, a batteries included framework
+- `datacake-eventual-consistency` - Built on top of `datacake-crdt`, a batteries included framework
   for building eventually consistent, replicated systems where you only need to implement a basic
   storage trait.
 - `datacake-sqlite` - A pre-built and tested implementation of the datacake `Storage` trait built 
@@ -26,14 +26,14 @@ Check out some pre-built apps we have in the
 [example folder](https://github.com/lnx-search/datacake/tree/main/examples)
 
 You can also look at some heavier integration tests 
-[here](https://github.com/lnx-search/datacake/tree/main/datacake-cluster/tests)
+[here](https://github.com/lnx-search/datacake/tree/main/datacake-eventual-consistency/tests)
 
 #### Single Node Cluster
 Here's an example of a basic cluster with one node that runs on your local network:
 
 ```rust
-use datacake::cluster::test_utils::MemStore;
-use datacake::cluster::{
+use datacake::eventual_consistency::test_utils::MemStore;
+use datacake::eventual_consistency::{
     ClusterOptions,
     ConnectionConfig,
     DCAwareSelector,
