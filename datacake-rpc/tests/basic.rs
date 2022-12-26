@@ -41,12 +41,11 @@ impl Handler<MyMessage> for MyService {
 
 #[tokio::test]
 async fn test_basic() {
-    let bind = "0.0.0.0:7001".parse::<SocketAddr>().unwrap();
-    let addr = "127.0.0.1:7001".parse::<SocketAddr>().unwrap();
+    let addr = "127.0.0.1:9111".parse::<SocketAddr>().unwrap();
 
-    let server = Server::listen(bind).await.unwrap();
+    let server = Server::listen(addr).await.unwrap();
     server.add_service(MyService);
-    println!("Listening to address {}!", bind);
+    println!("Listening to address {}!", addr);
 
     let client = Channel::connect(addr).unwrap();
     println!("Connected to address {}!", addr);
