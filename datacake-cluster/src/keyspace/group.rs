@@ -11,11 +11,12 @@ use datacake_node::Clock;
 use parking_lot::RwLock;
 use puppet::ActorMailbox;
 use tokio::time::interval;
+use bytecheck::CheckBytes;
+use rkyv::{Archive, Deserialize, Serialize};
 
 use super::NUM_SOURCES;
 use crate::keyspace::messages::PurgeDeletes;
 use crate::keyspace::KeyspaceActor;
-use crate::rpc::datacake_api;
 use crate::Storage;
 
 const PURGE_DELETES_INTERVAL: Duration = if cfg!(test) {
@@ -97,19 +98,12 @@ where
     ///
     /// These timestamps should only be compared against timestamps created by the same node, comparing
     /// them against timestamps created by different nodes can cause issues due to clock drift, etc...
-    pub async fn get_keyspace_info(&self) -> datacake_api::KeyspaceInfo {
-        let ts = self.clock.get_time().await;
+    pub async fn get_keyspace_info(&self) -> KeyspaceInfo {
+        let timestamp = self.clock.get_time().await;
         let lock = self.keyspace_timestamps.read();
-
-        let mut timestamps = HashMap::with_capacity(lock.len());
-        for (name, ts) in lock.iter() {
-            timestamps
-                .insert(name.to_string(), datacake_api::Timestamp::from(ts.load()));
-        }
-
-        datacake_api::KeyspaceInfo {
-            timestamp: Some(ts.into()),
-            keyspace_timestamps: timestamps,
+        KeyspaceInfo {
+            timestamp,
+            keyspace_timestamps: lock.as_serializable(),
         }
     }
 
@@ -265,17 +259,34 @@ where
     }
 }
 
-#[derive(Clone, Default, Debug)]
+#[repr(C)]
+#[derive(Serialize, Deserialize, Archive)]
+#[archive_attr(derive(CheckBytes))]
+pub struct KeyspaceInfo {
+    pub timestamp: HLCTimestamp,
+    pub keyspace_timestamps: BTreeMap<String, HLCTimestamp>,
+}
+
+#[derive(Default, Clone, Debug)]
 pub struct KeyspaceTimestamps(
     pub BTreeMap<Cow<'static, str>, Arc<AtomicCell<HLCTimestamp>>>,
 );
 
 impl KeyspaceTimestamps {
-    pub fn diff(&self, other: &Self) -> impl Iterator<Item = Cow<'static, str>> {
-        let entries = self.iter().chain(other.iter());
+    pub fn as_serializable(&self) -> BTreeMap<String, HLCTimestamp> {
+        let mut entries = BTreeMap::new();
+        for (key, v) in self.iter() {
+            let val = v.load();
+            entries.insert(key.to_string(), val);
+        }
+
+        entries
+    }
+
+    pub fn diff(&self, other: &BTreeMap<String, HLCTimestamp>) -> impl Iterator<Item = Cow<'static, str>> {
         let mut processed = HashMap::with_capacity(self.len());
 
-        for (key, v) in entries {
+        for (key, v) in self.iter() {
             let val = v.load();
             processed
                 .entry(key.clone())
@@ -287,6 +298,19 @@ impl KeyspaceTimestamps {
                     }
                 })
                 .or_insert_with(|| (val, 1, false));
+        }
+
+        for (key, val) in other.iter() {
+            processed
+                .entry(Cow::Owned(key.clone()))
+                .and_modify(|existing: &mut (HLCTimestamp, usize, bool)| {
+                    existing.1 += 1;
+
+                    if existing.0 != *val {
+                        existing.2 = true;
+                    }
+                })
+                .or_insert_with(|| (*val, 1, false));
         }
 
         processed
@@ -307,17 +331,6 @@ impl Deref for KeyspaceTimestamps {
 impl DerefMut for KeyspaceTimestamps {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
-    }
-}
-
-impl From<datacake_api::KeyspaceInfo> for KeyspaceTimestamps {
-    fn from(info: datacake_api::KeyspaceInfo) -> Self {
-        let mut timestamps = Self::default();
-        for (keyspace, ts) in info.keyspace_timestamps {
-            let ts = HLCTimestamp::from(ts);
-            timestamps.insert(Cow::Owned(keyspace), Arc::new(AtomicCell::new(ts)));
-        }
-        timestamps
     }
 }
 

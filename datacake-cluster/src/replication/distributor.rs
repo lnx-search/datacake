@@ -6,15 +6,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crossbeam_channel::{unbounded, Receiver, Sender};
-use datacake_crdt::{HLCTimestamp, Key, StateChanges};
 use datacake_node::{Clock, MembershipChange, RpcNetwork};
 use tokio::sync::Semaphore;
 use tokio::time::{interval, MissedTickBehavior};
 
 use crate::replication::MAX_CONCURRENT_REQUESTS;
-use crate::rpc::datacake_api;
-use crate::rpc::datacake_api::Context;
-use crate::{ConsistencyClient, Document};
+use crate::{ConsistencyClient, Document, Storage};
+use crate::core::DocumentMetadata;
+use crate::rpc::services::consistency_impl::{BatchPayload, Context, MultiPutPayload, MultiRemovePayload};
 
 const BATCHING_INTERVAL: Duration = Duration::from_secs(1);
 
@@ -73,12 +72,11 @@ pub enum Mutation {
     },
     Del {
         keyspace: Cow<'static, str>,
-        doc_id: Key,
-        ts: HLCTimestamp,
+        doc: DocumentMetadata,
     },
     MultiDel {
         keyspace: Cow<'static, str>,
-        docs: StateChanges,
+        docs: Vec<DocumentMetadata>,
     },
 }
 
@@ -88,22 +86,28 @@ pub enum Mutation {
 /// which are not part of the node broadcast when mutating data.
 ///
 /// This service will send the events to the remaining nodes in a single batch.
-pub(crate) async fn start_task_distributor_service(
+pub(crate) async fn start_task_distributor_service<S>(
     ctx: TaskServiceContext,
-) -> TaskDistributor {
+) -> TaskDistributor
+where
+    S: Storage + Send + Sync + 'static,
+{
     let kill_switch = Arc::new(AtomicBool::new(false));
     let (tx, rx) = unbounded();
 
-    tokio::spawn(task_distributor_service(ctx, rx, kill_switch.clone()));
+    tokio::spawn(task_distributor_service::<S>(ctx, rx, kill_switch.clone()));
 
     TaskDistributor { tx, kill_switch }
 }
 
-async fn task_distributor_service(
+async fn task_distributor_service<S>(
     ctx: TaskServiceContext,
     rx: Receiver<Op>,
     kill_switch: Arc<AtomicBool>,
-) {
+)
+where
+    S: Storage + Send + Sync + 'static,
+{
     info!("Task distributor service is running.");
 
     let mut live_members = BTreeMap::new();
@@ -136,30 +140,32 @@ async fn task_distributor_service(
         }
 
         if !put_payloads.is_empty() || !del_payloads.is_empty() {
-            let ts = ctx.clock.get_time().await;
-            let batch = datacake_api::BatchPayload {
-                timestamp: Some(ts.into()),
+            let timestamp = ctx.clock.get_time().await;
+            let batch = BatchPayload {
+                timestamp,
                 modified: put_payloads
                     .into_iter()
-                    .map(|(keyspace, payloads)| datacake_api::MultiPutPayload {
+                    .map(|(keyspace, payloads)| MultiPutPayload {
                         keyspace: keyspace.to_string(),
                         ctx: Some(Context {
                             node_id: ctx.local_node_id.to_string(),
-                            node_addr: ctx.public_node_addr.to_string(),
+                            node_addr: ctx.public_node_addr,
                         }),
                         documents: payloads,
+                        timestamp,
                     })
                     .collect(),
                 removed: del_payloads
                     .into_iter()
-                    .map(|(keyspace, payloads)| datacake_api::MultiRemovePayload {
+                    .map(|(keyspace, payloads)| MultiRemovePayload {
                         keyspace: keyspace.to_string(),
                         documents: payloads,
+                        timestamp,
                     })
                     .collect(),
             };
 
-            if let Err(e) = execute_batch(&ctx, &live_members, batch).await {
+            if let Err(e) = execute_batch::<S>(&ctx, &live_members, batch).await {
                 error!(error = ?e, "Failed to execute synchronisation batch.");
             }
         }
@@ -167,8 +173,8 @@ async fn task_distributor_service(
 }
 
 fn register_mutation(
-    put_payloads: &mut BTreeMap<Cow<'static, str>, Vec<datacake_api::Document>>,
-    del_payloads: &mut BTreeMap<Cow<'static, str>, Vec<datacake_api::DocumentMetadata>>,
+    put_payloads: &mut BTreeMap<Cow<'static, str>, Vec<Document>>,
+    del_payloads: &mut BTreeMap<Cow<'static, str>, Vec<DocumentMetadata>>,
     mutation: Mutation,
 ) {
     match mutation {
@@ -179,50 +185,44 @@ fn register_mutation(
             put_payloads
                 .entry(keyspace)
                 .or_default()
-                .extend(docs.into_iter().map(datacake_api::Document::from));
+                .extend(docs);
         },
         Mutation::Del {
             keyspace,
-            doc_id,
-            ts,
+            doc,
         } => {
-            del_payloads.entry(keyspace).or_default().push(
-                datacake_api::DocumentMetadata {
-                    id: doc_id,
-                    last_updated: Some(ts.into()),
-                },
-            );
+            del_payloads
+                .entry(keyspace)
+                .or_default()
+                .push(doc);
         },
         Mutation::MultiDel { keyspace, docs } => {
-            let iter =
-                docs.into_iter()
-                    .map(|(doc_id, ts)| datacake_api::DocumentMetadata {
-                        id: doc_id,
-                        last_updated: Some(ts.into()),
-                    });
-
-            del_payloads.entry(keyspace).or_default().extend(iter);
+            del_payloads.entry(keyspace).or_default().extend(docs);
         },
     }
 }
 
-async fn execute_batch(
+async fn execute_batch<S>(
     ctx: &TaskServiceContext,
     live_members: &BTreeMap<String, SocketAddr>,
-    batch: datacake_api::BatchPayload,
-) -> anyhow::Result<()> {
+    batch: BatchPayload,
+) -> anyhow::Result<()>
+where
+    S: Storage + Send + Sync + 'static,
+{
+    let batch = Arc::new(batch);
     let limiter = Arc::new(Semaphore::new(MAX_CONCURRENT_REQUESTS));
     let mut tasks = Vec::with_capacity(live_members.len());
     for (node_id, &addr) in live_members {
         let node_id = node_id.clone();
         let limiter = limiter.clone();
         let batch = batch.clone();
-        let channel = ctx.network.get_or_connect_lazy(addr);
-        let mut client = ConsistencyClient::new(ctx.clock.clone(), channel);
+        let channel = ctx.network.get_or_connect(addr)?;
+        let mut client = ConsistencyClient::<S>::new(ctx.clock.clone(), channel);
 
         let task = tokio::spawn(async move {
             let _permit = limiter.acquire().await;
-            let resp = client.apply_batch(batch).await;
+            let resp = client.apply_batch(&batch).await;
             (node_id, addr, resp)
         });
         tasks.push(task);

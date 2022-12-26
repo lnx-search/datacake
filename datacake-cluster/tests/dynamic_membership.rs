@@ -5,11 +5,11 @@ use bytes::Bytes;
 use datacake_cluster::test_utils::{InstrumentedStorage, MemStore};
 use datacake_cluster::{
     ClusterOptions,
-    ConnectionConfig,
     Consistency,
     DCAwareSelector,
     EventuallyConsistentStore,
 };
+use datacake_node::{ConnectionConfig, DatacakeNodeBuilder};
 
 #[tokio::test]
 pub async fn test_member_join() -> anyhow::Result<()> {
@@ -33,6 +33,11 @@ pub async fn test_member_join() -> anyhow::Result<()> {
         node_3_addr,
         &[node_1_addr.to_string(), node_2_addr.to_string()],
     );
+
+
+    let node_1 = DatacakeNodeBuilder::new("node-1", node_1_connection_cfg).connect() .await?;
+    let node_2 = DatacakeNodeBuilder::new("node-2", connection_cfg).connect() .await?;
+    let node_3 = DatacakeNodeBuilder::new("node-3", connection_cfg).connect() .await?;
 
     let node_1 = EventuallyConsistentStore::connect(
         "node-1",

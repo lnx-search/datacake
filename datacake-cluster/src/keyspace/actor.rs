@@ -62,12 +62,12 @@ where
     /// If the document is not the newest the store has seen thus far, it is a no-op.
     async fn on_set(&mut self, msg: Set<S>) -> Result<(), S::Error> {
         // We have something newer.
-        if !self.state.will_apply(msg.doc.id, msg.doc.last_updated) {
+        if !self.state.will_apply(msg.doc.id(), msg.doc.last_updated()) {
             return Ok(());
         }
 
-        let doc_id = msg.doc.id;
-        let ts = msg.doc.last_updated;
+        let doc_id = msg.doc.id();
+        let ts = msg.doc.last_updated();
 
         self.storage
             .put_with_ctx(&self.name, msg.doc, msg.ctx.as_ref())
@@ -93,9 +93,9 @@ where
         let docs = msg
             .docs
             .into_iter()
-            .filter(|doc| self.state.will_apply(doc.id, doc.last_updated))
+            .filter(|doc| self.state.will_apply(doc.id(), doc.last_updated()))
             .map(|doc| {
-                valid_entries.push((doc.id, doc.last_updated));
+                valid_entries.push((doc.id(), doc.last_updated()));
                 doc
             });
 
@@ -132,17 +132,17 @@ where
     /// If the document is not the newest the store has seen thus far, it is a no-op.
     async fn on_del(&mut self, msg: Del<S>) -> Result<(), S::Error> {
         // We have something newer.
-        if !self.state.will_apply(msg.doc_id, msg.ts) {
+        if !self.state.will_apply(msg.doc.id, msg.doc.last_updated) {
             return Ok(());
         }
 
         self.storage
-            .mark_as_tombstone(&self.name, msg.doc_id, msg.ts)
+            .mark_as_tombstone(&self.name, msg.doc.id, msg.doc.last_updated)
             .await?;
 
         // The change has gone through, let's apply our memory state.
         self.state
-            .delete_with_source(msg.source, msg.doc_id, msg.ts);
+            .delete_with_source(msg.source, msg.doc.id, msg.doc.last_updated);
         self.inc_change_timestamp().await;
         Ok(())
     }
@@ -155,19 +155,20 @@ where
         &mut self,
         msg: MultiDel<S>,
     ) -> Result<(), BulkMutationError<S::Error>> {
-        let mut valid_entries = Vec::with_capacity(msg.key_ts_pairs.len());
+        let mut valid_entries = Vec::with_capacity(msg.docs.len());
 
         // Only select docs to be inserted if they're able to be applied.
         let docs = msg
-            .key_ts_pairs
+            .docs
             .into_iter()
-            .filter(|doc| self.state.will_apply(doc.0, doc.1))
+            .filter(|doc| self.state.will_apply(doc.id, doc.last_updated))
             .map(|doc| {
-                valid_entries.push((doc.0, doc.1));
+                valid_entries.push((doc.id, doc.last_updated));
                 doc
             });
 
-        let res = self.storage.mark_many_as_tombstone(&self.name, docs).await;
+        let res = self.storage
+            .mark_many_as_tombstone(&self.name, docs).await;
 
         // Ensure the insertion order into the set is correct.
         valid_entries.sort_by_key(|entry| entry.1);
@@ -253,6 +254,7 @@ mod tests {
     use std::cmp::Reverse;
 
     use datacake_crdt::get_unix_timestamp_ms;
+    use crate::core::DocumentMetadata;
 
     use super::*;
     use crate::test_utils::MockStorage;
@@ -387,7 +389,8 @@ mod tests {
 
         let docs = [doc_1.clone(), doc_2.clone(), doc_3.clone()];
 
-        let mock_store = MockStorage::default().expect_multi_put_with_ctx(
+        let mock_store = MockStorage::default()
+            .expect_multi_put_with_ctx(
             1,
             move |keyspace, mut docs_iter, ctx| {
                 assert_eq!(keyspace, "my-keyspace");
@@ -433,7 +436,7 @@ mod tests {
             .expect_put_with_ctx(2, move |keyspace, doc, ctx| {
                 assert_eq!(keyspace, "my-keyspace");
                 assert!(ctx.is_none());
-                assert!(doc.id == doc_3.id || doc.id == doc_1.id);
+                assert!(doc.id() == doc_3.id() || doc.id() == doc_1.id());
 
                 Ok(())
             });
@@ -506,10 +509,10 @@ mod tests {
             .await
             .expect("Put operation should be successful.");
 
-        assert!(keyspace.state.get(&doc_1.id).is_some());
-        assert!(keyspace.state.get(&doc_2.id).is_some());
-        assert!(keyspace.state.get(&doc_3.id).is_some());
-        assert!(keyspace.state.get(&doc_4.id).is_some());
+        assert!(keyspace.state.get(&doc_1.id()).is_some());
+        assert!(keyspace.state.get(&doc_2.id()).is_some());
+        assert!(keyspace.state.get(&doc_3.id()).is_some());
+        assert!(keyspace.state.get(&doc_4.id()).is_some());
     }
 
     #[tokio::test]
@@ -533,7 +536,7 @@ mod tests {
             })
             .expect_mark_as_tombstone(1, move |keyspace, doc_id, ts| {
                 assert_eq!(keyspace, "my-keyspace");
-                assert_eq!(doc_id, doc_1.id);
+                assert_eq!(doc_id, doc_1.id());
                 assert_eq!(ts, delete_ts);
 
                 Ok(())
@@ -553,8 +556,10 @@ mod tests {
         keyspace
             .on_del(Del {
                 source: 0,
-                doc_id: doc_1.id,
-                ts: delete_ts,
+                doc: DocumentMetadata {
+                    id: doc_1.id(),
+                    last_updated: delete_ts,
+                },
                 _marker: Default::default(),
             })
             .await
@@ -569,7 +574,7 @@ mod tests {
         let doc_2 = Document::new(2, clock.get_time().await, b"Hello, world 2".to_vec());
         let doc_3 = Document::new(3, clock.get_time().await, b"Hello, world 3".to_vec());
 
-        let doc_ids = [doc_1.id, doc_2.id];
+        let doc_ids = [doc_1.id(), doc_2.id()];
         let docs = [doc_1.clone(), doc_2.clone(), doc_3.clone()];
 
         let mock_store = MockStorage::default()
@@ -582,7 +587,7 @@ mod tests {
             })
             .expect_mark_many_as_tombstone(1, move |keyspace, mut docs| {
                 assert_eq!(keyspace, "my-keyspace");
-                assert!(docs.all(|doc| doc_ids.contains(&doc.0)));
+                assert!(docs.all(|doc| doc_ids.contains(&doc.id)));
 
                 Ok(())
             });
@@ -601,9 +606,9 @@ mod tests {
         keyspace
             .on_multi_del(MultiDel {
                 source: 0,
-                key_ts_pairs: vec![
-                    (doc_1.id, clock.get_time().await),
-                    (doc_2.id, clock.get_time().await),
+                docs: vec![
+                    DocumentMetadata::new(doc_1.id(), clock.get_time().await),
+                    DocumentMetadata::new(doc_2.id(), clock.get_time().await),
                 ],
                 _marker: Default::default(),
             })
@@ -622,8 +627,8 @@ mod tests {
         let docs = [doc_1.clone(), doc_2.clone(), doc_3.clone()];
 
         let deletes_expected = vec![
-            (doc_3.id, clock.get_time().await),
-            (doc_1.id, clock.get_time().await),
+            DocumentMetadata::new(doc_3.id(), clock.get_time().await),
+            DocumentMetadata::new(doc_1.id(), clock.get_time().await),
         ];
 
         let deletes_expected_clone = deletes_expected.clone();
@@ -656,7 +661,7 @@ mod tests {
         keyspace
             .on_multi_del(MultiDel {
                 source: 0,
-                key_ts_pairs: deletes_expected.clone(),
+                docs: deletes_expected.clone(),
                 _marker: Default::default(),
             })
             .await

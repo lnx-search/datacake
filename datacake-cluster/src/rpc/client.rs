@@ -1,68 +1,63 @@
-use std::borrow::Cow;
+use std::collections::BTreeMap;
 use std::net::SocketAddr;
-use std::sync::Arc;
 
-use crossbeam_utils::atomic::AtomicCell;
 use datacake_crdt::{HLCTimestamp, Key, OrSWotSet};
 use datacake_node::Clock;
 use rkyv::AlignedVec;
-use tonic::transport::Channel;
-use tonic::Status;
-
-use crate::core::Document;
-use crate::keyspace::KeyspaceTimestamps;
-use crate::rpc::datacake_api;
-use crate::rpc::datacake_api::consistency_api_client::ConsistencyApiClient;
-use crate::rpc::datacake_api::replication_api_client::ReplicationApiClient;
-use crate::rpc::datacake_api::{
-    Context,
-    DocumentMetadata,
-    FetchDocs,
-    GetState,
-    MultiPutPayload,
-    MultiRemovePayload,
-    PollPayload,
-    PutPayload,
-    RemovePayload,
-};
+use datacake_rpc::{Channel, RpcClient, Status};
+use crate::core::{Document, DocumentMetadata};
+use crate::rpc::services::consistency_impl::{BatchPayload, ConsistencyService, Context, MultiPutPayload, MultiRemovePayload, PutPayload, RemovePayload};
+use crate::rpc::services::replication_impl::{FetchDocs, GetState, PollKeyspace, ReplicationService};
+use crate::Storage;
 
 /// A high level wrapper around the consistency GRPC service.
-pub struct ConsistencyClient {
+pub struct ConsistencyClient<S>
+where
+    S: Storage + Send + Sync + 'static,
+{
     clock: Clock,
-    inner: ConsistencyApiClient<Channel>,
+    inner: RpcClient<ConsistencyService<S>>,
 }
 
-impl ConsistencyClient {
+impl<S> ConsistencyClient<S>
+where
+    S: Storage + Send + Sync + 'static,
+{
     pub fn new(clock: Clock, channel: Channel) -> Self {
         Self {
             clock,
-            inner: ConsistencyApiClient::new(channel),
+            inner: RpcClient::new(channel),
         }
     }
 }
 
-impl ConsistencyClient {
+impl<S> ConsistencyClient<S>
+where
+    S: Storage + Send + Sync + 'static,
+{
     /// Adds a document to the remote node's state.
     pub async fn put(
         &mut self,
         keyspace: impl Into<String>,
-        doc: Document,
+        document: Document,
         node_id: &str,
         node_addr: SocketAddr,
     ) -> Result<(), Status> {
+        let timestamp = self.clock.get_time().await;
         let ts = self
             .inner
-            .put(PutPayload {
+            .send(&PutPayload {
                 keyspace: keyspace.into(),
-                document: Some(doc.into()),
+                document,
                 ctx: Some(Context {
                     node_id: node_id.to_string(),
-                    node_addr: node_addr.to_string(),
+                    node_addr,
                 }),
+                timestamp,
             })
             .await?
-            .into_inner()
-            .into();
+            .to_owned()
+            .map_err(Status::internal)?;
         self.clock.register_ts(ts).await;
         Ok(())
     }
@@ -71,23 +66,25 @@ impl ConsistencyClient {
     pub async fn multi_put(
         &mut self,
         keyspace: impl Into<String>,
-        docs: impl Iterator<Item = Document>,
+        documents: impl Iterator<Item = Document>,
         node_id: &str,
         node_addr: SocketAddr,
     ) -> Result<(), Status> {
+        let timestamp = self.clock.get_time().await;
         let ts = self
             .inner
-            .multi_put(MultiPutPayload {
+            .send(&MultiPutPayload {
                 keyspace: keyspace.into(),
-                documents: docs.map(|doc| doc.into()).collect(),
+                documents: documents.collect(),
                 ctx: Some(Context {
                     node_id: node_id.to_string(),
-                    node_addr: node_addr.to_string(),
+                    node_addr,
                 }),
+                timestamp,
             })
             .await?
-            .into_inner()
-            .into();
+            .to_owned()
+            .map_err(Status::internal)?;
         self.clock.register_ts(ts).await;
         Ok(())
     }
@@ -99,18 +96,17 @@ impl ConsistencyClient {
         id: Key,
         ts: HLCTimestamp,
     ) -> Result<(), Status> {
+        let timestamp = self.clock.get_time().await;
         let ts = self
             .inner
-            .remove(RemovePayload {
+            .send(&RemovePayload {
                 keyspace: keyspace.into(),
-                document: Some(DocumentMetadata {
-                    id,
-                    last_updated: Some(ts.into()),
-                }),
+                document: DocumentMetadata::new(id, ts),
+                timestamp,
             })
             .await?
-            .into_inner()
-            .into();
+            .to_owned()
+            .map_err(Status::internal)?;
         self.clock.register_ts(ts).await;
         Ok(())
     }
@@ -119,73 +115,74 @@ impl ConsistencyClient {
     pub async fn multi_del(
         &mut self,
         keyspace: impl Into<String>,
-        pairs: impl Iterator<Item = (Key, HLCTimestamp)>,
+        documents: Vec<DocumentMetadata>,
     ) -> Result<(), Status> {
+        let timestamp = self.clock.get_time().await;
         let ts = self
             .inner
-            .multi_remove(MultiRemovePayload {
+            .send(&MultiRemovePayload {
                 keyspace: keyspace.into(),
-                documents: pairs
-                    .map(|(id, ts)| DocumentMetadata {
-                        id,
-                        last_updated: Some(ts.into()),
-                    })
-                    .collect(),
+                documents,
+                timestamp,
             })
             .await?
-            .into_inner()
-            .into();
+            .to_owned()
+            .map_err(Status::internal)?;
         self.clock.register_ts(ts).await;
         Ok(())
     }
 
     pub async fn apply_batch(
         &mut self,
-        batch: datacake_api::BatchPayload,
+        batch: &BatchPayload,
     ) -> Result<(), Status> {
-        let ts = self.inner.apply_batch(batch).await?.into_inner().into();
+        let ts = self.inner
+            .send(batch)
+            .await?
+            .to_owned()
+            .map_err(Status::internal)?;
         self.clock.register_ts(ts).await;
         Ok(())
     }
 }
 
 /// A high level wrapper around the replication GRPC service.
-pub struct ReplicationClient {
+pub struct ReplicationClient<S>
+where
+    S: Storage + Send + Sync + 'static,
+{
     clock: Clock,
-    inner: ReplicationApiClient<Channel>,
+    inner: RpcClient<ReplicationService<S>>,
 }
 
-impl ReplicationClient {
+impl<S> ReplicationClient<S>
+where
+    S: Storage + Send + Sync + 'static,
+{
     pub fn new(clock: Clock, channel: Channel) -> Self {
         Self {
             clock,
-            inner: ReplicationApiClient::new(channel),
+            inner: RpcClient::new(channel),
         }
     }
 }
 
-impl ReplicationClient {
+impl<S> ReplicationClient<S>
+where
+    S: Storage + Send + Sync + 'static,
+{
     /// Fetches the newest version of the node's keyspace timestamps.
-    pub async fn poll_keyspace(&mut self) -> Result<KeyspaceTimestamps, Status> {
-        let ts = self.clock.get_time().await;
+    pub async fn poll_keyspace(&mut self) -> Result<BTreeMap<String, HLCTimestamp>, Status> {
+        let timestamp = self.clock.get_time().await;
         let inner = self
             .inner
-            .poll_keyspace(PollPayload {
-                timestamp: Some(ts.into()),
-            })
+            .send(&PollKeyspace(timestamp))
             .await?
-            .into_inner();
+            .to_owned()
+            .map_err(Status::internal)?;
 
-        let ts = HLCTimestamp::from(inner.timestamp.unwrap());
-        self.clock.register_ts(ts).await;
-
-        let mut timestamps = KeyspaceTimestamps::default();
-        for (keyspace, ts) in inner.keyspace_timestamps {
-            let ts = HLCTimestamp::from(ts);
-            timestamps.insert(Cow::Owned(keyspace), Arc::new(AtomicCell::new(ts)));
-        }
-
-        Ok(timestamps)
+        self.clock.register_ts(inner.timestamp).await;
+        Ok(inner.keyspace_timestamps)
     }
 
     /// Fetches the node's current state for a given keyspace and returns
@@ -199,26 +196,24 @@ impl ReplicationClient {
         keyspace: impl Into<String>,
     ) -> Result<(HLCTimestamp, OrSWotSet<{ crate::keyspace::NUM_SOURCES }>), Status>
     {
-        let ts = self.clock.get_time().await;
+        let timestamp = self.clock.get_time().await;
         let inner = self
             .inner
-            .get_state(GetState {
-                timestamp: Some(ts.into()),
+            .send(&GetState {
+                timestamp,
                 keyspace: keyspace.into(),
             })
             .await?
-            .into_inner();
+            .to_owned()
+            .map_err(Status::internal)?;
 
-        let ts = HLCTimestamp::from(inner.timestamp.unwrap());
-        self.clock.register_ts(ts).await;
+        self.clock.register_ts(inner.timestamp).await;
 
-        let mut aligned = AlignedVec::with_capacity(inner.set_data.len());
-        aligned.extend_from_slice(&inner.set_data);
+        let mut aligned = AlignedVec::with_capacity(inner.set.len());
+        aligned.extend_from_slice(&inner.set);
 
-        let state = rkyv::from_bytes(&aligned)
-            .map_err(|_| Status::data_loss("Returned buffer is corrupted."))?;
-
-        Ok((inner.last_updated.unwrap().into(), state))
+        let state = rkyv::from_bytes(&aligned).map_err(|_| Status::invalid())?;
+        Ok((inner.last_updated, state))
     }
 
     /// Fetches a set of documents with the provided IDs belonging to the given keyspace.
@@ -226,23 +221,22 @@ impl ReplicationClient {
         &mut self,
         keyspace: impl Into<String>,
         doc_ids: Vec<Key>,
-    ) -> Result<impl Iterator<Item = Document>, Status> {
-        let ts = self.clock.get_time().await;
+    ) -> Result<Vec<Document>, Status> {
+        let timestamp = self.clock.get_time().await;
         let inner = self
             .inner
-            .fetch_docs(FetchDocs {
-                timestamp: Some(ts.into()),
+            .send(&FetchDocs {
+                timestamp,
                 keyspace: keyspace.into(),
                 doc_ids,
             })
-            .await?
-            .into_inner();
+            .await?;
 
-        let ts = HLCTimestamp::from(inner.timestamp.unwrap());
-        self.clock.register_ts(ts).await;
+        let payload = inner
+            .to_owned()
+            .unwrap();
 
-        let documents = inner.documents.into_iter().map(Document::from);
-
-        Ok(documents)
+        self.clock.register_ts(payload.timestamp).await;
+        Ok(payload.documents)
     }
 }

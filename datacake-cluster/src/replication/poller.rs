@@ -9,11 +9,12 @@ use std::time::Duration;
 use anyhow::anyhow;
 use crossbeam_channel::{Receiver, Sender};
 use crossbeam_utils::atomic::AtomicCell;
-use datacake_crdt::{HLCTimestamp, StateChanges};
+use datacake_crdt::HLCTimestamp;
 use datacake_node::{Clock, MembershipChange, RpcNetwork};
 use puppet::ActorMailbox;
 use tokio::sync::Semaphore;
 use tokio::time::{interval, MissedTickBehavior};
+use datacake_rpc::Status;
 
 use crate::keyspace::{
     Del,
@@ -29,6 +30,7 @@ use crate::replication::MAX_CONCURRENT_REQUESTS;
 use crate::rpc::ReplicationClient;
 use crate::storage::ProgressWatcher;
 use crate::{ProgressTracker, PutContext, Storage};
+use crate::core::DocumentMetadata;
 
 const INITIAL_KEYSPACE_WAIT: Duration = if cfg!(any(test, feature = "test-utils")) {
     Duration::from_millis(500)
@@ -171,7 +173,7 @@ impl KeyspaceTracker {
     fn get_diff(
         &mut self,
         node_id: String,
-        other: &KeyspaceTimestamps,
+        other: &BTreeMap<String, HLCTimestamp>,
     ) -> impl Iterator<Item = Cow<'static, str>> {
         self.inner.entry(node_id).or_default().diff(other)
     }
@@ -261,8 +263,8 @@ where
         "Getting keyspace changes on remote node.",
     );
 
-    let channel = ctx.network.get_or_connect(target_node_addr).await?;
-    let mut client = ReplicationClient::new(ctx.clock().clone(), channel.clone());
+    let channel = ctx.network.get_or_connect(target_node_addr)?;
+    let mut client = ReplicationClient::<S>::new(ctx.clock().clone(), channel.clone());
     let keyspace_timestamps = client.poll_keyspace().await?;
 
     let diff = keyspace_tracker
@@ -316,15 +318,15 @@ where
 
 pub struct KeyspaceDiff {
     keyspace: String,
-    modified: StateChanges,
-    removed: StateChanges,
+    modified: Vec<DocumentMetadata>,
+    removed: Vec<DocumentMetadata>,
     last_updated: HLCTimestamp,
 }
 
 #[derive(Debug, thiserror::Error)]
 #[error("RPC Error: {cause:?}")]
 pub struct GetDiffError {
-    cause: tonic::Status,
+    cause: Status,
     keyspace: String,
     node_id: String,
     node_addr: SocketAddr,
@@ -344,7 +346,7 @@ async fn get_keyspace_diff<S>(
     target_node_id: String,
     target_rpc_addr: SocketAddr,
     group: KeyspaceGroup<S>,
-    mut client: ReplicationClient,
+    mut client: ReplicationClient<S>,
 ) -> Result<KeyspaceDiff, GetDiffError>
 where
     S: Storage + Send + Sync + 'static,
@@ -365,8 +367,8 @@ where
 
     Ok(KeyspaceDiff {
         keyspace: keyspace_name.clone(),
-        modified,
-        removed,
+        modified: modified.into_iter().map(|(id, ts)| DocumentMetadata::new(id, ts)).collect(),
+        removed: removed.into_iter().map(|(id, ts)| DocumentMetadata::new(id, ts)).collect(),
         last_updated,
     })
 }
@@ -382,13 +384,13 @@ async fn begin_keyspace_sync<S>(
     keyspace_name: String,
     target_node_id: String,
     target_rpc_addr: SocketAddr,
-    removed: StateChanges,
-    modified: StateChanges,
+    removed: Vec<DocumentMetadata>,
+    modified: Vec<DocumentMetadata>,
 ) -> Result<(), anyhow::Error>
 where
     S: Storage + Send + Sync + 'static,
 {
-    let channel = ctx.network.get_or_connect(target_rpc_addr).await?;
+    let channel = ctx.network.get_or_connect(target_rpc_addr)?;
     let keyspace = ctx.group.get_or_create_keyspace(&keyspace_name).await;
     let client = ReplicationClient::new(ctx.clock().clone(), channel.clone());
 
@@ -433,9 +435,9 @@ where
 ///
 /// These documents are then persisted and the metadata marked accordingly.
 async fn handle_modified<S>(
-    mut client: ReplicationClient,
+    mut client: ReplicationClient<S>,
     keyspace: ActorMailbox<KeyspaceActor<S>>,
-    modified: StateChanges,
+    modified: Vec<DocumentMetadata>,
     ctx: PutContext,
 ) -> Result<(), anyhow::Error>
 where
@@ -443,13 +445,12 @@ where
 {
     let doc_id_chunks = modified
         .chunks(MAX_NUMBER_OF_DOCS_PER_FETCH)
-        .map(|entries| entries.iter().map(|(k, _)| *k).collect::<Vec<_>>());
+        .map(|entries| entries.iter().map(|doc| doc.id).collect::<Vec<_>>());
 
     for doc_ids in doc_id_chunks {
         let docs = client
             .fetch_docs(keyspace.name(), doc_ids)
-            .await?
-            .collect::<Vec<_>>();
+            .await?;
 
         let msg = MultiSet {
             source: READ_REPAIR_SOURCE_ID,
@@ -471,7 +472,7 @@ where
 /// as deleted along with the main data itself, but we keep a history of the deletes we've made.
 async fn handle_removals<S>(
     keyspace: ActorMailbox<KeyspaceActor<S>>,
-    mut removed: StateChanges,
+    mut removed: Vec<DocumentMetadata>,
 ) -> Result<(), anyhow::Error>
 where
     S: Storage + Send + Sync + 'static,
@@ -481,11 +482,10 @@ where
     }
 
     if removed.len() == 1 {
-        let (doc_id, ts) = removed.remove(0);
+        let doc = removed.remove(0);
         let msg = Del {
             source: READ_REPAIR_SOURCE_ID,
-            doc_id,
-            ts,
+            doc,
             _marker: PhantomData::<S>::default(),
         };
         keyspace.send(msg).await?;
@@ -494,7 +494,7 @@ where
 
     let msg = MultiDel {
         source: READ_REPAIR_SOURCE_ID,
-        key_ts_pairs: removed,
+        docs: removed,
         _marker: PhantomData::<S>::default(),
     };
     keyspace.send(msg).await?;

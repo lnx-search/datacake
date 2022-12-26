@@ -8,6 +8,7 @@ use parking_lot::{Mutex, RwLock};
 
 use crate::storage::BulkMutationError;
 use crate::{Document, PutContext, Storage};
+use crate::core::DocumentMetadata;
 
 /// A wrapping type around another `Storage` implementation that
 /// logs all the activity going into and out of the store.
@@ -101,7 +102,7 @@ impl<S: Storage + Send + Sync + 'static> Storage for InstrumentedStorage<S> {
     async fn mark_many_as_tombstone(
         &self,
         keyspace: &str,
-        documents: impl Iterator<Item = (Key, HLCTimestamp)> + Send,
+        documents: impl Iterator<Item = DocumentMetadata> + Send,
     ) -> Result<(), BulkMutationError<Self::Error>> {
         let documents = documents.collect::<Vec<_>>();
         info!(keyspace = keyspace, documents = ?documents, "mark_many_as_tombstone");
@@ -237,7 +238,7 @@ mock_storage_methods!(MockStorage {
         returns = Result<(), MockError>
         => expect_mark_as_tombstone
     mark_many_as_tombstone:
-        params = (&str, Box<dyn Iterator<Item = (Key, HLCTimestamp)> + Send>,)
+        params = (&str, Box<dyn Iterator<Item = DocumentMetadata> + Send>,)
         returns = Result<(), BulkMutationError<MockError>>
         => expect_mark_many_as_tombstone
     get:
@@ -355,7 +356,7 @@ impl Storage for MockStorage {
     async fn mark_many_as_tombstone(
         &self,
         keyspace: &str,
-        documents: impl Iterator<Item = (Key, HLCTimestamp)> + Send,
+        documents: impl Iterator<Item = DocumentMetadata> + Send,
     ) -> Result<(), BulkMutationError<Self::Error>> {
         if let Some((expected, name)) = self.mark_many_as_tombstone.as_ref() {
             self.mock_counters.inc(name);
@@ -463,12 +464,12 @@ impl Storage for MemStore {
             .entry(keyspace.to_string())
             .and_modify(|entries| {
                 for doc in documents.clone() {
-                    entries.insert(doc.id, doc);
+                    entries.insert(doc.id(), doc);
                 }
             })
             .or_insert_with(|| {
                 HashMap::from_iter(
-                    documents.clone().into_iter().map(|doc| (doc.id, doc)),
+                    documents.clone().into_iter().map(|doc| (doc.id(), doc)),
                 )
             });
         self.metadata
@@ -476,14 +477,14 @@ impl Storage for MemStore {
             .entry(keyspace.to_string())
             .and_modify(|entries| {
                 for doc in documents.clone() {
-                    entries.insert(doc.id, (doc.last_updated, false));
+                    entries.insert(doc.id(), (doc.last_updated(), false));
                 }
             })
             .or_insert_with(|| {
                 HashMap::from_iter(
                     documents
                         .into_iter()
-                        .map(|doc| (doc.id, (doc.last_updated, false))),
+                        .map(|doc| (doc.id(), (doc.last_updated(), false))),
                 )
             });
 
@@ -496,31 +497,32 @@ impl Storage for MemStore {
         doc_id: Key,
         timestamp: HLCTimestamp,
     ) -> Result<(), Self::Error> {
-        self.mark_many_as_tombstone(keyspace, [(doc_id, timestamp)].into_iter())
-            .await
-            .map_err(|e| e.inner)
+        self.mark_many_as_tombstone(
+            keyspace,
+            [DocumentMetadata { id: doc_id, last_updated: timestamp }].into_iter()
+        ).await.map_err(|e| e.inner)
     }
 
     async fn mark_many_as_tombstone(
         &self,
         keyspace: &str,
-        documents: impl Iterator<Item = (Key, HLCTimestamp)> + Send,
+        documents: impl Iterator<Item = DocumentMetadata> + Send,
     ) -> Result<(), BulkMutationError<Self::Error>> {
         let docs = documents.collect::<Vec<_>>();
         self.data
             .write()
             .entry(keyspace.to_string())
             .and_modify(|entries| {
-                for (doc_id, _) in docs.iter() {
-                    entries.remove(doc_id);
+                for doc in docs.iter() {
+                    entries.remove(&doc.id);
                 }
             });
         self.metadata
             .write()
             .entry(keyspace.to_string())
             .and_modify(|entries| {
-                for (doc_id, ts) in docs {
-                    entries.insert(doc_id, (ts, true));
+                for doc in docs {
+                    entries.insert(doc.id, (doc.last_updated, true));
                 }
             });
 

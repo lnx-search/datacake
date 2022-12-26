@@ -7,9 +7,9 @@ use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use datacake_crdt::{HLCTimestamp, Key};
-use tonic::transport::Channel;
+use datacake_rpc::Channel;
 
-use crate::core::Document;
+use crate::core::{Document, DocumentMetadata};
 
 /// A utility for tracking the progress a task has made.
 pub struct ProgressWatcher {
@@ -321,7 +321,7 @@ pub trait Storage {
     async fn mark_many_as_tombstone(
         &self,
         keyspace: &str,
-        documents: impl Iterator<Item = (Key, HLCTimestamp)> + Send,
+        documents: impl Iterator<Item = DocumentMetadata> + Send,
     ) -> Result<(), BulkMutationError<Self::Error>>;
 
     /// Retrieves a single document belonging to a given keyspace from the store.

@@ -1,10 +1,11 @@
 use std::marker::PhantomData;
 
-use datacake_crdt::{HLCTimestamp, Key, OrSWotSet, StateChanges};
+use datacake_crdt::{HLCTimestamp, OrSWotSet, StateChanges};
 use puppet::{derive_message, Message};
 
 use crate::storage::BulkMutationError;
 use crate::{Document, PutContext, Storage};
+use crate::core::DocumentMetadata;
 
 #[derive(Debug, thiserror::Error)]
 #[error("Failed to (de)serialize state.")]
@@ -34,8 +35,7 @@ impl<S: Storage> Message for MultiSet<S> {
 
 pub struct Del<S> {
     pub source: usize,
-    pub doc_id: Key,
-    pub ts: HLCTimestamp,
+    pub doc: DocumentMetadata,
     pub _marker: PhantomData<S>,
 }
 impl<S: Storage> Message for Del<S> {
@@ -44,7 +44,7 @@ impl<S: Storage> Message for Del<S> {
 
 pub struct MultiDel<S> {
     pub source: usize,
-    pub key_ts_pairs: StateChanges,
+    pub docs: Vec<DocumentMetadata>,
     pub _marker: PhantomData<S>,
 }
 impl<S: Storage> Message for MultiDel<S> {

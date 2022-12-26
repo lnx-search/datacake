@@ -56,13 +56,26 @@ where
     pub fn new(
         node_id: impl Into<String>,
         connection_cfg: ConnectionConfig,
-        selector: S,
-    ) -> Self {
-        Self {
+    ) -> DatacakeNodeBuilder<DCAwareSelector> {
+        DatacakeNodeBuilder {
             node_id: node_id.into(),
             connection_cfg,
             cluster_id: DEFAULT_CLUSTER_ID.to_string(),
             data_center: Cow::Borrowed(DEFAULT_DATA_CENTER),
+            node_selector: DCAwareSelector::default(),
+        }
+    }
+
+    /// Set a node selector.
+    ///
+    /// This is used by systems to select a specific set of nodes from
+    /// the live membership set with a given consistency level.
+    pub fn with_node_selector<S2>(self, selector: S2) -> DatacakeNodeBuilder<S2> {
+        DatacakeNodeBuilder {
+            node_id: self.node_id,
+            connection_cfg: self.connection_cfg,
+            cluster_id: self.cluster_id,
+            data_center: self.data_center,
             node_selector: selector,
         }
     }
@@ -215,6 +228,17 @@ impl DatacakeNode {
         Svc: RpcService + Send + Sync + 'static,
     {
         self.rpc_server.add_service(service);
+    }
+
+    /// Adds a new cluster extension to the existing node.
+    ///
+    /// Cluster extensions can be used to extend the cluster to provide
+    /// additional functionality like storage, messaging, etc...
+    pub async fn add_extension<Ext>(&self, ext: Ext) -> Result<Ext::Output, Ext::Error>
+    where
+        Ext: ClusterExtension
+    {
+        ext.init_extension(self).await
     }
 
     #[inline]

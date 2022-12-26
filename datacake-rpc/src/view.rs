@@ -19,7 +19,7 @@ pub struct InvalidView;
 /// allocations if the situation does not require having an owned version of the value.
 pub struct DataView<T, D = AlignedVec>
 where
-    T: Archive + ?Sized,
+    T: Archive,
     T::Archived: 'static,
     D: Deref<Target = [u8]> + Send + Sync,
 {
@@ -55,9 +55,7 @@ where
 impl<T, D> DataView<T, D>
 where
     T: Archive,
-    T::Archived: CheckBytes<DefaultValidator<'static>>
-        + Deserialize<T, SharedDeserializeMap>
-        + 'static,
+    T::Archived: Deserialize<T, SharedDeserializeMap> + 'static,
     D: Deref<Target = [u8]> + Send + Sync,
 {
     /// Deserializes the view into it's owned value T.

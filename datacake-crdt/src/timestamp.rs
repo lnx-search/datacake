@@ -16,7 +16,7 @@ const MAX_DRIFT_MS: u64 = 60_000;
 #[repr(C)]
 #[cfg_attr(feature = "rkyv-support", derive(Serialize, Deserialize, Archive))]
 #[cfg_attr(feature = "rkyv-support", archive(compare(PartialEq)))]
-#[cfg_attr(feature = "rkyv-support", archive_attr(derive(CheckBytes, Debug)))]
+#[cfg_attr(feature = "rkyv-support", archive_attr(repr(C), derive(CheckBytes, Debug)))]
 /// A HLC (Hybrid Logical Clock) timestamp implementation.
 ///
 /// This implementation is largely a port of the JavaScript implementation

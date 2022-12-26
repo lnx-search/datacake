@@ -1,9 +1,11 @@
 use std::error::Error;
 use std::fmt::Debug;
+use std::io;
 use std::net::SocketAddr;
 
 use datacake_node::ConsistencyError;
 use thiserror::Error;
+use datacake_rpc::Status;
 
 use crate::storage::BulkMutationError;
 
@@ -43,9 +45,9 @@ pub enum StoreError<E: Error + Send + 'static> {
 
     #[error("Transport Error: ({0}) - {1}")]
     /// An error occurred when attempting to open a connection or listen on a given address.
-    TransportError(SocketAddr, tonic::transport::Error),
+    TransportError(SocketAddr, io::Error),
 
     #[error("Rpc Error: ({0}) - {1}")]
     /// An error occurred during RPC communication with other nodes.
-    RpcError(SocketAddr, tonic::Status),
+    RpcError(SocketAddr, Status),
 }

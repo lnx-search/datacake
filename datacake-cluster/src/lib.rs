@@ -18,9 +18,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::Error;
 use async_trait::async_trait;
-use bytes::Bytes;
 use datacake_crdt::Key;
 use datacake_node::{
     ClusterExtension,
@@ -28,7 +26,6 @@ use datacake_node::{
     ConsistencyError,
     DatacakeHandle,
     DatacakeNode,
-    ServiceRegistry,
 };
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
@@ -36,9 +33,8 @@ pub use statistics::SystemStatistics;
 #[cfg(feature = "test-utils")]
 pub use storage::test_suite;
 pub use storage::{BulkMutationError, ProgressTracker, PutContext, Storage};
-use tonic::transport::server::Router;
 
-pub use self::core::Document;
+pub use self::core::{Document, DocumentMetadata};
 use crate::keyspace::{
     Del,
     KeyspaceGroup,
@@ -55,6 +51,8 @@ use crate::replication::{
     TaskServiceContext,
 };
 use crate::rpc::ConsistencyClient;
+use crate::rpc::services::consistency_impl::ConsistencyService;
+use crate::rpc::services::replication_impl::ReplicationService;
 
 const TIMEOUT: Duration = Duration::from_secs(2);
 const DEFAULT_REPAIR_INTERVAL: Duration = if cfg!(any(test, feature = "test-utils")) {
@@ -65,14 +63,14 @@ const DEFAULT_REPAIR_INTERVAL: Duration = if cfg!(any(test, feature = "test-util
 
 /// A fully managed eventually consistent state controller.
 ///
-/// The [EventuallyConsistentReplicator] manages all RPC and state propagation for
+/// The [EventuallyConsistentStore] manages all RPC and state propagation for
 /// a given application, where the only setup required is the
 /// RPC based configuration and the required handler traits
 /// which wrap the application itself.
 ///
 /// Datacake essentially acts as a frontend wrapper around a datastore
 /// to make is distributed.
-pub struct EventuallyConsistentStoreExt<S>
+pub struct EventuallyConsistentStoreExtension<S>
 where
     S: Storage + Send + Sync + 'static,
 {
@@ -80,7 +78,7 @@ where
     repair_interval: Duration,
 }
 
-impl<S> EventuallyConsistentStoreExt<S>
+impl<S> EventuallyConsistentStoreExtension<S>
 where
     S: Storage + Send + Sync + 'static,
 {
@@ -101,7 +99,7 @@ where
 }
 
 #[async_trait]
-impl<S> ClusterExtension for EventuallyConsistentStoreExt<S>
+impl<S> ClusterExtension for EventuallyConsistentStoreExtension<S>
 where
     S: Storage + Send + Sync + 'static,
 {
@@ -112,23 +110,13 @@ where
         self,
         node: &DatacakeNode,
     ) -> Result<Self::Output, Self::Error> {
-        EventuallyConsistentStore::create(self.datastore, self.repair_interval, node)
-            .await
-    }
-}
-
-impl<S> ServiceRegistry for EventuallyConsistentStoreExt<S>
-where
-    S: 'static + Send + Storage + Sync,
-{
-    fn register_service(&self, router: Router) -> Router {
-        todo!()
+        EventuallyConsistentStore::create(self.datastore, self.repair_interval, node).await
     }
 }
 
 /// A fully managed eventually consistent state controller.
 ///
-/// The [EventuallyConsistentReplicator] manages all RPC and state propagation for
+/// The [EventuallyConsistentStore] manages all RPC and state propagation for
 /// a given application, where the only setup required is the
 /// RPC based configuration and the required handler traits
 /// which wrap the application itself.
@@ -174,7 +162,7 @@ where
             group: group.clone(),
             network: node.network().clone(),
         };
-        let task_service = replication::start_task_distributor_service(task_ctx).await;
+        let task_service = replication::start_task_distributor_service::<S>(task_ctx).await;
         let repair_service = replication::start_replication_cycle(replication_ctx).await;
 
         tokio::spawn(watch_membership_changes(
@@ -182,6 +170,9 @@ where
             repair_service.clone(),
             node.handle(),
         ));
+
+        node.add_rpc_service(ConsistencyService::new(group.clone(), node.network().clone()));
+        node.add_rpc_service(ReplicationService::new(group.clone()));
 
         Ok(Self {
             node: node.handle(),
@@ -318,7 +309,7 @@ where
         consistency: Consistency,
     ) -> Result<(), error::StoreError<S::Error>>
     where
-        D: Into<Bytes>,
+        D: Into<Vec<u8>>,
     {
         let nodes = self
             .node
@@ -353,10 +344,9 @@ where
                     .node
                     .network()
                     .get_or_connect(node)
-                    .await
                     .map_err(|e| error::StoreError::TransportError(node, e))?;
 
-                let mut client = ConsistencyClient::new(clock, channel);
+                let mut client = ConsistencyClient::<S>::new(clock, channel);
 
                 client
                     .put(
@@ -383,7 +373,7 @@ where
         consistency: Consistency,
     ) -> Result<(), error::StoreError<S::Error>>
     where
-        D: Into<Bytes>,
+        D: Into<Vec<u8>>,
         T: Iterator<Item = (Key, D)> + Send,
         I: IntoIterator<IntoIter = T> + Send,
     {
@@ -424,10 +414,9 @@ where
                     .node
                     .network()
                     .get_or_connect(node)
-                    .await
                     .map_err(|e| error::StoreError::TransportError(node, e))?;
 
-                let mut client = ConsistencyClient::new(clock, channel);
+                let mut client = ConsistencyClient::<S>::new(clock, channel);
 
                 client
                     .multi_put(
@@ -462,10 +451,13 @@ where
         let last_updated = self.node.clock().get_time().await;
 
         let keyspace = self.group.get_or_create_keyspace(keyspace).await;
+        let doc = DocumentMetadata {
+            id: doc_id,
+            last_updated,
+        };
         let msg = Del {
             source: CONSISTENCY_SOURCE_ID,
-            doc_id,
-            ts: last_updated,
+            doc,
             _marker: PhantomData::<S>::default(),
         };
         keyspace.send(msg).await?;
@@ -473,8 +465,7 @@ where
         // Register mutation with the distributor service.
         self.task_service.mutation(Mutation::Del {
             keyspace: Cow::Owned(keyspace.name().to_string()),
-            doc_id,
-            ts: last_updated,
+            doc,
         });
 
         let factory = |node| {
@@ -485,10 +476,9 @@ where
                     .node
                     .network()
                     .get_or_connect(node)
-                    .await
                     .map_err(|e| error::StoreError::TransportError(node, e))?;
 
-                let mut client = ConsistencyClient::new(clock, channel);
+                let mut client = ConsistencyClient::<S>::new(clock, channel);
 
                 client
                     .del(keyspace, doc_id, last_updated)
@@ -522,13 +512,18 @@ where
         let last_updated = self.node.clock().get_time().await;
         let docs = doc_ids
             .into_iter()
-            .map(|id| (id, last_updated))
+            .map(|id|  {
+                DocumentMetadata {
+                    id,
+                    last_updated,
+                }
+            })
             .collect::<Vec<_>>();
 
         let keyspace = self.group.get_or_create_keyspace(keyspace).await;
         let msg = MultiDel {
             source: CONSISTENCY_SOURCE_ID,
-            key_ts_pairs: docs.clone(),
+            docs: docs.clone(),
             _marker: PhantomData::<S>::default(),
         };
         keyspace.send(msg).await?;
@@ -548,13 +543,12 @@ where
                     .node
                     .network()
                     .get_or_connect(node)
-                    .await
                     .map_err(|e| error::StoreError::TransportError(node, e))?;
 
-                let mut client = ConsistencyClient::new(clock, channel);
+                let mut client = ConsistencyClient::<S>::new(clock, channel);
 
                 client
-                    .multi_del(keyspace, docs.into_iter())
+                    .multi_del(keyspace, docs)
                     .await
                     .map_err(|e| error::StoreError::RpcError(node, e))?;
 
