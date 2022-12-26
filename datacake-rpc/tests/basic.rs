@@ -60,4 +60,6 @@ async fn test_basic() {
 
     let resp = rpc_client.send(&msg1).await.unwrap();
     assert_eq!(resp, msg1.name);
+
+    server.shutdown();
 }
