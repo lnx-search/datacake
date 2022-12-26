@@ -59,7 +59,8 @@ use crate::handler::{HandlerKey, OpaqueMessageHandler, RpcService, ServiceRegist
 /// // service that is no longer registered,
 /// server.remove_service(EchoService::service_name());
 ///
-/// server.wait().await;
+/// // We can add wait() here if we want to listen for messages forever.
+/// // server.wait().await;
 /// # Ok(())
 /// # }
 /// ```

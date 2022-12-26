@@ -16,7 +16,6 @@
 //! use std::net::SocketAddr;
 //!
 //! use bytecheck::CheckBytes;
-//! use bytecheck::CheckBytes;
 //! use datacake_rpc::{
 //!     Channel,
 //!     Handler,
@@ -89,7 +88,7 @@
 //!     // Clients only need references to the message which helps
 //!     // reduce allocations.
 //!     let resp = rpc_client.send(&msg1).await?;
-//!     assert_eq!(resp, &msg1);
+//!     assert_eq!(resp, msg1.name);
 //!     Ok(())
 //! }
 //! ```

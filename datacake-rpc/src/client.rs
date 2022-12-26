@@ -65,7 +65,7 @@ pub type MessageReply<Svc, Msg> = DataView<<Svc as Handler<Msg>>::Reply>;
 ///     age: 12,
 /// };
 ///
-/// let resp = rpc_client.send(&msg1).await?;
+/// let resp = rpc_client.send(&msg).await?;
 /// assert_eq!(resp, msg);
 /// # Ok(())
 /// # }
