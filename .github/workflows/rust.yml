@@ -43,3 +43,5 @@ jobs:
       - uses: Swatinem/rust-cache@v1
       - name: Run main tests
         run: cargo +nightly test --all --all-features -j 4
+        env:
+          RUST_LOG: info
