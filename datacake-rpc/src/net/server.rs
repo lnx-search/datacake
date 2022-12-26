@@ -37,6 +37,7 @@ pub(crate) async fn start_rpc_server(
             .http2_adaptive_window(true)
             .serve(make_service);
 
+        info!("Listening @ {}", bind_addr);
         if let Err(e) = server.await {
             error!(error = ?e, "Server failed to handle requests.");
         } else {
