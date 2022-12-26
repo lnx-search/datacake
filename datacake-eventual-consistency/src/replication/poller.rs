@@ -413,7 +413,7 @@ where
     // we simply let the removal task continue on as normal.
     let removal_task = tokio::spawn(handle_removals(keyspace.clone(), removed));
 
-    let res = tokio::spawn(handle_modified(client, keyspace, modified, ctx));
+    tokio::spawn(handle_modified(client, keyspace, modified, ctx));
 
     let mut watcher = ProgressWatcher::new(progress_tracker, KEYSPACE_SYNC_TIMEOUT);
     let mut interval = interval(Duration::from_millis(250));
@@ -421,7 +421,7 @@ where
         interval.tick().await;
 
         if watcher.has_expired() {
-            res.abort();
+            warn!("Storage task took too long to complete and has been left to run.");
             removal_task.await??;
             return Err(anyhow!("Task timed out and could not be completed."));
         }
