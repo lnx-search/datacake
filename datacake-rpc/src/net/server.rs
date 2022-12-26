@@ -39,6 +39,8 @@ pub(crate) async fn start_rpc_server(
 
         if let Err(e) = server.await {
             error!(error = ?e, "Server failed to handle requests.");
+        } else {
+            info!("RPC system has shutdown.");
         }
     });
 
