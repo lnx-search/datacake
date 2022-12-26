@@ -351,6 +351,7 @@ pub mod test_suite {
     use datacake_crdt::{get_unix_timestamp_ms, HLCTimestamp, Key};
 
     use crate::core::Document;
+    use crate::DocumentMetadata;
     use crate::storage::Storage;
     use crate::test_utils::InstrumentedStorage;
 
@@ -466,9 +467,9 @@ pub mod test_suite {
             .await
             .expect("Put documents");
 
-        doc_3.last_updated = clock.send().unwrap();
+        doc_3.metadata.last_updated = clock.send().unwrap();
         storage
-            .mark_as_tombstone(KEYSPACE, doc_3.id, doc_3.last_updated)
+            .mark_as_tombstone(KEYSPACE, doc_3.id(), doc_3.last_updated())
             .await
             .expect("Mark document as tombstone.");
 
@@ -480,21 +481,21 @@ pub mod test_suite {
         assert_eq!(
             metadata,
             to_hashset([
-                (doc_1.id, doc_1.last_updated, false),
-                (doc_2.id, doc_2.last_updated, false),
-                (doc_3.id, doc_3.last_updated, true),
+                (doc_1.id(), doc_1.last_updated(), false),
+                (doc_2.id(), doc_2.last_updated(), false),
+                (doc_3.id(), doc_3.last_updated(), true),
             ]),
             "Persisted metadata entries should match expected values."
         );
 
-        doc_1.last_updated = clock.send().unwrap();
-        doc_2.last_updated = clock.send().unwrap();
+        doc_1.metadata.last_updated = clock.send().unwrap();
+        doc_2.metadata.last_updated = clock.send().unwrap();
         storage
             .mark_many_as_tombstone(
                 KEYSPACE,
                 [
-                    (doc_1.id, doc_1.last_updated),
-                    (doc_2.id, doc_2.last_updated),
+                    doc_1.metadata,
+                    doc_2.metadata,
                 ]
                 .into_iter(),
             )
@@ -508,9 +509,9 @@ pub mod test_suite {
         assert_eq!(
             metadata,
             to_hashset([
-                (doc_1.id, doc_1.last_updated, true),
-                (doc_2.id, doc_2.last_updated, true),
-                (doc_3.id, doc_3.last_updated, true),
+                (doc_1.id(), doc_1.last_updated(), true),
+                (doc_2.id(), doc_2.last_updated(), true),
+                (doc_3.id(), doc_3.last_updated(), true),
             ]),
             "Persisted metadata entries should match expected values."
         );
@@ -526,13 +527,13 @@ pub mod test_suite {
             .collect::<HashSet<(Key, HLCTimestamp, bool)>>();
         assert_eq!(
             metadata,
-            to_hashset([(doc_3.id, doc_3.last_updated, true)]),
+            to_hashset([(doc_3.id(), doc_3.last_updated(), true)]),
             "Persisted metadata entries should match expected values after removal."
         );
 
-        doc_1.last_updated = clock.send().unwrap();
-        doc_2.last_updated = clock.send().unwrap();
-        doc_3.last_updated = clock.send().unwrap();
+        doc_1.metadata.last_updated = clock.send().unwrap();
+        doc_2.metadata.last_updated = clock.send().unwrap();
+        doc_3.metadata.last_updated = clock.send().unwrap();
         storage
             .multi_put(
                 KEYSPACE,
@@ -548,23 +549,23 @@ pub mod test_suite {
         assert_eq!(
             metadata,
             to_hashset([
-                (doc_1.id, doc_1.last_updated, false),
-                (doc_2.id, doc_2.last_updated, false),
-                (doc_3.id, doc_3.last_updated, false),
+                (doc_1.id(), doc_1.last_updated(), false),
+                (doc_2.id(), doc_2.last_updated(), false),
+                (doc_3.id(), doc_3.last_updated(), false),
             ]),
             "Persisted metadata entries should match expected values after update."
         );
 
-        doc_1.last_updated = clock.send().unwrap();
-        doc_2.last_updated = clock.send().unwrap();
-        doc_3.last_updated = clock.send().unwrap();
+        doc_1.metadata.last_updated = clock.send().unwrap();
+        doc_2.metadata.last_updated = clock.send().unwrap();
+        doc_3.metadata.last_updated = clock.send().unwrap();
         storage
             .mark_many_as_tombstone(
                 KEYSPACE,
                 [
-                    (doc_1.id, doc_1.last_updated),
-                    (doc_2.id, doc_2.last_updated),
-                    (doc_3.id, doc_3.last_updated),
+                    doc_1.metadata,
+                    doc_2.metadata,
+                    doc_3.metadata,
                 ]
                 .into_iter(),
             )
@@ -589,18 +590,18 @@ pub mod test_suite {
             "Persisted metadata entries should be empty after tombstone purge."
         );
 
-        doc_1.last_updated = clock.send().unwrap();
-        doc_2.last_updated = clock.send().unwrap();
-        doc_3.last_updated = clock.send().unwrap();
+        doc_1.metadata.last_updated = clock.send().unwrap();
+        doc_2.metadata.last_updated = clock.send().unwrap();
+        doc_3.metadata.last_updated = clock.send().unwrap();
         let doc_4_ts = clock.send().unwrap();
         storage
             .mark_many_as_tombstone(
                 KEYSPACE,
                 [
-                    (doc_1.id, doc_1.last_updated),
-                    (doc_2.id, doc_2.last_updated),
-                    (doc_3.id, doc_3.last_updated),
-                    (4, doc_4_ts),
+                    doc_1.metadata,
+                    doc_2.metadata,
+                    doc_3.metadata,
+                    DocumentMetadata::new(4, doc_4_ts),
                 ]
                 .into_iter(),
             )
@@ -614,9 +615,9 @@ pub mod test_suite {
         assert_eq!(
             metadata,
             to_hashset([
-                (doc_1.id, doc_1.last_updated, true),
-                (doc_2.id, doc_2.last_updated, true),
-                (doc_3.id, doc_3.last_updated, true),
+                (doc_1.id(), doc_1.last_updated(), true),
+                (doc_2.id(), doc_2.last_updated(), true),
+                (doc_3.id(), doc_3.last_updated(), true),
                 (4, doc_4_ts, true),
             ]),
             "Persisted tombstones should be tracked."
@@ -706,9 +707,9 @@ pub mod test_suite {
         let doc = res.expect("Expected document to be returned after updating doc.");
         assert_eq!(doc, doc_3_updated, "Returned document should match.");
 
-        doc_2.last_updated = clock.send().unwrap();
+        doc_2.metadata.last_updated = clock.send().unwrap();
         storage
-            .mark_as_tombstone(KEYSPACE, doc_2.id, doc_2.last_updated)
+            .mark_as_tombstone(KEYSPACE, doc_2.id(), doc_2.last_updated())
             .await
             .expect("Mark document as tombstone.");
         let res = storage.get(KEYSPACE, 2).await;
@@ -722,15 +723,15 @@ pub mod test_suite {
             "Expected no document to be returned."
         );
 
-        doc_1.last_updated = clock.send().unwrap();
-        doc_2.last_updated = clock.send().unwrap();
+        doc_1.metadata.last_updated = clock.send().unwrap();
+        doc_2.metadata.last_updated = clock.send().unwrap();
         storage
             .mark_many_as_tombstone(
                 KEYSPACE,
                 [
-                    (doc_1.id, doc_1.last_updated),
-                    (doc_2.id, doc_2.last_updated),
-                    (4, clock.send().unwrap()),
+                    doc_1.metadata,
+                    doc_2.metadata,
+                    DocumentMetadata::new(4, clock.send().unwrap()),
                 ]
                 .into_iter(),
             )
@@ -747,9 +748,9 @@ pub mod test_suite {
             "Expected returned documents to match.",
         );
 
-        doc_3.last_updated = clock.send().unwrap();
+        doc_3.metadata.last_updated = clock.send().unwrap();
         storage
-            .mark_as_tombstone(KEYSPACE, doc_3.id, doc_3.last_updated)
+            .mark_as_tombstone(KEYSPACE, doc_3.id(), doc_3.last_updated())
             .await
             .expect("Delete documents from store.");
         #[allow(clippy::needless_collect)]

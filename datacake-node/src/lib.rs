@@ -11,6 +11,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Display;
 use std::net::SocketAddr;
 use std::sync::atomic::Ordering;
+use std::time::Duration;
 
 use chitchat::transport::Transport;
 use chitchat::FailureDetectorConfig;
@@ -40,7 +41,7 @@ pub static DEFAULT_CLUSTER_ID: &str = "datacake-cluster-unknown";
 pub static DEFAULT_DATA_CENTER: &str = "datacake-dc-unknown";
 
 /// Build a datacake node using provided settings.
-pub struct DatacakeNodeBuilder<S> {
+pub struct DatacakeNodeBuilder<S = DCAwareSelector> {
     node_id: String,
     connection_cfg: ConnectionConfig,
     cluster_id: String,
@@ -278,6 +279,29 @@ impl DatacakeNode {
         consistency: Consistency,
     ) -> Result<Vec<SocketAddr>, ConsistencyError> {
         self.selector.get_nodes(consistency).await
+    }
+
+    #[inline]
+    /// Waits for the given node IDs to join the cluster or timeout to elapse.
+    pub async fn wait_for_nodes(
+        &self,
+        node_ids: impl AsRef<[&str]>,
+        timeout: Duration,
+    ) -> Result<(), anyhow::Error> {
+        let nodes = node_ids.as_ref();
+        self.node
+            .wait_for_members(
+                |members| {
+                    for id in nodes {
+                        if !members.contains_key(&**id) {
+                            return false;
+                        }
+                    }
+                    true
+                },
+                timeout,
+            )
+            .await
     }
 
     #[inline]

@@ -10,11 +10,13 @@
 //! - `datacake_sqlite` - A implementation of the `datacake_cluster::Storage` trait using SQLite.
 //! - `datacake_rpc` - A fast, zero-copy RPC framework with a familiar actor-like feel.
 
-#[cfg(feature = "datacake-cluster")]
-pub use datacake_cluster as cluster;
-#[cfg(feature = "datacake-crdt")]
-pub use datacake_crdt as crdt;
+#[cfg(feature = "datacake-node")]
+pub use datacake_node as node;
 #[cfg(feature = "datacake-rpc")]
 pub use datacake_rpc as rpc;
+#[cfg(feature = "datacake-crdt")]
+pub use datacake_crdt as crdt;
+#[cfg(feature = "datacake-cluster")]
+pub use datacake_cluster as cluster;
 #[cfg(feature = "datacake-sqlite")]
 pub use datacake_sqlite as sqlite;

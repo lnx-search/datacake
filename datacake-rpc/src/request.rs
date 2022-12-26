@@ -127,23 +127,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
     use super::*;
-    use rkyv::{Serialize, Deserialize, Archive};
-    use rkyv::with::AsOwned;
-    use bytecheck::CheckBytes;
-
-    #[repr(C)]
-    #[derive(Serialize, Deserialize, Archive)]
-    #[archive_attr(derive(CheckBytes))]
-    pub struct Demo {
-        bad: Arc<Vec<u8>>,
-    }
 
     #[test]
     fn test_metadata() {
-        let x: Demo = rkyv::from_bytes(&b"Hello").unwrap();
-
         let meta = MessageMetadata {
             service_name: Cow::Borrowed("test"),
             path: Cow::Borrowed("demo"),

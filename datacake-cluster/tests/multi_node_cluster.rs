@@ -1,15 +1,9 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use bytes::Bytes;
-use datacake_cluster::test_utils::{InstrumentedStorage, MemStore};
-use datacake_cluster::{
-    ClusterOptions,
-    ConnectionConfig,
-    Consistency,
-    DCAwareSelector,
-    EventuallyConsistentStore,
-};
+use datacake_cluster::test_utils::MemStore;
+use datacake_cluster::EventuallyConsistentStoreExtension;
+use datacake_node::{ConnectionConfig, DatacakeNode, DatacakeNodeBuilder, Consistency, DCAwareSelector};
 
 #[tokio::test]
 async fn test_consistency_all() -> anyhow::Result<()> {
@@ -22,9 +16,19 @@ async fn test_consistency_all() -> anyhow::Result<()> {
     let [node_1, node_2, node_3] =
         connect_cluster([node_1_addr, node_2_addr, node_3_addr]).await;
 
-    let node_1_handle = node_1.handle_with_keyspace("my-keyspace");
-    let node_2_handle = node_2.handle_with_keyspace("my-keyspace");
-    let node_3_handle = node_3.handle_with_keyspace("my-keyspace");
+    let store_1 = node_1
+        .add_extension(EventuallyConsistentStoreExtension::new(MemStore::default()))
+        .await?;
+    let store_2 = node_2
+        .add_extension(EventuallyConsistentStoreExtension::new(MemStore::default()))
+        .await?;
+    let store_3 = node_3
+        .add_extension(EventuallyConsistentStoreExtension::new(MemStore::default()))
+        .await?;
+
+    let node_1_handle = store_1.handle_with_keyspace("my-keyspace");
+    let node_2_handle = store_2.handle_with_keyspace("my-keyspace");
+    let node_3_handle = store_3.handle_with_keyspace("my-keyspace");
 
     // Test reading
     let doc = node_1_handle.get(1).await.expect("Get value.");
@@ -42,8 +46,8 @@ async fn test_consistency_all() -> anyhow::Result<()> {
         .await
         .expect("Get value.")
         .expect("Document should not be none");
-    assert_eq!(doc.id, 1);
-    assert_eq!(doc.data.as_ref(), b"Hello, world");
+    assert_eq!(doc.id(), 1);
+    assert_eq!(doc.data(), b"Hello, world");
 
     // Nodes 2 and 3 should also have the value immediately due to the consistency level.
     let doc = node_2_handle
@@ -51,15 +55,15 @@ async fn test_consistency_all() -> anyhow::Result<()> {
         .await
         .expect("Get value.")
         .expect("Document should not be none");
-    assert_eq!(doc.id, 1);
-    assert_eq!(doc.data.as_ref(), b"Hello, world");
+    assert_eq!(doc.id(), 1);
+    assert_eq!(doc.data(), b"Hello, world");
     let doc = node_3_handle
         .get(1)
         .await
         .expect("Get value.")
         .expect("Document should not be none");
-    assert_eq!(doc.id, 1);
-    assert_eq!(doc.data.as_ref(), b"Hello, world");
+    assert_eq!(doc.id(), 1);
+    assert_eq!(doc.data(), b"Hello, world");
 
     // Delete a key from the cluster
     node_3_handle
@@ -109,9 +113,19 @@ async fn test_consistency_none() -> anyhow::Result<()> {
     let [node_1, node_2, node_3] =
         connect_cluster([node_1_addr, node_2_addr, node_3_addr]).await;
 
-    let node_1_handle = node_1.handle_with_keyspace("my-keyspace");
-    let node_2_handle = node_2.handle_with_keyspace("my-keyspace");
-    let node_3_handle = node_3.handle_with_keyspace("my-keyspace");
+    let store_1 = node_1
+        .add_extension(EventuallyConsistentStoreExtension::new(MemStore::default()))
+        .await?;
+    let store_2 = node_2
+        .add_extension(EventuallyConsistentStoreExtension::new(MemStore::default()))
+        .await?;
+    let store_3 = node_3
+        .add_extension(EventuallyConsistentStoreExtension::new(MemStore::default()))
+        .await?;
+
+    let node_1_handle = store_1.handle_with_keyspace("my-keyspace");
+    let node_2_handle = store_2.handle_with_keyspace("my-keyspace");
+    let node_3_handle = store_3.handle_with_keyspace("my-keyspace");
 
     // Test reading
     let doc = node_1_handle.get(1).await.expect("Get value.");
@@ -129,8 +143,8 @@ async fn test_consistency_none() -> anyhow::Result<()> {
         .await
         .expect("Get value.")
         .expect("Document should not be none");
-    assert_eq!(doc.id, 1);
-    assert_eq!(doc.data, Bytes::from_static(b"Hello, world"));
+    assert_eq!(doc.id(), 1);
+    assert_eq!(doc.data(), b"Hello, world");
 
     // Nodes 2 and 3 will not have the value yet as syncing has not taken place.
     let doc = node_2_handle.get(1).await.expect("Get value.");
@@ -147,15 +161,15 @@ async fn test_consistency_none() -> anyhow::Result<()> {
         .await
         .expect("Get value.")
         .expect("Document should not be none");
-    assert_eq!(doc.id, 1);
-    assert_eq!(doc.data, Bytes::from_static(b"Hello, world"));
+    assert_eq!(doc.id(), 1);
+    assert_eq!(doc.data(), b"Hello, world");
     let doc = node_3_handle
         .get(1)
         .await
         .expect("Get value.")
         .expect("Document should not be none");
-    assert_eq!(doc.id, 1);
-    assert_eq!(doc.data, Bytes::from_static(b"Hello, world"));
+    assert_eq!(doc.id(), 1);
+    assert_eq!(doc.data(), b"Hello, world");
 
     // Delete a key from the cluster
     node_3_handle
@@ -207,9 +221,19 @@ async fn test_async_operations() -> anyhow::Result<()> {
     let [node_1, node_2, node_3] =
         connect_cluster([node_1_addr, node_2_addr, node_3_addr]).await;
 
-    let node_1_handle = node_1.handle_with_keyspace("my-keyspace");
-    let node_2_handle = node_2.handle_with_keyspace("my-keyspace");
-    let node_3_handle = node_3.handle_with_keyspace("my-keyspace");
+    let store_1 = node_1
+        .add_extension(EventuallyConsistentStoreExtension::new(MemStore::default()))
+        .await?;
+    let store_2 = node_2
+        .add_extension(EventuallyConsistentStoreExtension::new(MemStore::default()))
+        .await?;
+    let store_3 = node_3
+        .add_extension(EventuallyConsistentStoreExtension::new(MemStore::default()))
+        .await?;
+
+    let node_1_handle = store_1.handle_with_keyspace("my-keyspace");
+    let node_2_handle = store_2.handle_with_keyspace("my-keyspace");
+    let node_3_handle = store_3.handle_with_keyspace("my-keyspace");
 
     // These operations all happen at the exact same time. But they will always be applied in the
     // same deterministic order. So we know node-3 will win.
@@ -234,22 +258,22 @@ async fn test_async_operations() -> anyhow::Result<()> {
         .await
         .expect("Get value.")
         .expect("Document should not be none");
-    assert_eq!(doc.id, 1);
-    assert_eq!(doc.data, Bytes::from_static(b"Hello, world from node-1"));
+    assert_eq!(doc.id(), 1);
+    assert_eq!(doc.data(), b"Hello, world from node-1");
     let doc = node_2_handle
         .get(1)
         .await
         .expect("Get value.")
         .expect("Document should not be none");
-    assert_eq!(doc.id, 1);
-    assert_eq!(doc.data, Bytes::from_static(b"Hello, world from node-2"));
+    assert_eq!(doc.id(), 1);
+    assert_eq!(doc.data(), b"Hello, world from node-2");
     let doc = node_3_handle
         .get(1)
         .await
         .expect("Get value.")
         .expect("Document should not be none");
-    assert_eq!(doc.id, 1);
-    assert_eq!(doc.data, Bytes::from_static(b"Hello, world from node-3"));
+    assert_eq!(doc.id(), 1);
+    assert_eq!(doc.data(), b"Hello, world from node-3");
 
     tokio::time::sleep(Duration::from_secs(10)).await;
 
@@ -259,27 +283,27 @@ async fn test_async_operations() -> anyhow::Result<()> {
         .await
         .expect("Get value.")
         .expect("Document should not be none");
-    assert_eq!(doc.id, 1);
-    assert_eq!(doc.data, Bytes::from_static(b"Hello, world from node-3"));
+    assert_eq!(doc.id(), 1);
+    assert_eq!(doc.data(), b"Hello, world from node-3");
     let doc = node_2_handle
         .get(1)
         .await
         .expect("Get value.")
         .expect("Document should not be none");
-    assert_eq!(doc.id, 1);
+    assert_eq!(doc.id(), 1);
     assert_eq!(
-        doc.data.as_ref(),
-        Bytes::from_static(b"Hello, world from node-3")
+        doc.data(),
+        b"Hello, world from node-3"
     );
     let doc = node_3_handle
         .get(1)
         .await
         .expect("Get value.")
         .expect("Document should not be none");
-    assert_eq!(doc.id, 1);
+    assert_eq!(doc.id(), 1);
     assert_eq!(
-        doc.data.as_ref(),
-        Bytes::from_static(b"Hello, world from node-3")
+        doc.data(),
+        b"Hello, world from node-3"
     );
 
     // This goes for all operations.
@@ -304,10 +328,10 @@ async fn test_async_operations() -> anyhow::Result<()> {
         .await
         .expect("Get value.")
         .expect("Document should not be none");
-    assert_eq!(doc.id, 1);
+    assert_eq!(doc.id(), 1);
     assert_eq!(
-        doc.data,
-        Bytes::from_static(b"Hello, world from node-1 but updated")
+        doc.data(),
+        b"Hello, world from node-1 but updated"
     );
 
     // Node 2 has only seen it's delete so far, so it assumes it's correct.
@@ -333,7 +357,7 @@ async fn test_async_operations() -> anyhow::Result<()> {
 
 async fn connect_cluster(
     addrs: [SocketAddr; 3],
-) -> [EventuallyConsistentStore<InstrumentedStorage<MemStore>>; 3] {
+) -> [DatacakeNode; 3] {
     dbg!(
         crc32fast::hash("node-1".as_bytes()),
         crc32fast::hash("node-2".as_bytes()),
@@ -343,46 +367,22 @@ async fn connect_cluster(
     let node_1_connection_cfg = ConnectionConfig::new(
         addrs[0],
         addrs[0],
-        &[addrs[1].to_string(), addrs[2].to_string()],
+        [addrs[1].to_string(), addrs[2].to_string()],
     );
     let node_2_connection_cfg = ConnectionConfig::new(
         addrs[1],
         addrs[1],
-        &[addrs[0].to_string(), addrs[2].to_string()],
+        [addrs[0].to_string(), addrs[2].to_string()],
     );
     let node_3_connection_cfg = ConnectionConfig::new(
         addrs[2],
         addrs[2],
-        &[addrs[0].to_string(), addrs[1].to_string()],
+        [addrs[0].to_string(), addrs[1].to_string()],
     );
 
-    let node_1 = EventuallyConsistentStore::connect(
-        "node-1",
-        node_1_connection_cfg,
-        InstrumentedStorage(MemStore::default()),
-        DCAwareSelector::default(),
-        ClusterOptions::default(),
-    )
-    .await
-    .expect("Connect node.");
-    let node_2 = EventuallyConsistentStore::connect(
-        "node-2",
-        node_2_connection_cfg,
-        InstrumentedStorage(MemStore::default()),
-        DCAwareSelector::default(),
-        ClusterOptions::default(),
-    )
-    .await
-    .expect("Connect node.");
-    let node_3 = EventuallyConsistentStore::connect(
-        "node-3",
-        node_3_connection_cfg,
-        InstrumentedStorage(MemStore::default()),
-        DCAwareSelector::default(),
-        ClusterOptions::default(),
-    )
-    .await
-    .expect("Connect node.");
+    let node_1 = DatacakeNodeBuilder::<DCAwareSelector>::new("node-1", node_1_connection_cfg).connect().await.unwrap();
+    let node_2 = DatacakeNodeBuilder::<DCAwareSelector>::new("node-2", node_2_connection_cfg).connect().await.unwrap();
+    let node_3 = DatacakeNodeBuilder::<DCAwareSelector>::new("node-2", node_3_connection_cfg).connect().await.unwrap();
 
     node_1
         .wait_for_nodes(&["node-2", "node-3"], Duration::from_secs(30))
@@ -401,25 +401,16 @@ async fn connect_cluster(
     assert_eq!(stats.num_data_centers(), 1);
     assert_eq!(stats.num_live_members(), 3);
     assert_eq!(stats.num_dead_members(), 0);
-    assert_eq!(stats.num_slow_sync_tasks(), 0);
-    assert_eq!(stats.num_failed_sync_tasks(), 0);
-    assert_eq!(stats.num_ongoing_sync_tasks(), 0);
 
     let stats = node_2.statistics();
     assert_eq!(stats.num_data_centers(), 1);
     assert_eq!(stats.num_live_members(), 3);
     assert_eq!(stats.num_dead_members(), 0);
-    assert_eq!(stats.num_slow_sync_tasks(), 0);
-    assert_eq!(stats.num_failed_sync_tasks(), 0);
-    assert_eq!(stats.num_ongoing_sync_tasks(), 0);
 
     let stats = node_3.statistics();
     assert_eq!(stats.num_data_centers(), 1);
     assert_eq!(stats.num_live_members(), 3);
     assert_eq!(stats.num_dead_members(), 0);
-    assert_eq!(stats.num_slow_sync_tasks(), 0);
-    assert_eq!(stats.num_failed_sync_tasks(), 0);
-    assert_eq!(stats.num_ongoing_sync_tasks(), 0);
 
     [node_1, node_2, node_3]
 }

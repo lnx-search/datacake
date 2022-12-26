@@ -33,4 +33,5 @@ tracing = "0.1.37"
 tracing-subscriber = "0.3.16"
 
 uuid = { version = "1", features = ["v4"] }
+datacake-node = { version = "0.1", path = "../datacake-node" }
 datacake-cluster = { version = "0.1", path = "../datacake-cluster", features = ["test-utils"] }

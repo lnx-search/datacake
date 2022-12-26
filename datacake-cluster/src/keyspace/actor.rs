@@ -423,6 +423,9 @@ mod tests {
         let doc_3 = Document::new(3, clock.get_time().await, b"Hello, world 3".to_vec());
         let doc_4 = Document::new(4, old_ts, b"Hello, world 4".to_vec());
 
+        let doc_3_metadata = doc_3.metadata;
+        let doc_1_metadata = doc_1.metadata;
+
         let docs = [doc_2.clone()];
 
         let mock_store = MockStorage::default()
@@ -436,7 +439,7 @@ mod tests {
             .expect_put_with_ctx(2, move |keyspace, doc, ctx| {
                 assert_eq!(keyspace, "my-keyspace");
                 assert!(ctx.is_none());
-                assert!(doc.id() == doc_3.id() || doc.id() == doc_1.id());
+                assert!(doc.id() == doc_3_metadata.id || doc.id() == doc_1_metadata.id);
 
                 Ok(())
             });
@@ -536,7 +539,7 @@ mod tests {
             })
             .expect_mark_as_tombstone(1, move |keyspace, doc_id, ts| {
                 assert_eq!(keyspace, "my-keyspace");
-                assert_eq!(doc_id, doc_1.id());
+                assert_eq!(doc_id, doc_1.metadata.id);
                 assert_eq!(ts, delete_ts);
 
                 Ok(())
@@ -667,9 +670,9 @@ mod tests {
             .await
             .expect("Put operation should be successful.");
 
-        assert!(keyspace.state.get(&doc_2.id).is_some());
-        assert!(!keyspace.state.delete(doc_1.id, doc_1.last_updated));
-        assert!(!keyspace.state.delete(doc_3.id, doc_3.last_updated));
+        assert!(keyspace.state.get(&doc_2.id()).is_some());
+        assert!(!keyspace.state.delete(doc_1.id(), doc_1.last_updated()));
+        assert!(!keyspace.state.delete(doc_3.id(), doc_3.last_updated()));
 
         // Push the safe timestamp forwards.
         keyspace.state.insert_with_source(
@@ -686,6 +689,11 @@ mod tests {
         let mut changes = keyspace.state.purge_old_deletes();
         // Needed because it may not be ordered.
         changes.sort_by_key(|change| Reverse(change.0));
-        assert_eq!(changes, deletes_expected);
+
+        let expected_deletes = deletes_expected
+            .iter()
+            .map(|doc| (doc.id, doc.last_updated))
+            .collect::<Vec<_>>();
+        assert_eq!(changes, expected_deletes);
     }
 }

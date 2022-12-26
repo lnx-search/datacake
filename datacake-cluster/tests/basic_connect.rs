@@ -2,8 +2,8 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use datacake_cluster::test_utils::MemStore;
-use datacake_cluster::{ClusterOptions, DCAwareSelector, EventuallyConsistentStore, EventuallyConsistentStoreExtension};
-use datacake_node::{ConnectionConfig, DatacakeNode, DatacakeNodeBuilder};
+use datacake_cluster::{EventuallyConsistentStoreExtension};
+use datacake_node::{ConnectionConfig, DatacakeNodeBuilder, DCAwareSelector};
 
 #[tokio::test]
 async fn test_basic_connect() -> anyhow::Result<()> {
@@ -12,7 +12,7 @@ async fn test_basic_connect() -> anyhow::Result<()> {
     let addr = "127.0.0.1:8000".parse::<SocketAddr>().unwrap();
     let connection_cfg = ConnectionConfig::new(addr, addr, Vec::<String>::new());
 
-    let node = DatacakeNodeBuilder::new("node-1", connection_cfg).connect() .await?;
+    let node = DatacakeNodeBuilder::<DCAwareSelector>::new("node-1", connection_cfg).connect().await?;
     let _store = node.add_extension(EventuallyConsistentStoreExtension::new(MemStore::default())).await?;
 
     tokio::time::sleep(Duration::from_secs(1)).await;

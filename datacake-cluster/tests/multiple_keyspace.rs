@@ -1,14 +1,9 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use datacake_cluster::test_utils::{InstrumentedStorage, MemStore};
-use datacake_cluster::{
-    ClusterOptions,
-    ConnectionConfig,
-    Consistency,
-    DCAwareSelector,
-    EventuallyConsistentStore,
-};
+use datacake_cluster::test_utils::MemStore;
+use datacake_cluster::EventuallyConsistentStoreExtension;
+use datacake_node::{ConnectionConfig, DatacakeNodeBuilder, Consistency, DCAwareSelector};
 
 static KEYSPACE_1: &str = "my-first-keyspace";
 static KEYSPACE_2: &str = "my-second-keyspace";
@@ -21,17 +16,13 @@ async fn test_single_node() -> anyhow::Result<()> {
     let node_addr = "127.0.0.1:8014".parse::<SocketAddr>().unwrap();
     let connection_cfg =
         ConnectionConfig::new(node_addr, node_addr, Vec::<String>::new());
-    let node = EventuallyConsistentStore::connect(
-        "node-1",
-        connection_cfg,
-        InstrumentedStorage(MemStore::default()),
-        DCAwareSelector::default(),
-        ClusterOptions::default(),
-    )
-    .await
-    .expect("Connect node.");
 
-    let handle = node.handle();
+    let node_1 = DatacakeNodeBuilder::<DCAwareSelector>::new("node-1", connection_cfg).connect().await?;
+    let store_1 = node_1
+        .add_extension(EventuallyConsistentStoreExtension::new(MemStore::default()))
+        .await?;
+
+    let handle = store_1.handle();
 
     handle
         .put(
@@ -78,46 +69,22 @@ async fn test_multi_node() -> anyhow::Result<()> {
     let node_1_connection_cfg = ConnectionConfig::new(
         node_1_addr,
         node_1_addr,
-        &[node_2_addr.to_string(), node_3_addr.to_string()],
+        [node_2_addr.to_string(), node_3_addr.to_string()],
     );
     let node_2_connection_cfg = ConnectionConfig::new(
         node_2_addr,
         node_2_addr,
-        &[node_1_addr.to_string(), node_3_addr.to_string()],
+        [node_1_addr.to_string(), node_3_addr.to_string()],
     );
     let node_3_connection_cfg = ConnectionConfig::new(
         node_3_addr,
         node_3_addr,
-        &[node_1_addr.to_string(), node_2_addr.to_string()],
+        [node_1_addr.to_string(), node_2_addr.to_string()],
     );
 
-    let node_1 = EventuallyConsistentStore::connect(
-        "node-1",
-        node_1_connection_cfg,
-        InstrumentedStorage(MemStore::default()),
-        DCAwareSelector::default(),
-        ClusterOptions::default(),
-    )
-    .await
-    .expect("Connect node.");
-    let node_2 = EventuallyConsistentStore::connect(
-        "node-2",
-        node_2_connection_cfg,
-        InstrumentedStorage(MemStore::default()),
-        DCAwareSelector::default(),
-        ClusterOptions::default(),
-    )
-    .await
-    .expect("Connect node.");
-    let node_3 = EventuallyConsistentStore::connect(
-        "node-3",
-        node_3_connection_cfg,
-        InstrumentedStorage(MemStore::default()),
-        DCAwareSelector::default(),
-        ClusterOptions::default(),
-    )
-    .await
-    .expect("Connect node.");
+    let node_1 = DatacakeNodeBuilder::<DCAwareSelector>::new("node-1", node_1_connection_cfg).connect().await?;
+    let node_2 = DatacakeNodeBuilder::<DCAwareSelector>::new("node-2", node_2_connection_cfg).connect().await?;
+    let node_3 = DatacakeNodeBuilder::<DCAwareSelector>::new("node-3", node_3_connection_cfg).connect().await?;
 
     node_1
         .wait_for_nodes(&["node-2", "node-3"], Duration::from_secs(30))
@@ -132,9 +99,19 @@ async fn test_multi_node() -> anyhow::Result<()> {
         .await
         .expect("Nodes should connect within timeout.");
 
-    let node_1_handle = node_1.handle();
-    let node_2_handle = node_2.handle();
-    let node_3_handle = node_3.handle();
+    let store_1 = node_1
+        .add_extension(EventuallyConsistentStoreExtension::new(MemStore::default()))
+        .await?;
+    let store_2 = node_2
+        .add_extension(EventuallyConsistentStoreExtension::new(MemStore::default()))
+        .await?;
+    let store_3 = node_3
+        .add_extension(EventuallyConsistentStoreExtension::new(MemStore::default()))
+        .await?;
+
+    let node_1_handle = store_1.handle();
+    let node_2_handle = store_2.handle();
+    let node_3_handle = store_3.handle();
 
     node_1_handle
         .put(
