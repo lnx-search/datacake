@@ -1,0 +1,19 @@
+[package]
+name = "datacake-multi-raft"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tracing = "0.1.36"
+puppet = "0.4.0"
+bytecheck = "0.6.9"
+thiserror = "1"
+
+tokio = { version = "1", default-features = false, features = ["sync", "time"] }
+rkyv = { version = "0.7.9", features = ["validation"] }
+
+datacake-rpc = { path = "../datacake-rpc", version = "0.2" }
+datacake-node = { path = "../datacake-node", version = "0.1" }
+datacake-crdt = { path = "../datacake-crdt", version = "0.3", features = ["rkyv-support"] }

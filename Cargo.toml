@@ -33,6 +33,7 @@ default = [
 members = [
     "datacake-node",
     "datacake-eventual-consistency",
+    "datacake-multi-raft",
     "datacake-crdt",
     "datacake-sqlite",
     "datacake-rpc",
