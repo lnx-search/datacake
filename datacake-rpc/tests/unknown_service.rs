@@ -92,6 +92,8 @@ async fn test_unknown_service() {
 
 #[tokio::test]
 async fn test_unknown_message() {
+    let _ = tracing_subscriber::fmt::try_init();
+
     let addr = "127.0.0.1:7005".parse::<SocketAddr>().unwrap();
 
     let server = Server::listen(addr).await.unwrap();

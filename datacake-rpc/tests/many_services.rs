@@ -60,6 +60,8 @@ impl Handler<Payload> for Sub5Service {
 
 #[tokio::test]
 async fn test_multiple_services() {
+    let _ = tracing_subscriber::fmt::try_init();
+
     let addr = "127.0.0.1:7003".parse::<SocketAddr>().unwrap();
 
     let server = Server::listen(addr).await.unwrap();

@@ -41,6 +41,8 @@ impl Handler<MyMessage> for MyService {
 
 #[tokio::test]
 async fn test_service_error() {
+    let _ = tracing_subscriber::fmt::try_init();
+
     let addr = "127.0.0.1:7006".parse::<SocketAddr>().unwrap();
 
     let server = Server::listen(addr).await.unwrap();
