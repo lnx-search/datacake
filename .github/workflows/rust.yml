@@ -18,6 +18,7 @@ jobs:
         rust: [stable]
 
     steps:
+      - uses: actions/checkout@v2
       - name: Install cargo-hack
         run: cargo install cargo-hack
       - uses: Swatinem/rust-cache@v1
@@ -26,7 +27,7 @@ jobs:
       - name: Check all targets
         run: cargo check --all --all-targets --all-features
 
-  test:
+  build:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -34,6 +35,7 @@ jobs:
         rust: [stable]
 
     steps:
+      - uses: actions/checkout@v2
       - uses: Swatinem/rust-cache@v1
       - name: Run main tests
         run: cargo test --all --all-features -j 4 --keep-going
