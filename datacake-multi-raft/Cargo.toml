@@ -7,11 +7,13 @@ edition = "2021"
 
 [dependencies]
 tracing = "0.1.36"
-puppet = "0.4.0"
 bytecheck = "0.6.9"
 thiserror = "1"
+flume = "0.10.14"
+slog = "2.7.0"
 
-raft = { version = "0.6.0", default-features = false }
+puppet = { version = "0.4.0", default-features = false }
+raft = { git = "https://github.com/lnx-search/raft-rs.git", default-features = false, features = ["protobuf-codec"] }
 tokio = { version = "1", default-features = false, features = ["sync", "time"] }
 rkyv = { version = "0.7.9", features = ["validation"] }
 
