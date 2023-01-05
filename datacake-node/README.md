@@ -19,7 +19,6 @@ which lets it be added at runtime without issue.
 To get started we'll begin by creating our cluster:
 
 ```rust
-
 use std::net::SocketAddr;
 
 use datacake_node::{ConnectionConfig, DCAwareSelector, DatacakeNodeBuilder};

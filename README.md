@@ -30,39 +30,48 @@ You can also look at some heavier integration tests
 [here](https://github.com/lnx-search/datacake/tree/main/datacake-eventual-consistency/tests)
 
 #### Single Node Cluster
-Here's an example of a basic cluster with one node that runs on your local network:
+Here's an example of a basic cluster with one node that runs on your local network, it uses almost all of the packages
+including:
+
+- `datacake-node` for the core node membership.
+- `datacake-crdt` for the HLCTimestamp and CRDT implementations
+- `datacake-eventually-consistency` for the eventually consistent replication of state.
+- `datacake-rpc` bundled up with everything for managing all the cluster RPC.
 
 ```rust
+use std::net::SocketAddr;
+use datacake::node::{Consistency, ConnectionConfig, DCAwareSelector, DatacakeNodeBuilder};
 use datacake::eventual_consistency::test_utils::MemStore;
-use datacake::eventual_consistency::{
-    ClusterOptions,
-    ConnectionConfig,
-    DCAwareSelector,
-    DatacakeCluster,
-};
+use datacake::eventual_consistency::EventuallyConsistentStoreExtension;
 
+async fn main() -> anyhow::Result<()> {
+    let addr = "127.0.0.1:8080".parse::<SocketAddr>().unwrap();
+    let connection_cfg = ConnectionConfig::new(addr, addr, Vec::<String>::new());
+    let node = DatacakeNodeBuilder::<DCAwareSelector>::new(1, connection_cfg)
+        .connect()
+        .await
+        .expect("Connect node.");
 
-#[tokio::main]
-async fn main() -> Result<()> {
-  let _ = tracing_subscriber::fmt::try_init();
+    let store = node
+        .add_extension(EventuallyConsistentStoreExtension::new(MemStore::default()))
+        .await
+        .expect("Create store.");
+    
+    let handle = store.handle();
 
-  let addr = "127.0.0.1:8000".parse::<SocketAddr>().unwrap();
-  let connection_cfg = ConnectionConfig::new(addr, addr, Vec::<String>::new());
-
-  let cluster = DatacakeCluster::connect(
-    1,
-    connection_cfg,
-    MemStore::default(),
-    DCAwareSelector::default(),
-    ClusterOptions::default(),
-  ).await?;
-
-  tokio::time::sleep(Duration::from_secs(1)).await;
-
-  cluster.shutdown().await;
+    handle
+        .put(
+            "my-keyspace",
+            1,
+            b"Hello, world! From keyspace 1.".to_vec(),
+            Consistency::All,
+        )
+        .await
+        .expect("Put doc.");
+    
+    Ok(())
 }
 ```
-
 
 ### Why does Datacake exist?
 
