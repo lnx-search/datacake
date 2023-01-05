@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::time::SystemTime;
 
 use bytecheck::CheckBytes;
 use datacake_rpc::{
@@ -78,10 +79,10 @@ async fn test_multiple_msgs() {
 
     let server = Server::listen(addr).await.unwrap();
     server.add_service(CountingService::default());
-    println!("Listening to address {}!", addr);
+    println!("Listening to address {}! {:?}", addr, SystemTime::now());
 
     let client = Channel::connect(addr);
-    println!("Connected to address {}!", addr);
+    println!("Connected to address {}! {:?}", addr, SystemTime::now());
 
     let rpc_client = RpcClient::<CountingService>::new(client);
 

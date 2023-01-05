@@ -1,6 +1,7 @@
 use std::convert::Infallible;
 use std::io;
 use std::net::SocketAddr;
+use std::time::SystemTime;
 
 use http::{Request, Response, StatusCode};
 use hyper::body::HttpBody;
@@ -37,7 +38,7 @@ pub(crate) async fn start_rpc_server(
             .http2_adaptive_window(true)
             .serve(make_service);
 
-        println!("Serving things");
+        println!("Serving things {:?}", SystemTime::now());
         if let Err(e) = server.await {
             error!(error = ?e, "Server failed to handle requests.");
         }
