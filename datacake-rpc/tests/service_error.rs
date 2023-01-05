@@ -1,5 +1,3 @@
-use std::net::SocketAddr;
-
 use bytecheck::CheckBytes;
 use datacake_rpc::{
     Channel,
