@@ -10,6 +10,5 @@ pub use timestamp::{
     HLCTimestamp,
     InvalidFormat,
     TimestampError,
-    COUNTER_MAX,
     TIMESTAMP_MAX,
 };

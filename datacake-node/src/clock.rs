@@ -1,11 +1,11 @@
 use std::time::Duration;
 
-use datacake_crdt::{HLCTimestamp, COUNTER_MAX};
+use datacake_crdt::HLCTimestamp;
 use tokio::sync::oneshot;
 
 use crate::NodeId;
 
-const CLOCK_BACKPRESSURE_LIMIT: u32 = COUNTER_MAX - 10;
+const CLOCK_BACKPRESSURE_LIMIT: u16 = u16::MAX - 10;
 
 #[derive(Clone)]
 pub struct Clock {
@@ -76,8 +76,6 @@ async fn run_clock(mut clock: HLCTimestamp, reqs: flume::Receiver<Event>) {
 
 #[cfg(test)]
 mod tests {
-    use datacake_crdt::get_unix_timestamp;
-
     use super::*;
 
     #[tokio::test]
@@ -95,7 +93,8 @@ mod tests {
         assert!(ts1 < ts2);
         assert!(ts2 < ts3);
 
-        let drift_ts = HLCTimestamp::new(get_unix_timestamp() + 5, 0, 1);
+        let drift_ts =
+            HLCTimestamp::new(ts3.as_duration() + Duration::from_secs(50), 0, 1);
         clock.register_ts(drift_ts).await;
         let ts = clock.get_time().await;
         assert!(
@@ -103,7 +102,7 @@ mod tests {
             "New timestamp should be monotonic relative to drifted ts."
         );
 
-        let old_ts = HLCTimestamp::new(get_unix_timestamp() + 500, 0, 1);
+        let old_ts = HLCTimestamp::new(ts3.as_duration() + Duration::from_secs(5), 0, 1);
         clock.register_ts(old_ts).await;
     }
 }

@@ -251,6 +251,7 @@ where
 #[cfg(test)]
 mod tests {
     use std::cmp::Reverse;
+    use std::time::Duration;
 
     use datacake_crdt::get_unix_timestamp;
 
@@ -327,7 +328,8 @@ mod tests {
     async fn test_on_set_old_ts() {
         let clock = Clock::new(0);
 
-        let old_ts = HLCTimestamp::new(get_unix_timestamp() - 3_700, 0, 0);
+        let old_ts =
+            HLCTimestamp::new(Duration::from_secs(get_unix_timestamp() - 3_700), 0, 0);
         let doc_1 = Document::new(1, clock.get_time().await, b"Hello, world 1".to_vec());
         let doc_2 = Document::new(2, clock.get_time().await, b"Hello, world 2".to_vec());
         let doc_3 = Document::new(3, old_ts, b"Hello, world 3".to_vec());
@@ -415,7 +417,8 @@ mod tests {
     async fn test_on_multi_set_old_ts() {
         let clock = Clock::new(0);
 
-        let old_ts = HLCTimestamp::new(get_unix_timestamp() - 3_700, 0, 0);
+        let old_ts =
+            HLCTimestamp::new(Duration::from_secs(get_unix_timestamp() - 3_700), 0, 0);
         let doc_1 = Document::new(1, clock.get_time().await, b"Hello, world 1".to_vec());
         let doc_2 = Document::new(2, clock.get_time().await, b"Hello, world 2".to_vec());
         let doc_3 = Document::new(3, clock.get_time().await, b"Hello, world 3".to_vec());
@@ -478,7 +481,8 @@ mod tests {
     async fn test_on_multi_set_unordered_events() {
         let clock = Clock::new(0);
 
-        let old_ts = HLCTimestamp::new(get_unix_timestamp() - 3_700, 0, 0);
+        let old_ts =
+            HLCTimestamp::new(Duration::from_secs(get_unix_timestamp() - 3_700), 0, 0);
         let doc_1 = Document::new(1, clock.get_time().await, b"Hello, world 1".to_vec());
         let doc_2 = Document::new(2, clock.get_time().await, b"Hello, world 2".to_vec());
         let doc_3 = Document::new(3, clock.get_time().await, b"Hello, world 3".to_vec());
@@ -676,12 +680,12 @@ mod tests {
         keyspace.state.insert_with_source(
             1,
             5,
-            HLCTimestamp::new(get_unix_timestamp() + 3_700, 0, 0),
+            HLCTimestamp::new(Duration::from_secs(get_unix_timestamp() + 3_700), 0, 0),
         );
         keyspace.state.insert_with_source(
             0,
             2,
-            HLCTimestamp::new(get_unix_timestamp() + 3_700, 1, 0),
+            HLCTimestamp::new(Duration::from_secs(get_unix_timestamp() + 3_700), 1, 0),
         );
 
         let mut changes = keyspace.state.purge_old_deletes();

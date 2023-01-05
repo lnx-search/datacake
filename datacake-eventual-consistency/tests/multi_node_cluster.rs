@@ -274,7 +274,7 @@ async fn test_async_operations() -> anyhow::Result<()> {
         .expect("Get value.")
         .expect("Document should not be none");
     assert_eq!(doc.id(), 1);
-    assert_eq!(doc.data(), b"Hello, world from node-3");
+    assert_eq!(doc.data(), b"Hello, world from node-3"); // TODO: This fails if the logical clock isn't correct??
     let doc = node_2_handle
         .get(1)
         .await
