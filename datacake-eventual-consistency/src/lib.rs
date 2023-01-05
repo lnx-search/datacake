@@ -18,8 +18,9 @@
 //! use datacake_eventual_consistency::test_utils::MemStore;
 //! use datacake_eventual_consistency::EventuallyConsistentStoreExtension;
 //!
+//! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
-//! let addr = "127.0.0.1:8080".parse::<SocketAddr>().unwrap();
+//!     let addr = "127.0.0.1:8080".parse::<SocketAddr>().unwrap();
 //!     let connection_cfg = ConnectionConfig::new(addr, addr, Vec::<String>::new());
 //!     let node = DatacakeNodeBuilder::<DCAwareSelector>::new(1, connection_cfg)
 //!         .connect()

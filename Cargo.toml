@@ -18,6 +18,10 @@ datacake-sqlite = { version = "0.3", path = "datacake-sqlite", optional = true }
 datacake-rpc = { version = "0.3", path = "datacake-rpc", optional = true }
 datacake-node = { version = "0.1", path = "datacake-node", optional = true }
 
+[dev-dependencies]
+tokio = { version = "1", features = ["rt"] }
+anyhow = "1"
+
 [features]
 test-utils = ["datacake-eventual-consistency/test-utils"]
 rkyv = ["datacake-crdt/rkyv-support"]

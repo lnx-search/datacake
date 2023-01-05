@@ -35,7 +35,7 @@ fn main() {
     // Merging set B with set A and vice versa. 
     // Our sets are now aligned without conflicts.
     node_b_set.merge(node_a_set.clone());
-    node_a_set.merge(node_b_set);
+    node_a_set.merge(node_b_set.clone());
     
     // Set A and B should both see that key `1` has been deleted.
     assert!(node_a_set.get(&1).is_none(), "Key should be correctly removed.");

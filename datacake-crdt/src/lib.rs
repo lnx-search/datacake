@@ -16,8 +16,9 @@
 //! // Simulating a node begin slightly ahead.
 //! let mut node_b = HLCTimestamp::new(node_a.datacake_timestamp() + Duration::from_secs(5), 0, 1);
 //!
-//! let mut node_a_set = OrSWotSet::default();
-//! let mut node_b_set = OrSWotSet::default();
+//! // We only have one effective source here.
+//! let mut node_a_set = OrSWotSet::<1>::default();
+//! let mut node_b_set = OrSWotSet::<1>::default();
 //!
 //! // Insert a new key with a new timestamp in set A.
 //! node_a_set.insert(1, node_a.send().unwrap());
@@ -34,7 +35,7 @@
 //! // Merging set B with set A and vice versa.
 //! // Our sets are now aligned without conflicts.
 //! node_b_set.merge(node_a_set.clone());
-//! node_a_set.merge(node_b_set);
+//! node_a_set.merge(node_b_set.clone());
 //!
 //! // Set A and B should both see that key `1` has been deleted.
 //! assert!(node_a_set.get(&1).is_none(), "Key should be correctly removed.");
