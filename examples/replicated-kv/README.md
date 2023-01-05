@@ -5,7 +5,7 @@ This is a nice little example of a KV store implemented as two basic HTTP endpoi
 ## Running
 ### Single node cluster
 ```shell
-cargo run --release -- --node-id "node-1" --data-dir "./my-data"
+cargo run --release -- --node-id 1 --data-dir "./my-data"
 ```
 
 This will spawn a single node with an ID of `node-1` and store the data in the `my-data` directory which will be
@@ -14,9 +14,9 @@ created if it doesn't already exist.
 
 ### 3 node cluster
 ```shell
-cargo run --release -- --node-id "node-1" --data-dir "./my-data/node-1-data --rest-listen-addr 127.0.0.1:8000 --cluster-listen-addr 127.0.0.1:8001 --seed 127.0.0.1:8003 --seed 127.0.0.1:8005"
-cargo run --release -- --node-id "node-2" --data-dir "./my-data/node-2-data --rest-listen-addr 127.0.0.1:8002 --cluster-listen-addr 127.0.0.1:8003 --seed 127.0.0.1:8001 --seed 127.0.0.1:8005"
-cargo run --release -- --node-id "node-3" --data-dir "./my-data/node-3-data --rest-listen-addr 127.0.0.1:8004 --cluster-listen-addr 127.0.0.1:8005 --seed 127.0.0.1:8001 --seed 127.0.0.1:8003"
+cargo run --release -- --node-id 1 --data-dir "./my-data/node-1-data --rest-listen-addr 127.0.0.1:8000 --cluster-listen-addr 127.0.0.1:8001 --seed 127.0.0.1:8003 --seed 127.0.0.1:8005"
+cargo run --release -- --node-id 2 --data-dir "./my-data/node-2-data --rest-listen-addr 127.0.0.1:8002 --cluster-listen-addr 127.0.0.1:8003 --seed 127.0.0.1:8001 --seed 127.0.0.1:8005"
+cargo run --release -- --node-id 3 --data-dir "./my-data/node-3-data --rest-listen-addr 127.0.0.1:8004 --cluster-listen-addr 127.0.0.1:8005 --seed 127.0.0.1:8001 --seed 127.0.0.1:8003"
 ```
 
 This will start a local 3 node cluster, for simplicity we've set the seeds to be each node's peers rather although this does

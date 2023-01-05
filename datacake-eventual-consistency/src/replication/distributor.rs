@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crossbeam_channel::{unbounded, Receiver, Sender};
-use datacake_node::{Clock, MembershipChange, RpcNetwork};
+use datacake_node::{Clock, MembershipChange, NodeId, RpcNetwork};
 use tokio::sync::Semaphore;
 use tokio::time::{interval, MissedTickBehavior};
 
@@ -28,7 +28,7 @@ pub struct TaskServiceContext {
     /// The network handle which contains all RPC connections.
     pub(crate) network: RpcNetwork,
     /// The unique ID of the node running.
-    pub(crate) local_node_id: Cow<'static, str>,
+    pub(crate) local_node_id: NodeId,
     /// The public RPC address of the node running.
     pub(crate) public_node_addr: SocketAddr,
 }
@@ -152,7 +152,7 @@ async fn task_distributor_service<S>(
                     .map(|(keyspace, payloads)| MultiPutPayload {
                         keyspace: keyspace.to_string(),
                         ctx: Some(Context {
-                            node_id: ctx.local_node_id.to_string(),
+                            node_id: ctx.local_node_id,
                             node_addr: ctx.public_node_addr,
                         }),
                         documents: payloads,
@@ -199,7 +199,7 @@ fn register_mutation(
 
 async fn execute_batch<S>(
     ctx: &TaskServiceContext,
-    live_members: &BTreeMap<String, SocketAddr>,
+    live_members: &BTreeMap<NodeId, SocketAddr>,
     batch: BatchPayload,
 ) -> anyhow::Result<()>
 where

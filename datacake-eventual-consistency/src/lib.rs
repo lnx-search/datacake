@@ -155,7 +155,7 @@ where
         let task_ctx = TaskServiceContext {
             clock: node.clock().clone(),
             network: node.network().clone(),
-            local_node_id: Cow::Owned(node.me().node_id.clone()),
+            local_node_id: node.me().node_id,
             public_node_addr: node.me().public_addr,
         };
         let replication_ctx = ReplicationCycleContext {
@@ -353,7 +353,7 @@ where
                     .put(
                         keyspace,
                         document,
-                        &self.node.me().node_id,
+                        self.node.me().node_id,
                         self.node.me().public_addr,
                     )
                     .await
@@ -419,7 +419,7 @@ where
                     .multi_put(
                         keyspace,
                         documents.into_iter(),
-                        &self_member.node_id,
+                        self_member.node_id,
                         self_member.public_addr,
                     )
                     .await

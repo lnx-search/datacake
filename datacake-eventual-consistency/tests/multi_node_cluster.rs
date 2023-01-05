@@ -353,12 +353,6 @@ async fn test_async_operations() -> anyhow::Result<()> {
 }
 
 async fn connect_cluster(addrs: [SocketAddr; 3]) -> [DatacakeNode; 3] {
-    dbg!(
-        crc32fast::hash("node-1".as_bytes()),
-        crc32fast::hash("node-2".as_bytes()),
-        crc32fast::hash("node-3".as_bytes())
-    );
-
     let node_1_connection_cfg = ConnectionConfig::new(
         addrs[0],
         addrs[0],
@@ -375,32 +369,29 @@ async fn connect_cluster(addrs: [SocketAddr; 3]) -> [DatacakeNode; 3] {
         [addrs[0].to_string(), addrs[1].to_string()],
     );
 
-    let node_1 =
-        DatacakeNodeBuilder::<DCAwareSelector>::new("node-1", node_1_connection_cfg)
-            .connect()
-            .await
-            .unwrap();
-    let node_2 =
-        DatacakeNodeBuilder::<DCAwareSelector>::new("node-2", node_2_connection_cfg)
-            .connect()
-            .await
-            .unwrap();
-    let node_3 =
-        DatacakeNodeBuilder::<DCAwareSelector>::new("node-3", node_3_connection_cfg)
-            .connect()
-            .await
-            .unwrap();
+    let node_1 = DatacakeNodeBuilder::<DCAwareSelector>::new(1, node_1_connection_cfg)
+        .connect()
+        .await
+        .unwrap();
+    let node_2 = DatacakeNodeBuilder::<DCAwareSelector>::new(2, node_2_connection_cfg)
+        .connect()
+        .await
+        .unwrap();
+    let node_3 = DatacakeNodeBuilder::<DCAwareSelector>::new(3, node_3_connection_cfg)
+        .connect()
+        .await
+        .unwrap();
 
     node_1
-        .wait_for_nodes(&["node-2", "node-3"], Duration::from_secs(60))
+        .wait_for_nodes(&[2, 3], Duration::from_secs(60))
         .await
         .expect("Nodes should connect within timeout.");
     node_2
-        .wait_for_nodes(&["node-3", "node-1"], Duration::from_secs(60))
+        .wait_for_nodes(&[3, 1], Duration::from_secs(60))
         .await
         .expect("Nodes should connect within timeout.");
     node_3
-        .wait_for_nodes(&["node-2", "node-1"], Duration::from_secs(60))
+        .wait_for_nodes(&[2, 1], Duration::from_secs(60))
         .await
         .expect("Nodes should connect within timeout.");
 

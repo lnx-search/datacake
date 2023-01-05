@@ -30,11 +30,12 @@ const GOSSIP_INTERVAL: Duration = if cfg!(test) {
 } else {
     Duration::from_secs(1)
 };
+pub type NodeMembership = BTreeMap<crate::NodeId, ClusterMember>;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ClusterMember {
     /// A unique ID for the given node in the cluster.
-    pub node_id: String,
+    pub node_id: crate::NodeId,
     /// The public address of the nod.
     pub public_addr: SocketAddr,
     /// The data center / availability zone the node is in.
@@ -44,7 +45,11 @@ pub struct ClusterMember {
 }
 
 impl ClusterMember {
-    pub fn new(node_id: String, public_addr: SocketAddr, data_center: String) -> Self {
+    pub fn new(
+        node_id: crate::NodeId,
+        public_addr: SocketAddr,
+        data_center: String,
+    ) -> Self {
         Self {
             node_id,
             public_addr,
@@ -53,7 +58,7 @@ impl ClusterMember {
     }
 
     pub fn chitchat_id(&self) -> String {
-        self.node_id.clone()
+        self.node_id.to_string()
     }
 }
 
@@ -67,7 +72,7 @@ pub struct ChitchatNode {
     pub me: Cow<'static, ClusterMember>,
     statistics: ClusterStatistics,
     chitchat_handle: ChitchatHandle,
-    members: watch::Receiver<BTreeMap<String, ClusterMember>>,
+    members: watch::Receiver<NodeMembership>,
     stop: Arc<AtomicBool>,
 }
 
@@ -122,8 +127,8 @@ impl ChitchatNode {
             stop: Arc::new(Default::default()),
         };
 
-        let initial_members: BTreeMap<String, ClusterMember> =
-            BTreeMap::from_iter([(me.node_id.clone(), me.clone())]);
+        let initial_members: BTreeMap<crate::NodeId, ClusterMember> =
+            BTreeMap::from_iter([(me.node_id, me.clone())]);
         if members_tx.send(initial_members).is_err() {
             error!("Failed to add itself as the initial member of the cluster.");
         }
@@ -186,18 +191,18 @@ impl ChitchatNode {
     }
 
     /// Return [WatchStream] for monitoring change of node members.
-    pub fn member_change_watcher(&self) -> WatchStream<BTreeMap<String, ClusterMember>> {
+    pub fn member_change_watcher(&self) -> WatchStream<NodeMembership> {
         WatchStream::new(self.members.clone())
     }
 
     /// Returns a handle to the members watcher channel.
-    pub fn members_watcher(&self) -> watch::Receiver<BTreeMap<String, ClusterMember>> {
+    pub fn members_watcher(&self) -> watch::Receiver<NodeMembership> {
         self.members.clone()
     }
 
     #[cfg(test)]
     /// Returns a list of node members.
-    pub fn members(&self) -> BTreeMap<String, ClusterMember> {
+    pub fn members(&self) -> NodeMembership {
         self.members.borrow().clone()
     }
 
@@ -226,7 +231,7 @@ impl ChitchatNode {
         timeout_after: Duration,
     ) -> Result<(), anyhow::Error>
     where
-        F: FnMut(&BTreeMap<String, ClusterMember>) -> bool,
+        F: FnMut(&NodeMembership) -> bool,
     {
         use tokio::time::timeout;
 
@@ -242,27 +247,35 @@ impl ChitchatNode {
 }
 
 fn build_cluster_member<'a>(
-    node_id: &'a NodeId,
+    chitchat_id: &'a NodeId,
     state: &'a ClusterStateSnapshot,
 ) -> Result<ClusterMember, String> {
-    let node_state = state.node_states.get(&node_id.id).ok_or_else(|| {
-        format!("Could not find node ID `{}` in ChitChat state.", node_id.id)
+    let node_state = state.node_states.get(&chitchat_id.id).ok_or_else(|| {
+        format!(
+            "Could not find node ID `{}` in ChitChat state.",
+            chitchat_id.id
+        )
     })?;
 
     let data_center = node_state
         .get(DATA_CENTER_KEY)
         .unwrap_or(DEFAULT_DATA_CENTER);
 
+    let node_id = chitchat_id
+        .id
+        .parse::<crate::NodeId>()
+        .map_err(|e| format!("Invalid node ID: {}", e))?;
+
     Ok(ClusterMember::new(
-        node_id.id.to_string(),
-        node_id.gossip_public_address,
+        node_id,
+        chitchat_id.gossip_public_address,
         data_center.to_owned(),
     ))
 }
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::AtomicU16;
+    use std::sync::atomic::AtomicU8;
 
     use anyhow::Result;
     use chitchat::transport::{ChannelTransport, Transport};
@@ -322,13 +335,12 @@ mod tests {
     }
 
     pub async fn create_node_for_test_with_id(
-        node_id: u16,
+        node_id: crate::NodeId,
         cluster_id: String,
         seeds: Vec<String>,
         transport: &dyn Transport,
     ) -> Result<ChitchatNode> {
-        let public_addr: SocketAddr = ([127, 0, 0, 1], node_id).into();
-        let node_id = format!("node_{node_id}");
+        let public_addr: SocketAddr = ([127, 0, 0, 1], node_id as u16).into();
         let failure_detector_config = create_failure_detector_config_for_test();
         let node = ChitchatNode::connect(
             ClusterMember::new(node_id, public_addr, "unknown".to_string()),
@@ -347,7 +359,7 @@ mod tests {
         seeds: Vec<String>,
         transport: &dyn Transport,
     ) -> Result<ChitchatNode> {
-        static NODE_AUTO_INCREMENT: AtomicU16 = AtomicU16::new(1u16);
+        static NODE_AUTO_INCREMENT: AtomicU8 = AtomicU8::new(1);
         let node_id = NODE_AUTO_INCREMENT.fetch_add(1, Ordering::Relaxed);
         let node = create_node_for_test_with_id(
             node_id,

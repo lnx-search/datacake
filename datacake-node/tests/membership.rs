@@ -21,21 +21,19 @@ pub async fn test_member_join() -> anyhow::Result<()> {
         [node_1_addr.to_string(), node_2_addr.to_string()],
     );
 
-    let node_1 =
-        DatacakeNodeBuilder::<DCAwareSelector>::new("node-1", node_1_connection_cfg)
-            .connect()
-            .await?;
-    let node_2 =
-        DatacakeNodeBuilder::<DCAwareSelector>::new("node-2", node_2_connection_cfg)
-            .connect()
-            .await?;
+    let node_1 = DatacakeNodeBuilder::<DCAwareSelector>::new(1, node_1_connection_cfg)
+        .connect()
+        .await?;
+    let node_2 = DatacakeNodeBuilder::<DCAwareSelector>::new(2, node_2_connection_cfg)
+        .connect()
+        .await?;
 
     node_1
-        .wait_for_nodes(&["node-2"], Duration::from_secs(30))
+        .wait_for_nodes(&[2], Duration::from_secs(30))
         .await
         .expect("Nodes should connect within timeout.");
     node_2
-        .wait_for_nodes(&["node-1"], Duration::from_secs(30))
+        .wait_for_nodes(&[1], Duration::from_secs(30))
         .await
         .expect("Nodes should connect within timeout.");
 
@@ -49,13 +47,12 @@ pub async fn test_member_join() -> anyhow::Result<()> {
     assert_eq!(stats.num_live_members(), 2);
     assert_eq!(stats.num_dead_members(), 0);
 
-    let node_3 =
-        DatacakeNodeBuilder::<DCAwareSelector>::new("node-3", node_3_connection_cfg)
-            .connect()
-            .await?;
+    let node_3 = DatacakeNodeBuilder::<DCAwareSelector>::new(3, node_3_connection_cfg)
+        .connect()
+        .await?;
 
     node_3
-        .wait_for_nodes(&["node-2", "node-1"], Duration::from_secs(30))
+        .wait_for_nodes(&[2, 1], Duration::from_secs(30))
         .await
         .expect("Nodes should connect within timeout.");
 
@@ -100,29 +97,26 @@ pub async fn test_member_leave() -> anyhow::Result<()> {
         [node_1_addr.to_string(), node_2_addr.to_string()],
     );
 
-    let node_1 =
-        DatacakeNodeBuilder::<DCAwareSelector>::new("node-1", node_1_connection_cfg)
-            .connect()
-            .await?;
-    let node_2 =
-        DatacakeNodeBuilder::<DCAwareSelector>::new("node-2", node_2_connection_cfg)
-            .connect()
-            .await?;
-    let node_3 =
-        DatacakeNodeBuilder::<DCAwareSelector>::new("node-3", node_3_connection_cfg)
-            .connect()
-            .await?;
+    let node_1 = DatacakeNodeBuilder::<DCAwareSelector>::new(1, node_1_connection_cfg)
+        .connect()
+        .await?;
+    let node_2 = DatacakeNodeBuilder::<DCAwareSelector>::new(2, node_2_connection_cfg)
+        .connect()
+        .await?;
+    let node_3 = DatacakeNodeBuilder::<DCAwareSelector>::new(3, node_3_connection_cfg)
+        .connect()
+        .await?;
 
     node_1
-        .wait_for_nodes(&["node-2", "node-3"], Duration::from_secs(30))
+        .wait_for_nodes(&[2, 3], Duration::from_secs(30))
         .await
         .expect("Nodes should connect within timeout.");
     node_2
-        .wait_for_nodes(&["node-1", "node-3"], Duration::from_secs(30))
+        .wait_for_nodes(&[1, 3], Duration::from_secs(30))
         .await
         .expect("Nodes should connect within timeout.");
     node_3
-        .wait_for_nodes(&["node-2", "node-1"], Duration::from_secs(30))
+        .wait_for_nodes(&[2, 1], Duration::from_secs(30))
         .await
         .expect("Nodes should connect within timeout.");
 
