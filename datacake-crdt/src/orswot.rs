@@ -29,6 +29,7 @@ pub const FORGIVENESS_PERIOD: Duration = if cfg!(test) {
 #[cfg(feature = "rkyv-support")]
 #[derive(Debug, thiserror::Error)]
 #[error("The set cannot be (de)serialized from the provided set of bytes.")]
+/// The set cannot be (de)serialized to or from the byte buffer.
 pub struct BadState;
 
 #[derive(Debug, Clone)]

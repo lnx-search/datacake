@@ -10,6 +10,7 @@ use rkyv::{Archive, Deserialize, Serialize};
 
 /// The maximum allowed clock drift between nodes.
 pub const MAX_CLOCK_DRIFT: Duration = Duration::from_secs(4_100);
+/// The maximum timestamp value in seconds that the timestamp can support (32 bits.)
 pub const TIMESTAMP_MAX: u64 = (1 << 32) - 1;
 /// The UNIX timestamp which datacake timestamps start counting from.
 ///
@@ -303,14 +304,21 @@ fn parts_as_duration(seconds: u64, fractional: u8) -> Duration {
 pub struct InvalidFormat;
 
 #[derive(Debug, thiserror::Error)]
+/// The clock was unable to produce a timestamp due to an error.
 pub enum TimestampError {
     #[error("Expected a different unique node, got node with the same id. {0:?}")]
+    /// The clock tried to receive/register a timestamp that it produced.
     DuplicatedNode(u8),
 
     #[error("The clock drift difference is too high to be used.")]
+    /// The clock on the remote node has drifted too far ahead for the timestamp
+    /// to be considered usable. The cut off is about 1 hour, so if this is raised
+    /// the NTP system on the server should be checked.
     ClockDrift,
 
     #[error("The timestamp counter is beyond the capacity of a u16 integer.")]
+    /// The timestamp counter overflowed, this normally means you're creating too many
+    /// timestamps every millisecond!
     Overflow,
 }
 

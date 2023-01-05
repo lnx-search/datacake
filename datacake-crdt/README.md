@@ -8,13 +8,14 @@ which guarantees the timestamp will always be unique and monotonic (providing it
 
 ### Basic Example
 ```rust
+use std::time::Duration;
 use datacake_crdt::{OrSWotSet, HLCTimestamp};
 
-fn main() {
+fn main() {        
     let mut node_a = HLCTimestamp::now(0, 0);
     
-    // Simulating a node begin slightly ahead.
-    let mut node_b = HLCTimestamp::new(node_a.seconds() + 5000, 0, 1);
+    // Simulating a node begin slightly ahead in time.
+    let mut node_b = HLCTimestamp::new(node_a.datacake_timestamp() + Duration::from_secs(5), 0, 1);
     
     let mut node_a_set = OrSWotSet::default();
     let mut node_b_set = OrSWotSet::default();
@@ -26,7 +27,7 @@ fn main() {
     node_b_set.insert(2, node_b.send().unwrap());
     
     // Let some time pass for demonstration purposes.
-    std::thread::sleep(std::time::Duration::from_millis(500));
+    std::thread::sleep(Duration::from_millis(500));
     
     // Set A has key `1` removed.
     node_a_set.delete(1, node_a.send().unwrap());
@@ -41,7 +42,6 @@ fn main() {
     assert!(node_b_set.get(&1).is_none(), "Key should be correctly removed.");
 }
 ```
-
 
 ### Inspirations
 - [CRDTs for Mortals by James Long](https://www.youtube.com/watch?v=iEFcmfmdh2w)
