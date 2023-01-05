@@ -78,7 +78,7 @@
 //!     let client = Channel::connect(address);
 //!     println!("Connected to address {}!", address);
 //!
-//!     let mut rpc_client = RpcClient::<MyService>::new(client);
+//!     let rpc_client = RpcClient::<MyService>::new(client);
 //!
 //!     let msg1 = MyMessage {
 //!         name: "Bobby".to_string(),

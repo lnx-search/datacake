@@ -15,7 +15,7 @@ readme = "README.md"
 datacake-crdt = { version = "0.4", path = "datacake-crdt", optional = true }
 datacake-eventual-consistency = { version = "0.2", path = "datacake-eventual-consistency", optional = true }
 datacake-sqlite = { version = "0.2", path = "datacake-sqlite", optional = true }
-datacake-rpc = { version = "0.2", path = "datacake-rpc", optional = true }
+datacake-rpc = { version = "0.3", path = "datacake-rpc", optional = true }
 datacake-node = { version = "0.1", path = "datacake-node", optional = true }
 
 [features]

@@ -50,6 +50,11 @@ where
 
         Ok(Self { data, view })
     }
+
+    /// Gets the bytes representation of the dataview.
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.data
+    }
 }
 
 impl<T, D> DataView<T, D>

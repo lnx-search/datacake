@@ -58,7 +58,7 @@ pub type MessageReply<Svc, Msg> = DataView<<Svc as Handler<Msg>>::Reply>;
 /// let connect = "127.0.0.1:8000".parse::<SocketAddr>()?;
 /// let client = Channel::connect(connect);
 ///
-/// let mut rpc_client = RpcClient::<EchoService>::new(client);
+/// let rpc_client = RpcClient::<EchoService>::new(client);
 ///
 /// let msg = MyMessage {
 ///     name: "Bobby".to_string(),
