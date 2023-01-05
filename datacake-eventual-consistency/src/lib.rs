@@ -54,7 +54,7 @@
 extern crate tracing;
 
 mod core;
-pub mod error;
+mod error;
 mod keyspace;
 mod replication;
 mod rpc;
@@ -85,6 +85,7 @@ pub use statistics::SystemStatistics;
 #[cfg(feature = "test-utils")]
 pub use storage::test_suite;
 pub use storage::{BulkMutationError, ProgressTracker, PutContext, Storage};
+pub use error::StoreError;
 
 pub use self::core::{Document, DocumentMetadata};
 use crate::keyspace::{

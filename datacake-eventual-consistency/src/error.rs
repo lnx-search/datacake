@@ -10,6 +10,7 @@ use thiserror::Error;
 use crate::storage::BulkMutationError;
 
 #[derive(Debug, Error)]
+/// A wrapping error for the store which can potentially fail under situations.
 pub enum StoreError<E: Error + Send + 'static> {
     #[error("{0}")]
     /// An error has occurred within Chitchat.

@@ -10,6 +10,7 @@ use rkyv::{Archive, Deserialize, Serialize};
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive, Copy, Clone, Debug, PartialEq)]
 #[archive_attr(repr(C), derive(CheckBytes))]
+/// The metadata attached to each document.
 pub struct DocumentMetadata {
     /// The unique id of the document.
     pub id: Key,
@@ -19,6 +20,8 @@ pub struct DocumentMetadata {
 }
 
 impl DocumentMetadata {
+    /// Creates a new metadata block with the given unique key and last updated
+    /// timestamp.
     pub fn new(id: Key, last_updated: HLCTimestamp) -> Self {
         Self { id, last_updated }
     }
@@ -27,6 +30,7 @@ impl DocumentMetadata {
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive, Clone)]
 #[archive_attr(repr(C), derive(CheckBytes))]
+/// A single document managed by the store.
 pub struct Document {
     /// The metadata associated with the document.
     pub metadata: DocumentMetadata,
