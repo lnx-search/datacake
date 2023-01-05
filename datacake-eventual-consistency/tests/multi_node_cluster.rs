@@ -14,8 +14,7 @@ use datacake_node::{
 async fn test_consistency_all() -> anyhow::Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
-    let [node_1, node_2, node_3] =
-        connect_cluster().await;
+    let [node_1, node_2, node_3] = connect_cluster().await;
 
     let store_1 = node_1
         .add_extension(EventuallyConsistentStoreExtension::new(MemStore::default()))
@@ -107,8 +106,7 @@ async fn test_consistency_all() -> anyhow::Result<()> {
 async fn test_consistency_none() -> anyhow::Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
-    let [node_1, node_2, node_3] =
-        connect_cluster().await;
+    let [node_1, node_2, node_3] = connect_cluster().await;
 
     let store_1 = node_1
         .add_extension(EventuallyConsistentStoreExtension::new(MemStore::default()))
@@ -211,9 +209,7 @@ async fn test_consistency_none() -> anyhow::Result<()> {
 async fn test_async_operations() -> anyhow::Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
-
-    let [node_1, node_2, node_3] =
-        connect_cluster().await;
+    let [node_1, node_2, node_3] = connect_cluster().await;
 
     let store_1 = node_1
         .add_extension(EventuallyConsistentStoreExtension::new(MemStore::default()))
