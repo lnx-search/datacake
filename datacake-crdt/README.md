@@ -8,13 +8,13 @@ which guarantees the timestamp will always be unique and monotonic (providing it
 
 ### Basic Example
 ```rust
-use datacake_crdt::{OrSWotSet, HLCTimestamp, get_unix_timestamp_ms};
+use datacake_crdt::{OrSWotSet, HLCTimestamp};
 
 fn main() {
-    let mut node_a = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 0);
+    let mut node_a = HLCTimestamp::now(0, 0);
     
     // Simulating a node begin slightly ahead.
-    let mut node_b = HLCTimestamp::new(get_unix_timestamp_ms() + 5000, 0, 1);
+    let mut node_b = HLCTimestamp::new(node_a.seconds() + 5000, 0, 1);
     
     let mut node_a_set = OrSWotSet::default();
     let mut node_b_set = OrSWotSet::default();
@@ -37,8 +37,8 @@ fn main() {
     node_a_set.merge(node_b_set);
     
     // Set A and B should both see that key `1` has been deleted.
-    assert!(node_a_set.get(&1).is_none(), "Key a was not correctly removed.");
-    assert!(node_b_set.get(&1).is_none(), "Key a was not correctly removed.");
+    assert!(node_a_set.get(&1).is_none(), "Key should be correctly removed.");
+    assert!(node_b_set.get(&1).is_none(), "Key should be correctly removed.");
 }
 ```
 

@@ -1,7 +1,7 @@
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::Debug;
-use std::mem;
+use std::{cmp, mem};
 
 #[cfg(feature = "rkyv-support")]
 use bytecheck::CheckBytes;
@@ -13,7 +13,7 @@ use crate::timestamp::HLCTimestamp;
 pub type Key = u64;
 pub type StateChanges = Vec<(Key, HLCTimestamp)>;
 
-/// The period of time in milliseconds, to remove from the
+/// The period of time in seconds, to remove from the
 /// safe timestamp cut off.
 ///
 /// This allows the system to essentially forgive some latency between events.
@@ -165,7 +165,7 @@ impl<const N: usize> NodeVersions<N> {
 /// Sources allow us to negate this issue while still keeping the observer pattern.
 ///
 /// ## Last write wins conditions
-/// If two operations occur at the same effective time, i.e. the `millis` and `counter` are the
+/// If two operations occur at the same effective time, i.e. the `seconds` and `counter` are the
 /// same on two timestamps. The timestamp with the largest `node_id` wins.
 ///
 /// Consistency is not guaranteed in the event that two operations with the same timestamp from the
@@ -179,12 +179,12 @@ impl<const N: usize> NodeVersions<N> {
 ///
 /// ## Example
 /// ```
-/// use datacake_crdt::{OrSWotSet, HLCTimestamp, get_unix_timestamp_ms};
+/// use datacake_crdt::{OrSWotSet, HLCTimestamp};
 ///
-/// let mut node_a = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 0);
+/// let mut node_a = HLCTimestamp::now(0, 0);
 ///
 /// // Simulating a node begin slightly ahead.
-/// let mut node_b = HLCTimestamp::new(get_unix_timestamp_ms() + 5000, 0, 1);
+/// let mut node_b = HLCTimestamp::new(node_a.seconds() + 5, 0, 1);
 ///
 /// // We have only 1 source.
 /// let mut node_a_set = OrSWotSet::<1>::default();
@@ -196,9 +196,6 @@ impl<const N: usize> NodeVersions<N> {
 /// // Insert a new entry in set B.
 /// node_b_set.insert(2, node_b.send().unwrap());
 ///
-/// // Let some time pass for demonstration purposes.
-/// std::thread::sleep(std::time::Duration::from_millis(500));
-///
 /// // Set A has key `1` removed.
 /// node_a_set.delete(1, node_a.send().unwrap());
 ///
@@ -208,8 +205,8 @@ impl<const N: usize> NodeVersions<N> {
 /// node_a_set.merge(node_b_set.clone());
 ///
 /// // Set A and B should both see that key `1` has been deleted.
-/// assert!(node_a_set.get(&1).is_none(), "Key a was not correctly removed.");
-/// assert!(node_b_set.get(&1).is_none(), "Key a was not correctly removed.");
+/// assert!(node_a_set.get(&1).is_none(), "Key should be correctly removed.");
+/// assert!(node_b_set.get(&1).is_none(), "Key should be correctly removed.");
 /// ```
 pub struct OrSWotSet<const N: usize = 1> {
     entries: BTreeMap<Key, HLCTimestamp>,
@@ -287,7 +284,7 @@ impl<const N: usize> OrSWotSet<N> {
         let mut entries_log = Vec::from_iter(base_entries);
         entries_log.extend(other.dead.into_iter().map(|(k, ts)| (k, ts, true)));
 
-        // It's important we go in time/event order. Otherwise we may incorrect merge the set.
+        // It's important we go in time/event order. Otherwise we may incorrectly merge the set.
         entries_log.sort_by_key(|v| v.1);
 
         let mut old_entries = mem::take(&mut self.entries);
@@ -309,9 +306,7 @@ impl<const N: usize> OrSWotSet<N> {
                 self.dead
                     .entry(key)
                     .and_modify(|v| {
-                        if *v < ts {
-                            (*v) = ts;
-                        }
+                        (*v) = cmp::max(*v, ts);
                     })
                     .or_insert_with(|| ts);
 
@@ -321,16 +316,14 @@ impl<const N: usize> OrSWotSet<N> {
             let mut timestamp = ts;
 
             // If our own entry is newer, we use that.
-            if let Some(delete_ts) = old_entries.remove(&key) {
-                if delete_ts < ts {
-                    timestamp = delete_ts;
-                }
+            if let Some(existing_ts) = old_entries.remove(&key) {
+                timestamp = cmp::max(timestamp, existing_ts);
             }
 
             // Have we already marked the document as dead. And if so, is it newer than this op?
-            if let Some(deleted) = self.dead.remove(&key) {
-                if timestamp < deleted {
-                    self.dead.insert(key, deleted);
+            if let Some(deleted_ts) = self.dead.remove(&key) {
+                if timestamp < deleted_ts {
+                    self.dead.insert(key, deleted_ts);
                     continue;
                 }
             }
@@ -536,12 +529,51 @@ mod tests {
     use std::time::Duration;
 
     use super::*;
-    use crate::timestamp::get_unix_timestamp_ms;
+
+    #[test]
+    fn test_op_order() {
+        let mut node_a = HLCTimestamp::now(0, 0);
+        let mut node_b = HLCTimestamp::new(node_a.seconds(), 0, 1);
+
+        let mut node_a_set = OrSWotSet::<1>::default();
+
+        let ts_a = node_a.send().unwrap();
+        let ts_b = node_b.send().unwrap();
+
+        node_a_set.insert(1, ts_a);
+        node_a_set.insert(1, ts_b);
+
+        let retrieved = node_a_set.get(&1);
+        assert_eq!(retrieved, Some(&ts_b), "Node B should win the operation.");
+
+        let mut node_a_set = OrSWotSet::<1>::default();
+        let mut node_b_set = OrSWotSet::<1>::default();
+
+        node_a_set.insert(1, ts_a);
+        node_b_set.insert(1, ts_b);
+
+        node_a_set.merge(node_b_set.clone());
+        node_b_set.merge(node_a_set.clone());
+
+        let retrieved = node_a_set.get(&1);
+        assert_eq!(
+            retrieved,
+            Some(&ts_b),
+            "Node B should win the operation after merging set A."
+        );
+
+        let retrieved = node_b_set.get(&1);
+        assert_eq!(
+            retrieved,
+            Some(&ts_b),
+            "Node B should win the operation after merging set B."
+        );
+    }
 
     #[test]
     fn test_basic_insert_merge() {
-        let mut node_a = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 0);
-        let mut node_b = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 1);
+        let mut node_a = HLCTimestamp::now(0, 0);
+        let mut node_b = HLCTimestamp::new(node_a.seconds(), 0, 1);
 
         // We create our new set for node a.
         let mut node_a_set = OrSWotSet::<1>::default();
@@ -585,8 +617,8 @@ mod tests {
 
     #[test]
     fn test_same_time_conflict_convergence() {
-        let mut node_a = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 0);
-        let mut node_b = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 1);
+        let mut node_a = HLCTimestamp::now(0, 0);
+        let mut node_b = HLCTimestamp::new(node_a.seconds(), 0, 1);
 
         // We create our new set for node a.
         let mut node_a_set = OrSWotSet::<1>::default();
@@ -653,8 +685,8 @@ mod tests {
 
     #[test]
     fn test_basic_delete_merge() {
-        let mut node_a = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 0);
-        let mut node_b = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 1);
+        let mut node_a = HLCTimestamp::now(0, 0);
+        let mut node_b = HLCTimestamp::new(node_a.seconds() + 1, 0, 1);
 
         // We create our new set for node a.
         let mut node_a_set = OrSWotSet::<1>::default();
@@ -663,8 +695,6 @@ mod tests {
         node_a_set.insert(1, node_a.send().unwrap());
         node_a_set.insert(2, node_a.send().unwrap());
         node_a_set.insert(3, node_a.send().unwrap());
-
-        std::thread::sleep(Duration::from_millis(1));
 
         // We create our new state on node b's side.
         let mut node_b_set = OrSWotSet::<1>::default();
@@ -696,8 +726,8 @@ mod tests {
 
     #[test]
     fn test_purge_delete_merge() {
-        let mut node_a = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 0);
-        let mut node_b = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 1);
+        let mut node_a = HLCTimestamp::now(0, 0);
+        let mut node_b = HLCTimestamp::new(node_a.seconds() + 1, 0, 1);
 
         // We create our new set for node a.
         let mut node_a_set = OrSWotSet::<1>::default();
@@ -706,8 +736,6 @@ mod tests {
         node_a_set.insert(1, node_a.send().unwrap());
         node_a_set.insert(2, node_a.send().unwrap());
         node_a_set.insert(3, node_a.send().unwrap());
-
-        std::thread::sleep(Duration::from_millis(1));
 
         // We create our new state on node b's side.
         let mut node_b_set = OrSWotSet::<1>::default();
@@ -751,8 +779,8 @@ mod tests {
 
     #[test]
     fn test_purge_some_entries() {
-        let mut node_a = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 0);
-        let mut node_b = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 1);
+        let mut node_a = HLCTimestamp::now(0, 0);
+        let mut node_b = HLCTimestamp::new(node_a.seconds() + 1, 0, 1);
 
         // We create our new set for node a.
         let mut node_a_set = OrSWotSet::<1>::default();
@@ -844,11 +872,8 @@ mod tests {
 
     #[test]
     fn test_insert_no_op() {
-        let mut node_a = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 0);
+        let mut node_a = HLCTimestamp::now(0, 0);
         let old_ts = node_a.send().unwrap();
-
-        // Wait a period of time to make the ts we just created 'old'
-        std::thread::sleep(Duration::from_millis(200));
 
         // We create our new set for node a.
         let mut node_a_set = OrSWotSet::<1>::default();
@@ -865,11 +890,8 @@ mod tests {
 
     #[test]
     fn test_delete_no_op() {
-        let mut node_a = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 0);
+        let mut node_a = HLCTimestamp::now(0, 0);
         let old_ts = node_a.send().unwrap();
-
-        // Wait a period of time to make the ts we just created 'old'
-        std::thread::sleep(Duration::from_millis(200));
 
         // We create our new set for node a.
         let mut node_a_set = OrSWotSet::<1>::default();
@@ -886,8 +908,8 @@ mod tests {
 
     #[test]
     fn test_set_diff() {
-        let mut node_a = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 0);
-        let mut node_b = HLCTimestamp::new(get_unix_timestamp_ms() + 5000, 0, 1);
+        let mut node_a = HLCTimestamp::now(0, 0);
+        let mut node_b = HLCTimestamp::new(node_a.seconds() + 5, 0, 1);
 
         let mut node_a_set = OrSWotSet::<1>::default();
         let mut node_b_set = OrSWotSet::<1>::default();
@@ -905,8 +927,6 @@ mod tests {
             removed.is_empty(),
             "Expected there to be no difference between sets."
         );
-
-        std::thread::sleep(Duration::from_millis(500));
 
         let delete_ts_3 = node_a.send().unwrap();
         node_a_set.delete(3, delete_ts_3);
@@ -941,8 +961,8 @@ mod tests {
 
     #[test]
     fn test_set_diff_with_conflicts() {
-        let mut node_a = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 0);
-        let mut node_b = HLCTimestamp::new(get_unix_timestamp_ms() + 5000, 0, 1);
+        let mut node_a = HLCTimestamp::now(0, 0);
+        let mut node_b = HLCTimestamp::new(node_a.seconds() + 5, 0, 1);
 
         let mut node_a_set = OrSWotSet::<1>::default();
         let mut node_b_set = OrSWotSet::<1>::default();
@@ -989,8 +1009,8 @@ mod tests {
 
     #[test]
     fn test_tie_breakers() {
-        let node_a = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 0);
-        let node_b = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 1);
+        let node_a = HLCTimestamp::now(0, 0);
+        let node_b = HLCTimestamp::new(node_a.seconds(), 0, 1);
 
         let mut node_a_set = OrSWotSet::<1>::default();
         let mut node_b_set = OrSWotSet::<1>::default();
@@ -1068,7 +1088,7 @@ mod tests {
 
     #[test]
     fn test_multi_source_handling() {
-        let mut clock = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 0);
+        let mut clock = HLCTimestamp::now(0, 0);
         let mut node_set = OrSWotSet::<1>::default();
 
         // A basic example of the purging system.

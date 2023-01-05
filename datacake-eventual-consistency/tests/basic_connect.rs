@@ -12,7 +12,7 @@ async fn test_basic_connect() -> anyhow::Result<()> {
     let addr = "127.0.0.1:8000".parse::<SocketAddr>().unwrap();
     let connection_cfg = ConnectionConfig::new(addr, addr, Vec::<String>::new());
 
-    let node = DatacakeNodeBuilder::<DCAwareSelector>::new("node-1", connection_cfg)
+    let node = DatacakeNodeBuilder::<DCAwareSelector>::new(1, connection_cfg)
         .connect()
         .await?;
     let _store = node

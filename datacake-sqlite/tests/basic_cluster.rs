@@ -21,7 +21,7 @@ async fn test_basic_sqlite_cluster() -> Result<()> {
     let addr = "127.0.0.1:9000".parse::<SocketAddr>().unwrap();
     let connection_cfg = ConnectionConfig::new(addr, addr, Vec::<String>::new());
 
-    let node = DatacakeNodeBuilder::<DCAwareSelector>::new("node-1", connection_cfg)
+    let node = DatacakeNodeBuilder::<DCAwareSelector>::new(1, connection_cfg)
         .connect()
         .await?;
     let store = node

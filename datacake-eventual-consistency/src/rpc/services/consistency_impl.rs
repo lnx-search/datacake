@@ -1,10 +1,9 @@
-use std::borrow::Cow;
 use std::marker::PhantomData;
 use std::net::SocketAddr;
 
 use bytecheck::CheckBytes;
 use datacake_crdt::HLCTimestamp;
-use datacake_node::RpcNetwork;
+use datacake_node::{NodeId, RpcNetwork};
 use datacake_rpc::{Handler, Request, RpcService, ServiceRegistry, Status};
 use rkyv::{Archive, Deserialize, Serialize};
 
@@ -49,7 +48,7 @@ where
 
             Some(PutContext {
                 progress: ProgressTracker::default(),
-                remote_node_id: Cow::Owned(info.node_id),
+                remote_node_id: info.node_id,
                 remote_addr: info.node_addr,
                 remote_rpc_channel,
             })
@@ -282,7 +281,7 @@ pub struct BatchPayload {
 #[derive(Serialize, Deserialize, Archive, Debug)]
 #[archive_attr(derive(CheckBytes))]
 pub struct Context {
-    pub node_id: String,
+    pub node_id: NodeId,
     pub node_addr: SocketAddr,
 }
 

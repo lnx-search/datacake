@@ -198,7 +198,7 @@ async fn test_single_node_cluster_bulk_op_with_keyspace_handle() -> anyhow::Resu
 async fn create_store(addr: &str) -> EventuallyConsistentStore<MemStore> {
     let addr = addr.parse::<SocketAddr>().unwrap();
     let connection_cfg = ConnectionConfig::new(addr, addr, Vec::<String>::new());
-    let node = DatacakeNodeBuilder::<DCAwareSelector>::new("node-1", connection_cfg)
+    let node = DatacakeNodeBuilder::<DCAwareSelector>::new(1, connection_cfg)
         .connect()
         .await
         .expect("Connect node.");

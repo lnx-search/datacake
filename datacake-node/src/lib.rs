@@ -34,15 +34,17 @@ use tokio::sync::watch;
 use tokio_stream::wrappers::WatchStream;
 use tracing::info;
 
+use crate::node::NodeMembership;
 use crate::rpc::chitchat_transport::ChitchatTransport;
 use crate::rpc::services::chitchat_impl::ChitchatService;
 
 pub static DEFAULT_CLUSTER_ID: &str = "datacake-eventual-consistency-unknown";
 pub static DEFAULT_DATA_CENTER: &str = "datacake-dc-unknown";
+pub type NodeId = u8;
 
 /// Build a datacake node using provided settings.
 pub struct DatacakeNodeBuilder<S = DCAwareSelector> {
-    node_id: String,
+    node_id: NodeId,
     connection_cfg: ConnectionConfig,
     cluster_id: String,
     data_center: Cow<'static, str>,
@@ -55,11 +57,11 @@ where
 {
     /// Create a new node builder.
     pub fn new(
-        node_id: impl Into<String>,
+        node_id: NodeId,
         connection_cfg: ConnectionConfig,
     ) -> DatacakeNodeBuilder<DCAwareSelector> {
         DatacakeNodeBuilder {
-            node_id: node_id.into(),
+            node_id,
             connection_cfg,
             cluster_id: DEFAULT_CLUSTER_ID.to_string(),
             data_center: Cow::Borrowed(DEFAULT_DATA_CENTER),
@@ -107,7 +109,7 @@ where
     /// but they are required in order for nodes to discover one-another and share
     /// their basic state.
     pub async fn connect(self) -> Result<DatacakeNode, NodeError> {
-        let clock = Clock::new(crc32fast::hash(self.node_id.as_bytes()));
+        let clock = Clock::new(self.node_id);
 
         let statistics = ClusterStatistics::default();
         let network = RpcNetwork::default();
@@ -127,7 +129,7 @@ where
             data_center: self.data_center.as_ref(),
         };
         let (node, transport) = connect_node(
-            self.node_id.clone(),
+            self.node_id,
             self.cluster_id.clone(),
             clock.clone(),
             network.clone(),
@@ -139,7 +141,7 @@ where
 
         let (tx, membership_changes) = watch::channel(MembershipChange::default());
         tokio::spawn(watch_membership_changes(
-            Cow::Owned(self.node_id.clone()),
+            self.node_id,
             network.clone(),
             selector.clone(),
             statistics.clone(),
@@ -285,7 +287,7 @@ impl DatacakeNode {
     /// Waits for the given node IDs to join the cluster or timeout to elapse.
     pub async fn wait_for_nodes(
         &self,
-        node_ids: impl AsRef<[&str]>,
+        node_ids: impl AsRef<[NodeId]>,
         timeout: Duration,
     ) -> Result<(), anyhow::Error> {
         let nodes = node_ids.as_ref();
@@ -293,7 +295,7 @@ impl DatacakeNode {
             .wait_for_members(
                 |members| {
                     for id in nodes {
-                        if !members.contains_key(&**id) {
+                        if !members.contains_key(id) {
                             return false;
                         }
                     }
@@ -387,7 +389,7 @@ struct ClusterInfo<'a> {
 /// The node will attempt to establish connections to the seed nodes and
 /// will broadcast the node's public address to communicate.
 async fn connect_node(
-    node_id: String,
+    node_id: NodeId,
     cluster_id: String,
     clock: Clock,
     network: RpcNetwork,
@@ -426,11 +428,11 @@ async fn connect_node(
 ///
 /// When nodes leave and join, pollers are stopped and started as required.
 async fn watch_membership_changes(
-    self_node_id: Cow<'static, str>,
+    self_node_id: NodeId,
     network: RpcNetwork,
     node_selector: NodeSelectorHandle,
     statistics: ClusterStatistics,
-    mut changes: WatchStream<BTreeMap<String, ClusterMember>>,
+    mut changes: WatchStream<NodeMembership>,
     membership_changes_tx: watch::Sender<MembershipChange>,
 ) {
     let mut last_network_set = BTreeSet::new();
@@ -444,8 +446,8 @@ async fn watch_membership_changes(
         let mut membership_changes = MembershipChange::default();
         let new_network_set = members
             .iter()
-            .filter(|(node_id, _)| node_id != &self_node_id.as_ref())
-            .map(|(_, member)| (member.node_id.clone(), member.public_addr))
+            .filter(|(node_id, _)| *node_id != &self_node_id)
+            .map(|(_, member)| (member.node_id, member.public_addr))
             .collect::<BTreeSet<_>>();
 
         {

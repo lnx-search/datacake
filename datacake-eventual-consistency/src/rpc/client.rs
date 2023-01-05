@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::net::SocketAddr;
 
 use datacake_crdt::{HLCTimestamp, Key, OrSWotSet};
-use datacake_node::Clock;
+use datacake_node::{Clock, NodeId};
 use datacake_rpc::{Channel, RpcClient, Status};
 use rkyv::AlignedVec;
 
@@ -54,7 +54,7 @@ where
         &mut self,
         keyspace: impl Into<String>,
         document: Document,
-        node_id: &str,
+        node_id: NodeId,
         node_addr: SocketAddr,
     ) -> Result<(), Status> {
         let timestamp = self.clock.get_time().await;
@@ -63,10 +63,7 @@ where
             .send(&PutPayload {
                 keyspace: keyspace.into(),
                 document,
-                ctx: Some(Context {
-                    node_id: node_id.to_string(),
-                    node_addr,
-                }),
+                ctx: Some(Context { node_id, node_addr }),
                 timestamp,
             })
             .await?
@@ -81,7 +78,7 @@ where
         &mut self,
         keyspace: impl Into<String>,
         documents: impl Iterator<Item = Document>,
-        node_id: &str,
+        node_id: NodeId,
         node_addr: SocketAddr,
     ) -> Result<(), Status> {
         let timestamp = self.clock.get_time().await;
@@ -90,10 +87,7 @@ where
             .send(&MultiPutPayload {
                 keyspace: keyspace.into(),
                 documents: documents.collect(),
-                ctx: Some(Context {
-                    node_id: node_id.to_string(),
-                    node_addr,
-                }),
+                ctx: Some(Context { node_id, node_addr }),
                 timestamp,
             })
             .await?

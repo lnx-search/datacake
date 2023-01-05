@@ -10,7 +10,7 @@ use anyhow::anyhow;
 use crossbeam_channel::{Receiver, Sender};
 use crossbeam_utils::atomic::AtomicCell;
 use datacake_crdt::HLCTimestamp;
-use datacake_node::{Clock, MembershipChange, RpcNetwork};
+use datacake_node::{Clock, MembershipChange, NodeId, RpcNetwork};
 use datacake_rpc::Status;
 use puppet::ActorMailbox;
 use tokio::sync::Semaphore;
@@ -37,11 +37,7 @@ const INITIAL_KEYSPACE_WAIT: Duration = if cfg!(any(test, feature = "test-utils"
 } else {
     Duration::from_secs(30)
 };
-const KEYSPACE_SYNC_TIMEOUT: Duration = if cfg!(test) {
-    Duration::from_secs(1)
-} else {
-    Duration::from_secs(5)
-};
+const KEYSPACE_SYNC_TIMEOUT: Duration = Duration::from_secs(5);
 const MAX_NUMBER_OF_DOCS_PER_FETCH: usize = 50_000;
 
 /// The required context for the actor to run.
@@ -146,7 +142,7 @@ async fn replication_cycle<S>(
                 Op::MembershipChange(changes) => {
                     for member in changes.left {
                         live_members.remove(&member.node_id);
-                        keyspace_tracker.remove_node(&member.node_id);
+                        keyspace_tracker.remove_node(member.node_id);
                     }
 
                     for member in changes.joined {
@@ -162,27 +158,27 @@ async fn replication_cycle<S>(
 
 #[derive(Default, Debug)]
 struct KeyspaceTracker {
-    inner: BTreeMap<String, KeyspaceTimestamps>,
+    inner: BTreeMap<NodeId, KeyspaceTimestamps>,
 }
 
 impl KeyspaceTracker {
-    fn remove_node(&mut self, node_id: &str) {
-        self.inner.remove(node_id);
+    fn remove_node(&mut self, node_id: NodeId) {
+        self.inner.remove(&node_id);
     }
 
     fn get_diff(
         &mut self,
-        node_id: String,
+        node_id: NodeId,
         other: &BTreeMap<String, HLCTimestamp>,
     ) -> impl Iterator<Item = Cow<'static, str>> {
         self.inner.entry(node_id).or_default().diff(other)
     }
 
-    fn set_keyspace(&mut self, node_id: String, ts: HLCTimestamp) {
+    fn set_keyspace(&mut self, node_id: NodeId, keyspace: String, ts: HLCTimestamp) {
         self.inner
-            .entry(node_id.clone())
+            .entry(node_id)
             .or_default()
-            .insert(Cow::Owned(node_id), Arc::new(AtomicCell::new(ts)));
+            .insert(Cow::Owned(keyspace), Arc::new(AtomicCell::new(ts)));
     }
 }
 
@@ -191,14 +187,13 @@ impl KeyspaceTracker {
 /// This will return a optimised plan of what nodes should have what documents retrieved.
 async fn read_repair_members<S>(
     ctx: &ReplicationCycleContext<S>,
-    live_members: &BTreeMap<String, SocketAddr>,
+    live_members: &BTreeMap<NodeId, SocketAddr>,
     keyspace_tracker: &mut KeyspaceTracker,
 ) where
     S: Storage + Send + Sync + 'static,
 {
     for (node_id, addr) in live_members {
-        let res =
-            check_node_changes(ctx, node_id.clone(), *addr, keyspace_tracker).await;
+        let res = check_node_changes(ctx, *node_id, *addr, keyspace_tracker).await;
 
         let info = match res {
             Err(e) => {
@@ -217,7 +212,7 @@ async fn read_repair_members<S>(
             let res = begin_keyspace_sync(
                 ctx,
                 change.keyspace.clone(),
-                node_id.to_string(),
+                *node_id,
                 *addr,
                 change.removed,
                 change.modified,
@@ -233,7 +228,11 @@ async fn read_repair_members<S>(
                     "Failed to sync with node."
                 );
             } else {
-                keyspace_tracker.set_keyspace(node_id.to_string(), change.last_updated);
+                keyspace_tracker.set_keyspace(
+                    *node_id,
+                    change.keyspace,
+                    change.last_updated,
+                );
             }
         }
     }
@@ -250,7 +249,7 @@ async fn read_repair_members<S>(
 /// and restarted.
 async fn check_node_changes<S>(
     ctx: &ReplicationCycleContext<S>,
-    target_node_id: String,
+    target_node_id: NodeId,
     target_node_addr: SocketAddr,
     keyspace_tracker: &mut KeyspaceTracker,
 ) -> Result<NodeChangeInfo, anyhow::Error>
@@ -268,7 +267,7 @@ where
     let keyspace_timestamps = client.poll_keyspace().await?;
 
     let diff = keyspace_tracker
-        .get_diff(target_node_id.clone(), &keyspace_timestamps)
+        .get_diff(target_node_id, &keyspace_timestamps)
         .map(|ks| ks.to_string())
         .collect::<Vec<_>>();
 
@@ -276,7 +275,6 @@ where
     let mut tasks = Vec::new();
     for keyspace in diff {
         let permits = permits.clone();
-        let target_node_id = target_node_id.clone();
         let group = ctx.group.clone();
         let client = ReplicationClient::new(ctx.clock().clone(), channel.clone());
 
@@ -388,7 +386,7 @@ where
 async fn begin_keyspace_sync<S>(
     ctx: &ReplicationCycleContext<S>,
     keyspace_name: String,
-    target_node_id: String,
+    target_node_id: NodeId,
     target_rpc_addr: SocketAddr,
     removed: Vec<DocumentMetadata>,
     modified: Vec<DocumentMetadata>,
@@ -403,7 +401,7 @@ where
     let progress_tracker = ProgressTracker::default();
     let ctx = PutContext {
         progress: progress_tracker.clone(),
-        remote_node_id: Cow::Owned(target_node_id.clone()),
+        remote_node_id: target_node_id,
         remote_addr: target_rpc_addr,
         remote_rpc_channel: channel.clone(),
     };

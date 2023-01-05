@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::error::Error;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -7,6 +6,7 @@ use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use datacake_crdt::{HLCTimestamp, Key};
+use datacake_node::NodeId;
 use datacake_rpc::Channel;
 
 use crate::core::{Document, DocumentMetadata};
@@ -88,7 +88,7 @@ pub struct PutContext {
     pub(crate) progress: ProgressTracker,
 
     // Info relating to the remote node.
-    pub(crate) remote_node_id: Cow<'static, str>,
+    pub(crate) remote_node_id: NodeId,
     pub(crate) remote_addr: SocketAddr,
     pub(crate) remote_rpc_channel: Channel,
 }
@@ -105,8 +105,8 @@ impl PutContext {
 
     #[inline]
     /// The unique ID of the remote node.
-    pub fn remote_node_id(&self) -> &str {
-        self.remote_node_id.as_ref()
+    pub fn remote_node_id(&self) -> NodeId {
+        self.remote_node_id
     }
 
     #[inline]
@@ -348,7 +348,7 @@ pub mod test_suite {
     use std::collections::HashSet;
     use std::hash::Hash;
 
-    use datacake_crdt::{get_unix_timestamp_ms, HLCTimestamp, Key};
+    use datacake_crdt::{HLCTimestamp, Key};
 
     use crate::core::Document;
     use crate::storage::Storage;
@@ -363,7 +363,7 @@ pub mod test_suite {
     }
 
     pub async fn run_test_suite<S: Storage + Send + Sync + 'static>(storage: S) {
-        let mut clock = HLCTimestamp::new(get_unix_timestamp_ms(), 0, 0);
+        let mut clock = HLCTimestamp::now(0, 0);
         info!("Starting test suite for storage: {}", type_name::<S>());
 
         let storage = InstrumentedStorage(storage);

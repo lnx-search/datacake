@@ -74,6 +74,13 @@ impl HLCTimestamp {
         Self(pack(seconds, counter, node))
     }
 
+    /// Create a new [HLCTimestamp].
+    ///
+    /// This internally gets the current UNIX timestamp in seconds.
+    pub fn now(counter: u32, node: u8) -> Self {
+        Self::new(get_unix_timestamp(), counter, node)
+    }
+
     #[inline]
     pub fn node(&self) -> u8 {
         (self.0 & 0xFF).try_into().unwrap_or_default()

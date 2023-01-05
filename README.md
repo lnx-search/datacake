@@ -50,7 +50,7 @@ async fn main() -> Result<()> {
   let connection_cfg = ConnectionConfig::new(addr, addr, Vec::<String>::new());
 
   let cluster = DatacakeCluster::connect(
-    "node-1",
+    1,
     connection_cfg,
     MemStore::default(),
     DCAwareSelector::default(),
