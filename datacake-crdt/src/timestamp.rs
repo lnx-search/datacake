@@ -82,11 +82,13 @@ impl HLCTimestamp {
     }
 
     #[inline]
+    /// The node ID which produced this timestamp
     pub fn node(&self) -> u8 {
         (self.0 & 0xFF).try_into().unwrap_or_default()
     }
 
     #[inline]
+    /// The counter used to keep the clock monotonic.
     pub fn counter(&self) -> u32 {
         ((self.0 >> 8) & 0b1111111111111111111111) // 22 bits explicitly.
             .try_into()
@@ -94,8 +96,25 @@ impl HLCTimestamp {
     }
 
     #[inline]
+    /// The UNIX timestamp.
     pub fn seconds(&self) -> u64 {
         self.0 >> 30
+    }
+
+    #[inline]
+    /// The timestamp as it's raw `u64`.
+    pub fn as_u64(&self) -> u64 {
+        self.0
+    }
+
+    #[inline]
+    /// Creates a new timestamp from a given `u64`.
+    ///
+    /// WARNING:
+    ///     It is *your* responsibility that the provided value is a correctly
+    ///     packed number, otherwise your timestamp will spit out gibberish.
+    pub fn from_u64(val: u64) -> Self {
+        Self(val)
     }
 
     /// Timestamp send. Generates a unique, monotonic timestamp suitable
