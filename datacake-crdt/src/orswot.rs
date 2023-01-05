@@ -1,6 +1,7 @@
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::Debug;
+use std::time::Duration;
 use std::{cmp, mem};
 
 #[cfg(feature = "rkyv-support")]
@@ -13,13 +14,17 @@ use crate::timestamp::HLCTimestamp;
 pub type Key = u64;
 pub type StateChanges = Vec<(Key, HLCTimestamp)>;
 
-/// The period of time in seconds, to remove from the
+/// The period of time, to remove from the
 /// safe timestamp cut off.
 ///
 /// This allows the system to essentially forgive some latency between events.
 ///
 /// This is 1 hour by default.
-pub const FORGIVENESS_PERIOD: u64 = if cfg!(test) { 0 } else { 3_600 };
+pub const FORGIVENESS_PERIOD: Duration = if cfg!(test) {
+    Duration::from_secs(0)
+} else {
+    Duration::from_secs(3_600)
+};
 
 #[cfg(feature = "rkyv-support")]
 #[derive(Debug, thiserror::Error)]
@@ -106,16 +111,15 @@ impl<const N: usize> NodeVersions<N> {
             .nodes_max_stamps
             .iter()
             .map(|stamps| {
-                stamps
-                    .get(&node)
-                    .copied()
-                    .unwrap_or_else(|| HLCTimestamp::new(0, 0, node))
+                stamps.get(&node).copied().unwrap_or_else(|| {
+                    HLCTimestamp::new(Duration::from_secs(0), 0, node)
+                })
             })
             .min();
 
         if let Some(min) = min {
             let ts = HLCTimestamp::new(
-                min.seconds().saturating_sub(FORGIVENESS_PERIOD),
+                min.datacake_timestamp().saturating_sub(FORGIVENESS_PERIOD),
                 min.counter(),
                 min.node(),
             );
@@ -179,12 +183,13 @@ impl<const N: usize> NodeVersions<N> {
 ///
 /// ## Example
 /// ```
+/// use std::time::Duration;
 /// use datacake_crdt::{OrSWotSet, HLCTimestamp};
 ///
 /// let mut node_a = HLCTimestamp::now(0, 0);
 ///
 /// // Simulating a node begin slightly ahead.
-/// let mut node_b = HLCTimestamp::new(node_a.seconds() + 5, 0, 1);
+/// let mut node_b = HLCTimestamp::new(node_a.datacake_timestamp() + Duration::from_secs(5), 0, 1);
 ///
 /// // We have only 1 source.
 /// let mut node_a_set = OrSWotSet::<1>::default();
@@ -533,7 +538,7 @@ mod tests {
     #[test]
     fn test_op_order() {
         let mut node_a = HLCTimestamp::now(0, 0);
-        let mut node_b = HLCTimestamp::new(node_a.seconds(), 0, 1);
+        let mut node_b = HLCTimestamp::new(node_a.datacake_timestamp(), 0, 1);
 
         let mut node_a_set = OrSWotSet::<1>::default();
 
@@ -573,7 +578,7 @@ mod tests {
     #[test]
     fn test_basic_insert_merge() {
         let mut node_a = HLCTimestamp::now(0, 0);
-        let mut node_b = HLCTimestamp::new(node_a.seconds(), 0, 1);
+        let mut node_b = HLCTimestamp::new(node_a.datacake_timestamp(), 0, 1);
 
         // We create our new set for node a.
         let mut node_a_set = OrSWotSet::<1>::default();
@@ -618,7 +623,7 @@ mod tests {
     #[test]
     fn test_same_time_conflict_convergence() {
         let mut node_a = HLCTimestamp::now(0, 0);
-        let mut node_b = HLCTimestamp::new(node_a.seconds(), 0, 1);
+        let mut node_b = HLCTimestamp::new(node_a.datacake_timestamp(), 0, 1);
 
         // We create our new set for node a.
         let mut node_a_set = OrSWotSet::<1>::default();
@@ -686,7 +691,11 @@ mod tests {
     #[test]
     fn test_basic_delete_merge() {
         let mut node_a = HLCTimestamp::now(0, 0);
-        let mut node_b = HLCTimestamp::new(node_a.seconds() + 1, 0, 1);
+        let mut node_b = HLCTimestamp::new(
+            node_a.datacake_timestamp() + Duration::from_secs(1),
+            0,
+            1,
+        );
 
         // We create our new set for node a.
         let mut node_a_set = OrSWotSet::<1>::default();
@@ -727,7 +736,11 @@ mod tests {
     #[test]
     fn test_purge_delete_merge() {
         let mut node_a = HLCTimestamp::now(0, 0);
-        let mut node_b = HLCTimestamp::new(node_a.seconds() + 1, 0, 1);
+        let mut node_b = HLCTimestamp::new(
+            node_a.datacake_timestamp() + Duration::from_secs(1),
+            0,
+            1,
+        );
 
         // We create our new set for node a.
         let mut node_a_set = OrSWotSet::<1>::default();
@@ -780,7 +793,11 @@ mod tests {
     #[test]
     fn test_purge_some_entries() {
         let mut node_a = HLCTimestamp::now(0, 0);
-        let mut node_b = HLCTimestamp::new(node_a.seconds() + 1, 0, 1);
+        let mut node_b = HLCTimestamp::new(
+            node_a.datacake_timestamp() + Duration::from_secs(1),
+            0,
+            1,
+        );
 
         // We create our new set for node a.
         let mut node_a_set = OrSWotSet::<1>::default();
@@ -909,7 +926,11 @@ mod tests {
     #[test]
     fn test_set_diff() {
         let mut node_a = HLCTimestamp::now(0, 0);
-        let mut node_b = HLCTimestamp::new(node_a.seconds() + 5, 0, 1);
+        let mut node_b = HLCTimestamp::new(
+            node_a.datacake_timestamp() + Duration::from_secs(5),
+            0,
+            1,
+        );
 
         let mut node_a_set = OrSWotSet::<1>::default();
         let mut node_b_set = OrSWotSet::<1>::default();
@@ -962,7 +983,11 @@ mod tests {
     #[test]
     fn test_set_diff_with_conflicts() {
         let mut node_a = HLCTimestamp::now(0, 0);
-        let mut node_b = HLCTimestamp::new(node_a.seconds() + 5, 0, 1);
+        let mut node_b = HLCTimestamp::new(
+            node_a.datacake_timestamp() + Duration::from_secs(5),
+            0,
+            1,
+        );
 
         let mut node_a_set = OrSWotSet::<1>::default();
         let mut node_b_set = OrSWotSet::<1>::default();
@@ -1010,7 +1035,7 @@ mod tests {
     #[test]
     fn test_tie_breakers() {
         let node_a = HLCTimestamp::now(0, 0);
-        let node_b = HLCTimestamp::new(node_a.seconds(), 0, 1);
+        let node_b = HLCTimestamp::new(node_a.datacake_timestamp(), 0, 1);
 
         let mut node_a_set = OrSWotSet::<1>::default();
         let mut node_b_set = OrSWotSet::<1>::default();
@@ -1157,14 +1182,15 @@ mod tests {
 
     #[test]
     fn test_will_apply() {
+        let ts = Duration::from_secs(1);
         let mut node_set = OrSWotSet::<1>::default();
 
-        assert!(node_set.will_apply(1, HLCTimestamp::new(1, 0, 0)));
-        node_set.insert(1, HLCTimestamp::new(1, 0, 0));
-        assert!(!node_set.will_apply(1, HLCTimestamp::new(1, 0, 0)));
+        assert!(node_set.will_apply(1, HLCTimestamp::new(ts, 0, 0)));
+        node_set.insert(1, HLCTimestamp::new(ts, 0, 0));
+        assert!(!node_set.will_apply(1, HLCTimestamp::new(ts, 0, 0)));
 
-        assert!(node_set.will_apply(3, HLCTimestamp::new(3, 0, 0)));
-        node_set.delete(3, HLCTimestamp::new(5, 0, 0));
-        assert!(!node_set.will_apply(3, HLCTimestamp::new(4, 0, 0)));
+        assert!(node_set.will_apply(3, HLCTimestamp::new(Duration::from_secs(3), 0, 0)));
+        node_set.delete(3, HLCTimestamp::new(Duration::from_secs(5), 0, 0));
+        assert!(!node_set.will_apply(3, HLCTimestamp::new(Duration::from_secs(4), 0, 0)));
     }
 }

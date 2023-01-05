@@ -1,5 +1,3 @@
-use std::net::SocketAddr;
-
 use bytecheck::CheckBytes;
 use datacake_rpc::{
     Channel,
@@ -60,7 +58,7 @@ impl Handler<Payload> for Sub5Service {
 
 #[tokio::test]
 async fn test_multiple_services() {
-    let addr = "127.0.0.1:8002".parse::<SocketAddr>().unwrap();
+    let addr = test_helper::get_unused_addr();
 
     let server = Server::listen(addr).await.unwrap();
     server.add_service(Add5Service);
@@ -84,4 +82,6 @@ async fn test_multiple_services() {
     let subtract_client = add_client.new_client::<Sub5Service>();
     let resp = subtract_client.send(&msg).await.unwrap();
     assert_eq!(resp, 0);
+
+    server.shutdown();
 }

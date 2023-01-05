@@ -1,5 +1,3 @@
-use std::net::SocketAddr;
-
 use datacake_eventual_consistency::test_utils::MemStore;
 use datacake_eventual_consistency::{
     EventuallyConsistentStore,
@@ -18,7 +16,7 @@ static KEYSPACE: &str = "my-keyspace";
 async fn test_single_node_cluster() -> anyhow::Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
-    let store = create_store("127.0.0.1:8001").await;
+    let store = create_store().await;
     let handle = store.handle();
 
     // Test reading
@@ -60,7 +58,7 @@ async fn test_single_node_cluster() -> anyhow::Result<()> {
 async fn test_single_node_cluster_with_keyspace_handle() -> anyhow::Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
-    let store = create_store("127.0.0.1:8002").await;
+    let store = create_store().await;
     let handle = store.handle_with_keyspace(KEYSPACE);
 
     // Test reading
@@ -99,7 +97,7 @@ async fn test_single_node_cluster_with_keyspace_handle() -> anyhow::Result<()> {
 async fn test_single_node_cluster_bulk_op() -> anyhow::Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
-    let store = create_store("127.0.0.1:8003").await;
+    let store = create_store().await;
     let handle = store.handle();
 
     // Test reading
@@ -153,7 +151,7 @@ async fn test_single_node_cluster_bulk_op() -> anyhow::Result<()> {
 async fn test_single_node_cluster_bulk_op_with_keyspace_handle() -> anyhow::Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
-    let store = create_store("127.0.0.1:8004").await;
+    let store = create_store().await;
     let handle = store.handle_with_keyspace(KEYSPACE);
 
     // Test reading
@@ -195,8 +193,8 @@ async fn test_single_node_cluster_bulk_op_with_keyspace_handle() -> anyhow::Resu
     Ok(())
 }
 
-async fn create_store(addr: &str) -> EventuallyConsistentStore<MemStore> {
-    let addr = addr.parse::<SocketAddr>().unwrap();
+async fn create_store() -> EventuallyConsistentStore<MemStore> {
+    let addr = test_helper::get_unused_addr();
     let connection_cfg = ConnectionConfig::new(addr, addr, Vec::<String>::new());
     let node = DatacakeNodeBuilder::<DCAwareSelector>::new(1, connection_cfg)
         .connect()

@@ -1,5 +1,3 @@
-use std::net::SocketAddr;
-
 use bytecheck::CheckBytes;
 use datacake_rpc::{
     Channel,
@@ -58,7 +56,7 @@ impl Handler<Payload> for Sub5Service {
 
 #[tokio::test]
 async fn test_unknown_service() {
-    let addr = "127.0.0.1:8004".parse::<SocketAddr>().unwrap();
+    let addr = test_helper::get_unused_addr();
 
     let server = Server::listen(addr).await.unwrap();
     server.add_service(Add5Service);
@@ -87,12 +85,14 @@ async fn test_unknown_service() {
             <Sub5Service as Handler<Payload>>::path(),
         )),
         "Server should reject unknown service with message."
-    )
+    );
+
+    server.shutdown();
 }
 
 #[tokio::test]
 async fn test_unknown_message() {
-    let addr = "127.0.0.1:8005".parse::<SocketAddr>().unwrap();
+    let addr = test_helper::get_unused_addr();
 
     let server = Server::listen(addr).await.unwrap();
     server.add_service(Add5Service);
@@ -121,5 +121,7 @@ async fn test_unknown_message() {
             <Sub5Service as Handler<Payload>>::path(),
         )),
         "Server should reject unknown message with message."
-    )
+    );
+
+    server.shutdown();
 }

@@ -1,5 +1,3 @@
-use std::net::SocketAddr;
-
 use bytecheck::CheckBytes;
 use datacake_rpc::{
     Channel,
@@ -41,7 +39,7 @@ impl Handler<MyMessage> for MyService {
 
 #[tokio::test]
 async fn test_basic() {
-    let addr = "127.0.0.1:8001".parse::<SocketAddr>().unwrap();
+    let addr = test_helper::get_unused_addr();
 
     let server = Server::listen(addr).await.unwrap();
     server.add_service(MyService);
@@ -60,4 +58,6 @@ async fn test_basic() {
 
     let resp = rpc_client.send(&msg1).await.unwrap();
     assert_eq!(resp, msg1.name);
+
+    server.shutdown();
 }

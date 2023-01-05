@@ -1,4 +1,3 @@
-use std::net::SocketAddr;
 use std::time::Duration;
 
 use datacake_eventual_consistency::test_utils::MemStore;
@@ -14,9 +13,9 @@ use datacake_node::{
 pub async fn test_member_join() -> anyhow::Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
-    let node_1_addr = "127.0.0.1:8018".parse::<SocketAddr>().unwrap();
-    let node_2_addr = "127.0.0.1:8019".parse::<SocketAddr>().unwrap();
-    let node_3_addr = "127.0.0.1:8020".parse::<SocketAddr>().unwrap();
+    let node_1_addr = test_helper::get_unused_addr();
+    let node_2_addr = test_helper::get_unused_addr();
+    let node_3_addr = test_helper::get_unused_addr();
     let node_1_connection_cfg = ConnectionConfig::new(
         node_1_addr,
         node_1_addr,

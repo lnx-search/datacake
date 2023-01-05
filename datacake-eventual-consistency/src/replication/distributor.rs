@@ -183,7 +183,7 @@ fn register_mutation(
 ) {
     match mutation {
         Mutation::Put { keyspace, doc } => {
-            put_payloads.entry(keyspace).or_default().push(doc.into());
+            put_payloads.entry(keyspace).or_default().push(doc);
         },
         Mutation::MultiPut { keyspace, docs } => {
             put_payloads.entry(keyspace).or_default().extend(docs);
@@ -209,7 +209,7 @@ where
     let limiter = Arc::new(Semaphore::new(MAX_CONCURRENT_REQUESTS));
     let mut tasks = Vec::with_capacity(live_members.len());
     for (node_id, &addr) in live_members {
-        let node_id = node_id.clone();
+        let node_id = *node_id;
         let limiter = limiter.clone();
         let batch = batch.clone();
         let channel = ctx.network.get_or_connect(addr);

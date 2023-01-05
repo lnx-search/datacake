@@ -361,10 +361,10 @@ mod tests {
             "keyspace-4".to_string(),
         ];
         let metadata = vec![
-            (1, HLCTimestamp::new(1, 0, 0), false),
-            (2, HLCTimestamp::new(2, 0, 0), false),
-            (3, HLCTimestamp::new(3, 3, 0), true),
-            (4, HLCTimestamp::new(4, 0, 0), false),
+            (1, HLCTimestamp::new(Duration::from_secs(1), 0, 0), false),
+            (2, HLCTimestamp::new(Duration::from_secs(2), 0, 0), false),
+            (3, HLCTimestamp::new(Duration::from_secs(3), 3, 0), true),
+            (4, HLCTimestamp::new(Duration::from_secs(4), 0, 0), false),
         ];
 
         let keyspace_list_clone = keyspace_list.clone();

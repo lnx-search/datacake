@@ -1,5 +1,3 @@
-use std::net::SocketAddr;
-
 use anyhow::Result;
 use datacake_eventual_consistency::EventuallyConsistentStoreExtension;
 use datacake_node::{
@@ -18,7 +16,7 @@ async fn test_basic_sqlite_cluster() -> Result<()> {
 
     let store = SqliteStorage::open_in_memory().await?;
 
-    let addr = "127.0.0.1:9000".parse::<SocketAddr>().unwrap();
+    let addr = test_helper::get_unused_addr();
     let connection_cfg = ConnectionConfig::new(addr, addr, Vec::<String>::new());
 
     let node = DatacakeNodeBuilder::<DCAwareSelector>::new(1, connection_cfg)

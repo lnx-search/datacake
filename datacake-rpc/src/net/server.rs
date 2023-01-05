@@ -8,6 +8,7 @@ use hyper::server::conn::AddrStream;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Body;
 use rkyv::AlignedVec;
+use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
 use crate::server::ServerState;
@@ -19,7 +20,7 @@ use crate::{Status, SCRATCH_SPACE};
 pub(crate) async fn start_rpc_server(
     bind_addr: SocketAddr,
     state: ServerState,
-) -> io::Result<JoinHandle<()>> {
+) -> io::Result<(oneshot::Sender<()>, JoinHandle<()>)> {
     let make_service = make_service_fn(move |socket: &AddrStream| {
         let remote_addr = socket.remote_addr();
         let state = state.clone();
@@ -30,19 +31,27 @@ pub(crate) async fn start_rpc_server(
         }
     });
 
+    let (ready, waiter) = oneshot::channel();
+    let (shutdown, shutdown_waiter) = oneshot::channel();
     let handle = tokio::spawn(async move {
         let server = hyper::Server::bind(&bind_addr)
             .tcp_nodelay(false)
             .http2_only(true)
             .http2_adaptive_window(true)
-            .serve(make_service);
+            .serve(make_service)
+            .with_graceful_shutdown(async {
+                let _ = ready.send(());
+                let _ = shutdown_waiter.await;
+            });
 
         if let Err(e) = server.await {
             error!(error = ?e, "Server failed to handle requests.");
         }
     });
 
-    Ok(handle)
+    let _ = waiter.await;
+
+    Ok((shutdown, handle))
 }
 
 /// A single connection handler.
@@ -73,7 +82,7 @@ async fn handle_message(
     let uri = req.uri.path();
     match state.get_handler(uri) {
         None => {
-            let status = Status::unavailable(format!("Unknown service {}", uri));
+            let status = Status::unavailable(format!("Unknown service {uri}"));
             let buffer =
                 rkyv::to_bytes::<_, SCRATCH_SPACE>(&status).unwrap_or_else(|e| {
                     warn!(error = ?e, "Failed to serialize error message.");

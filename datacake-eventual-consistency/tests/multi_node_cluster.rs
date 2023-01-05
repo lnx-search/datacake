@@ -1,4 +1,3 @@
-use std::net::SocketAddr;
 use std::time::Duration;
 
 use datacake_eventual_consistency::test_utils::MemStore;
@@ -15,12 +14,7 @@ use datacake_node::{
 async fn test_consistency_all() -> anyhow::Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
-    let node_1_addr = "127.0.0.1:8005".parse::<SocketAddr>().unwrap();
-    let node_2_addr = "127.0.0.1:8006".parse::<SocketAddr>().unwrap();
-    let node_3_addr = "127.0.0.1:8007".parse::<SocketAddr>().unwrap();
-
-    let [node_1, node_2, node_3] =
-        connect_cluster([node_1_addr, node_2_addr, node_3_addr]).await;
+    let [node_1, node_2, node_3] = connect_cluster().await;
 
     let store_1 = node_1
         .add_extension(EventuallyConsistentStoreExtension::new(MemStore::default()))
@@ -112,12 +106,7 @@ async fn test_consistency_all() -> anyhow::Result<()> {
 async fn test_consistency_none() -> anyhow::Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
-    let node_1_addr = "127.0.0.1:8008".parse::<SocketAddr>().unwrap();
-    let node_2_addr = "127.0.0.1:8009".parse::<SocketAddr>().unwrap();
-    let node_3_addr = "127.0.0.1:8010".parse::<SocketAddr>().unwrap();
-
-    let [node_1, node_2, node_3] =
-        connect_cluster([node_1_addr, node_2_addr, node_3_addr]).await;
+    let [node_1, node_2, node_3] = connect_cluster().await;
 
     let store_1 = node_1
         .add_extension(EventuallyConsistentStoreExtension::new(MemStore::default()))
@@ -220,12 +209,7 @@ async fn test_consistency_none() -> anyhow::Result<()> {
 async fn test_async_operations() -> anyhow::Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
-    let node_1_addr = "127.0.0.1:8011".parse::<SocketAddr>().unwrap();
-    let node_2_addr = "127.0.0.1:8012".parse::<SocketAddr>().unwrap();
-    let node_3_addr = "127.0.0.1:8013".parse::<SocketAddr>().unwrap();
-
-    let [node_1, node_2, node_3] =
-        connect_cluster([node_1_addr, node_2_addr, node_3_addr]).await;
+    let [node_1, node_2, node_3] = connect_cluster().await;
 
     let store_1 = node_1
         .add_extension(EventuallyConsistentStoreExtension::new(MemStore::default()))
@@ -290,7 +274,7 @@ async fn test_async_operations() -> anyhow::Result<()> {
         .expect("Get value.")
         .expect("Document should not be none");
     assert_eq!(doc.id(), 1);
-    assert_eq!(doc.data(), b"Hello, world from node-3");
+    assert_eq!(doc.data(), b"Hello, world from node-3"); // TODO: This fails if the logical clock isn't correct??
     let doc = node_2_handle
         .get(1)
         .await
@@ -352,21 +336,25 @@ async fn test_async_operations() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn connect_cluster(addrs: [SocketAddr; 3]) -> [DatacakeNode; 3] {
+async fn connect_cluster() -> [DatacakeNode; 3] {
+    let node_1_addr = test_helper::get_unused_addr();
+    let node_2_addr = test_helper::get_unused_addr();
+    let node_3_addr = test_helper::get_unused_addr();
+
     let node_1_connection_cfg = ConnectionConfig::new(
-        addrs[0],
-        addrs[0],
-        [addrs[1].to_string(), addrs[2].to_string()],
+        node_1_addr,
+        node_1_addr,
+        [node_2_addr.to_string(), node_3_addr.to_string()],
     );
     let node_2_connection_cfg = ConnectionConfig::new(
-        addrs[1],
-        addrs[1],
-        [addrs[0].to_string(), addrs[2].to_string()],
+        node_2_addr,
+        node_2_addr,
+        [node_1_addr.to_string(), node_3_addr.to_string()],
     );
     let node_3_connection_cfg = ConnectionConfig::new(
-        addrs[2],
-        addrs[2],
-        [addrs[0].to_string(), addrs[1].to_string()],
+        node_3_addr,
+        node_3_addr,
+        [node_1_addr.to_string(), node_2_addr.to_string()],
     );
 
     let node_1 = DatacakeNodeBuilder::<DCAwareSelector>::new(1, node_1_connection_cfg)

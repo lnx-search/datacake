@@ -27,5 +27,6 @@ rkyv = { version = "0.7.39", features = ["validation"] }
 [dev-dependencies]
 tracing-subscriber = "0.3.16"
 tokio = { version = "1", features = ["full"] }
+test-helper = { path = "../test-helper" }
 datacake-rpc = { version = "0.2", path = "../datacake-rpc", features = ["test-utils"] }
 
