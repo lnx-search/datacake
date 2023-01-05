@@ -21,7 +21,7 @@ thiserror = "1"
 
 tokio = { version = "1", default-features = false, features = ["rt"] }
 
-datacake-crdt = { version = "0.3", path = "../datacake-crdt" }
+datacake-crdt = { version = "0.4", path = "../datacake-crdt" }
 datacake-eventual-consistency = { version = "0.2", path = "../datacake-eventual-consistency" }
 
 [features]

@@ -1,4 +1,4 @@
-use std::collections::hash_map::Entry;
+use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::Debug;
 use std::mem;
@@ -19,7 +19,7 @@ pub type StateChanges = Vec<(Key, HLCTimestamp)>;
 /// This allows the system to essentially forgive some latency between events.
 ///
 /// This is 1 hour by default.
-pub const FORGIVENESS_PERIOD: u64 = if cfg!(test) { 0 } else { 3_600_000 };
+pub const FORGIVENESS_PERIOD: u64 = if cfg!(test) { 0 } else { 3_600 };
 
 #[cfg(feature = "rkyv-support")]
 #[derive(Debug, thiserror::Error)]
@@ -32,8 +32,8 @@ pub struct BadState;
 #[cfg_attr(feature = "rkyv-support", archive(compare(PartialEq)))]
 #[cfg_attr(feature = "rkyv-support", archive_attr(derive(CheckBytes)))]
 pub struct NodeVersions<const N: usize> {
-    nodes_max_stamps: [HashMap<u32, HLCTimestamp>; N],
-    safe_last_stamps: HashMap<u32, HLCTimestamp>,
+    nodes_max_stamps: [BTreeMap<u8, HLCTimestamp>; N],
+    safe_last_stamps: BTreeMap<u8, HLCTimestamp>,
 }
 
 impl<const N: usize> Default for NodeVersions<N> {
@@ -41,8 +41,8 @@ impl<const N: usize> Default for NodeVersions<N> {
         let stamps_template = [(); N];
 
         Self {
-            nodes_max_stamps: stamps_template.map(|_| HashMap::new()),
-            safe_last_stamps: HashMap::new(),
+            nodes_max_stamps: stamps_template.map(|_| BTreeMap::new()),
+            safe_last_stamps: BTreeMap::new(),
         }
     }
 }
@@ -101,7 +101,7 @@ impl<const N: usize> NodeVersions<N> {
     }
 
     /// Computes the safe observed timestamp based off all known sources.
-    fn compute_safe_last_stamp(&mut self, node: u32) {
+    fn compute_safe_last_stamp(&mut self, node: u8) {
         let min = self
             .nodes_max_stamps
             .iter()
@@ -115,7 +115,7 @@ impl<const N: usize> NodeVersions<N> {
 
         if let Some(min) = min {
             let ts = HLCTimestamp::new(
-                min.millis().saturating_sub(FORGIVENESS_PERIOD),
+                min.seconds().saturating_sub(FORGIVENESS_PERIOD),
                 min.counter(),
                 min.node(),
             );

@@ -12,7 +12,7 @@ readme = "README.md"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-datacake-crdt = { version = "0.3", path = "datacake-crdt", optional = true }
+datacake-crdt = { version = "0.4", path = "datacake-crdt", optional = true }
 datacake-eventual-consistency = { version = "0.2", path = "datacake-eventual-consistency", optional = true }
 datacake-sqlite = { version = "0.2", path = "datacake-sqlite", optional = true }
 datacake-rpc = { version = "0.2", path = "datacake-rpc", optional = true }

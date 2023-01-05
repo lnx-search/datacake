@@ -34,7 +34,7 @@ rkyv = { version = "0.7.9", features = ["validation"] }
 
 datacake-rpc = { path = "../datacake-rpc", version = "0.2" }
 datacake-node = { path = "../datacake-node", version = "0.1" }
-datacake-crdt = { path = "../datacake-crdt", version = "0.3", features = ["rkyv-support"] }
+datacake-crdt = { path = "../datacake-crdt", version = "0.4", features = ["rkyv-support"] }
 
 [features]
 test-utils = []
