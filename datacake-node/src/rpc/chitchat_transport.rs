@@ -1,4 +1,3 @@
-use std::io::ErrorKind;
 use std::net::SocketAddr;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -9,7 +8,6 @@ use chitchat::serialize::Serializable;
 use chitchat::transport::{Socket, Transport};
 use chitchat::ChitchatMessage;
 use datacake_rpc::RpcClient;
-use futures::io;
 use tracing::trace;
 
 use crate::rpc::network::RpcNetwork;
@@ -100,10 +98,7 @@ impl Socket for GrpcConnection {
         trace!(to = %to, msg = ?msg, "Gossip send");
         let data = msg.serialize_to_vec();
 
-        let channel = self
-            .network
-            .get_or_connect(to)
-            .map_err(|e| io::Error::new(ErrorKind::ConnectionRefused, e.to_string()))?;
+        let channel = self.network.get_or_connect(to);
 
         let timestamp = self.clock.get_time().await;
         let msg = ChitchatRpcMessage {
@@ -112,7 +107,7 @@ impl Socket for GrpcConnection {
             timestamp,
         };
 
-        let mut client = RpcClient::<ChitchatService>::new(channel);
+        let client = RpcClient::<ChitchatService>::new(channel);
         client.send(&msg).await?;
 
         Ok(())

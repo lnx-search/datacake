@@ -212,7 +212,7 @@ where
         let node_id = node_id.clone();
         let limiter = limiter.clone();
         let batch = batch.clone();
-        let channel = ctx.network.get_or_connect(addr)?;
+        let channel = ctx.network.get_or_connect(addr);
         let mut client = ConsistencyClient::<S>::new(ctx.clock.clone(), channel);
 
         let task = tokio::spawn(async move {

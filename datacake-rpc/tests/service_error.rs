@@ -47,10 +47,10 @@ async fn test_service_error() {
     server.add_service(MyService);
     println!("Listening to address {}!", addr);
 
-    let client = Channel::connect(addr).unwrap();
+    let client = Channel::connect(addr);
     println!("Connected to address {}!", addr);
 
-    let mut rpc_client = RpcClient::<MyService>::new(client);
+    let rpc_client = RpcClient::<MyService>::new(client);
 
     let msg1 = MyMessage {
         name: "Bobby".to_string(),

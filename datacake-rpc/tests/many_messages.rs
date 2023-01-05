@@ -81,10 +81,10 @@ async fn test_multiple_msgs() {
     server.add_service(CountingService::default());
     println!("Listening to address {}!", addr);
 
-    let client = Channel::connect(addr).unwrap();
+    let client = Channel::connect(addr);
     println!("Connected to address {}!", addr);
 
-    let mut rpc_client = RpcClient::<CountingService>::new(client);
+    let rpc_client = RpcClient::<CountingService>::new(client);
 
     let msg = IncCounter {
         name: "Bobby".to_string(),

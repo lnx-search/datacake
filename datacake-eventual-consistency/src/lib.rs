@@ -345,11 +345,7 @@ where
             let keyspace = keyspace.name().to_string();
             let document = document.clone();
             async move {
-                let channel = self
-                    .node
-                    .network()
-                    .get_or_connect(node)
-                    .map_err(|e| error::StoreError::TransportError(node, e))?;
+                let channel = self.node.network().get_or_connect(node);
 
                 let mut client = ConsistencyClient::<S>::new(clock, channel);
 
@@ -415,11 +411,7 @@ where
             let documents = docs.clone();
             let self_member = self.node.me().clone();
             async move {
-                let channel = self
-                    .node
-                    .network()
-                    .get_or_connect(node)
-                    .map_err(|e| error::StoreError::TransportError(node, e))?;
+                let channel = self.node.network().get_or_connect(node);
 
                 let mut client = ConsistencyClient::<S>::new(clock, channel);
 
@@ -477,11 +469,7 @@ where
             let clock = self.node.clock().clone();
             let keyspace = keyspace.name().to_string();
             async move {
-                let channel = self
-                    .node
-                    .network()
-                    .get_or_connect(node)
-                    .map_err(|e| error::StoreError::TransportError(node, e))?;
+                let channel = self.node.network().get_or_connect(node);
 
                 let mut client = ConsistencyClient::<S>::new(clock, channel);
 
@@ -539,11 +527,7 @@ where
             let keyspace = keyspace.name().to_string();
             let docs = docs.clone();
             async move {
-                let channel = self
-                    .node
-                    .network()
-                    .get_or_connect(node)
-                    .map_err(|e| error::StoreError::TransportError(node, e))?;
+                let channel = self.node.network().get_or_connect(node);
 
                 let mut client = ConsistencyClient::<S>::new(clock, channel);
 
