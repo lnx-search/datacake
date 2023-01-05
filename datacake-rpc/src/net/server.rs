@@ -1,7 +1,6 @@
 use std::convert::Infallible;
 use std::io;
 use std::net::SocketAddr;
-use std::time::SystemTime;
 
 use http::{Request, Response, StatusCode};
 use hyper::body::HttpBody;
