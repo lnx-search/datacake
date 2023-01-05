@@ -49,7 +49,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Run main tests
-        run: cargo nextest run --workspace
+        run: cargo nextest run --all-features --workspace
 
       - name: Run doc tests
-        run: cargo test --doc --workspace
+        run: cargo test --doc --all-features --workspace
