@@ -43,6 +43,7 @@ test-utils = []
 anyhow = "1"
 tracing-subscriber = "0.3.15"
 bytes = "1.2.1"
+test-helper = { path = "../test-helper" }
 datacake-rpc = { path = "../datacake-rpc", version = "0.2", features = ["test-utils"] }
 
 

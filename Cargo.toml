@@ -37,6 +37,9 @@ members = [
     "datacake-sqlite",
     "datacake-rpc",
 
+    # Utils
+    "test-helper",
+
     # Example set
     "examples/replicated-kv",
 ]

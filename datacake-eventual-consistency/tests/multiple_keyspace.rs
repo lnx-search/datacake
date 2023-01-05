@@ -1,4 +1,3 @@
-use std::net::SocketAddr;
 use std::time::Duration;
 
 use datacake_eventual_consistency::test_utils::MemStore;
@@ -18,7 +17,7 @@ static KEYSPACE_3: &str = "my-third-keyspace";
 async fn test_single_node() -> anyhow::Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
-    let node_addr = "127.0.0.1:8014".parse::<SocketAddr>().unwrap();
+    let node_addr = test_helper::get_unused_addr();
     let connection_cfg =
         ConnectionConfig::new(node_addr, node_addr, Vec::<String>::new());
 
@@ -70,9 +69,9 @@ async fn test_single_node() -> anyhow::Result<()> {
 async fn test_multi_node() -> anyhow::Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
-    let node_1_addr = "127.0.0.1:8015".parse::<SocketAddr>().unwrap();
-    let node_2_addr = "127.0.0.1:8016".parse::<SocketAddr>().unwrap();
-    let node_3_addr = "127.0.0.1:8017".parse::<SocketAddr>().unwrap();
+    let node_1_addr = test_helper::get_unused_addr();
+    let node_2_addr = test_helper::get_unused_addr();
+    let node_3_addr = test_helper::get_unused_addr();
     let node_1_connection_cfg = ConnectionConfig::new(
         node_1_addr,
         node_1_addr,

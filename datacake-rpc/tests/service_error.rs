@@ -41,7 +41,7 @@ impl Handler<MyMessage> for MyService {
 
 #[tokio::test]
 async fn test_service_error() {
-    let addr = "127.0.0.1:8006".parse::<SocketAddr>().unwrap();
+    let addr = test_helper::get_unused_addr();
 
     let server = Server::listen(addr).await.unwrap();
     server.add_service(MyService);

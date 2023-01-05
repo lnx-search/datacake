@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::net::SocketAddr;
 
 use bytecheck::CheckBytes;
 use datacake_rpc::{
@@ -75,7 +74,7 @@ impl Handler<DecCounter> for CountingService {
 
 #[tokio::test]
 async fn test_multiple_msgs() {
-    let addr = "127.0.0.1:8002".parse::<SocketAddr>().unwrap();
+    let addr = test_helper::get_unused_addr();
 
     let server = Server::listen(addr).await.unwrap();
     server.add_service(CountingService::default());

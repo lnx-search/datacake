@@ -1,4 +1,3 @@
-use std::net::SocketAddr;
 use std::time::Duration;
 
 use datacake_node::{ConnectionConfig, DCAwareSelector, DatacakeNodeBuilder};
@@ -8,9 +7,9 @@ use datacake_node::{ConnectionConfig, DCAwareSelector, DatacakeNodeBuilder};
 pub async fn test_member_join() -> anyhow::Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
-    let node_1_addr = "127.0.0.1:8018".parse::<SocketAddr>().unwrap();
-    let node_2_addr = "127.0.0.1:8019".parse::<SocketAddr>().unwrap();
-    let node_3_addr = "127.0.0.1:8020".parse::<SocketAddr>().unwrap();
+    let node_1_addr = test_helper::get_unused_addr();
+    let node_2_addr = test_helper::get_unused_addr();
+    let node_3_addr = test_helper::get_unused_addr();
     let node_1_connection_cfg =
         ConnectionConfig::new(node_1_addr, node_1_addr, [node_2_addr.to_string()]);
     let node_2_connection_cfg =
@@ -78,9 +77,9 @@ pub async fn test_member_join() -> anyhow::Result<()> {
 pub async fn test_member_leave() -> anyhow::Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
-    let node_1_addr = "127.0.0.1:8021".parse::<SocketAddr>().unwrap();
-    let node_2_addr = "127.0.0.1:8022".parse::<SocketAddr>().unwrap();
-    let node_3_addr = "127.0.0.1:8023".parse::<SocketAddr>().unwrap();
+    let node_1_addr = test_helper::get_unused_addr();
+    let node_2_addr = test_helper::get_unused_addr();
+    let node_3_addr = test_helper::get_unused_addr();
     let node_1_connection_cfg = ConnectionConfig::new(
         node_1_addr,
         node_1_addr,

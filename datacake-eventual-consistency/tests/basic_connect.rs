@@ -1,4 +1,3 @@
-use std::net::SocketAddr;
 use std::time::Duration;
 
 use datacake_eventual_consistency::test_utils::MemStore;
@@ -9,7 +8,7 @@ use datacake_node::{ConnectionConfig, DCAwareSelector, DatacakeNodeBuilder};
 async fn test_basic_connect() -> anyhow::Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
-    let addr = "127.0.0.1:8000".parse::<SocketAddr>().unwrap();
+    let addr = test_helper::get_unused_addr();
     let connection_cfg = ConnectionConfig::new(addr, addr, Vec::<String>::new());
 
     let node = DatacakeNodeBuilder::<DCAwareSelector>::new(1, connection_cfg)

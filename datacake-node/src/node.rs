@@ -154,7 +154,7 @@ impl ChitchatNode {
                     .filter_map(|member_res| {
                         match member_res {
                             Ok(member) => {
-                                Some((member.node_id.clone(), member))
+                                Some((member.node_id, member))
                             },
                             Err(error) => {
                                 error!(
