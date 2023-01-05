@@ -120,12 +120,24 @@
 //!
 
 #[cfg(feature = "datacake-crdt")]
+/// A re-export of the `datacake-crdt` package, providing all of the
+/// hybrid logical clock and CRDT implementation.
 pub use datacake_crdt as crdt;
 #[cfg(feature = "datacake-eventual-consistency")]
+/// A re-export of the `datacake-eventual_consistency` package, A pre-built cluster extension that
+/// provides you with a eventually consistent store with automatic tombstone removal.
 pub use datacake_eventual_consistency as eventual_consistency;
 #[cfg(feature = "datacake-node")]
+/// A re-export of the `datacake-node` package, the core membership system for building
+/// your own cluster system.
 pub use datacake_node as node;
 #[cfg(feature = "datacake-rpc")]
+/// A re-export of the `datacake-rpc` package, this is built open HTTP/2 in a similar fashion
+/// to tonic, except it uses rust's `rkyv` package and support zero-copy deserialization
+/// in with an actor-like feel.
 pub use datacake_rpc as rpc;
 #[cfg(feature = "datacake-sqlite")]
+/// A re-export of the `datacake-sqlite` package, giving you a pre-built and tested storage
+/// implementation for the eventually consistent store, although this may not be suited for
+/// all applications, it is useful for testing and small datasets.
 pub use datacake_sqlite as sqlite;
