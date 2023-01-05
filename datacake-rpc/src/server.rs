@@ -75,9 +75,14 @@ impl Server {
     /// Spawns the RPC server task and returns the server handle.
     pub async fn listen(addr: SocketAddr) -> io::Result<Self> {
         let state = ServerState::default();
-        let (shutdown, handle) = crate::net::start_rpc_server(addr, state.clone()).await?;
+        let (shutdown, handle) =
+            crate::net::start_rpc_server(addr, state.clone()).await?;
 
-        Ok(Self { state, shutdown, handle })
+        Ok(Self {
+            state,
+            shutdown,
+            handle,
+        })
     }
 
     /// Adds a new service to the live RPC server.
