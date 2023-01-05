@@ -67,13 +67,13 @@ async fn test_multiple_services() {
     server.add_service(Sub5Service);
     println!("Listening to address {}!", addr);
 
-    let client = Channel::connect(addr).unwrap();
+    let client = Channel::connect(addr);
     println!("Connected to address {}!", addr);
 
     let msg = Payload { value: 5 };
 
-    let mut add_client = RpcClient::<Add5Service>::new(client.clone());
-    let mut subtract_client = RpcClient::<Sub5Service>::new(client);
+    let add_client = RpcClient::<Add5Service>::new(client.clone());
+    let subtract_client = RpcClient::<Sub5Service>::new(client);
 
     let resp = add_client.send(&msg).await.unwrap();
     assert_eq!(resp, 10);
@@ -81,7 +81,7 @@ async fn test_multiple_services() {
     let resp = subtract_client.send(&msg).await.unwrap();
     assert_eq!(resp, 0);
 
-    let mut subtract_client = add_client.new_client::<Sub5Service>();
+    let subtract_client = add_client.new_client::<Sub5Service>();
     let resp = subtract_client.send(&msg).await.unwrap();
     assert_eq!(resp, 0);
 }

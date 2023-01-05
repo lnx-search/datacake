@@ -1,4 +1,3 @@
-use std::io;
 use std::net::SocketAddr;
 use std::time::Duration;
 
@@ -19,7 +18,7 @@ pub struct Channel {
 
 impl Channel {
     /// Connects to a remote RPC server.
-    pub fn connect(remote_addr: SocketAddr) -> io::Result<Self> {
+    pub fn connect(remote_addr: SocketAddr) -> Self {
         let mut http = HttpConnector::new();
         http.enforce_http(false);
         http.set_nodelay(true);
@@ -31,10 +30,10 @@ impl Channel {
             .http2_adaptive_window(true)
             .build(http);
 
-        Ok(Self {
+        Self {
             connection: client,
             remote_addr,
-        })
+        }
     }
 
     /// Sends a message payload the remote server and gets the response

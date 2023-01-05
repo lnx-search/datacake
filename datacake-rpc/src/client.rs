@@ -119,10 +119,7 @@ where
     }
 
     /// Sends a message to the server and wait for a reply.
-    pub async fn send<Msg>(
-        &mut self,
-        msg: &Msg,
-    ) -> Result<MessageReply<Svc, Msg>, Status>
+    pub async fn send<Msg>(&self, msg: &Msg) -> Result<MessageReply<Svc, Msg>, Status>
     where
         Msg: Archive + Serialize<AllocSerializer<SCRATCH_SPACE>>,
         Msg::Archived: CheckBytes<DefaultValidator<'static>> + 'static,
