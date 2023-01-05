@@ -115,4 +115,5 @@ tests in any way you might think of, big or small is a huge help :)
 
 ### Future Ideas
 - Multi-raft framework?
+- CASPaxos???
 - More storage implementations?
