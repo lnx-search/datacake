@@ -42,10 +42,7 @@ where
 
     fn get_put_ctx(&self, ctx: Option<Context>) -> Result<Option<PutContext>, Status> {
         let ctx = if let Some(info) = ctx {
-            let remote_rpc_channel = self
-                .network
-                .get_or_connect(info.node_addr)
-                .map_err(Status::internal)?;
+            let remote_rpc_channel = self.network.get_or_connect(info.node_addr);
 
             Some(PutContext {
                 progress: ProgressTracker::default(),
