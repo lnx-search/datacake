@@ -64,13 +64,13 @@ async fn test_unknown_service() {
     server.add_service(Add5Service);
     println!("Listening to address {}!", addr);
 
-    let client = Channel::connect(addr).unwrap();
+    let client = Channel::connect(addr);
     println!("Connected to address {}!", addr);
 
     let msg = Payload { value: 5 };
 
-    let mut add_client = RpcClient::<Add5Service>::new(client.clone());
-    let mut subtract_client = RpcClient::<Sub5Service>::new(client);
+    let add_client = RpcClient::<Add5Service>::new(client.clone());
+    let subtract_client = RpcClient::<Sub5Service>::new(client);
 
     let resp = add_client.send(&msg).await.unwrap();
     assert_eq!(resp, 10);
@@ -98,13 +98,13 @@ async fn test_unknown_message() {
     server.add_service(Add5Service);
     println!("Listening to address {}!", addr);
 
-    let client = Channel::connect(addr).unwrap();
+    let client = Channel::connect(addr);
     println!("Connected to address {}!", addr);
 
     let msg = Payload { value: 5 };
 
-    let mut add_client = RpcClient::<Add5Service>::new(client.clone());
-    let mut subtract_client = RpcClient::<Sub5Service>::new(client);
+    let add_client = RpcClient::<Add5Service>::new(client.clone());
+    let subtract_client = RpcClient::<Sub5Service>::new(client);
 
     let resp = add_client.send(&msg).await.unwrap();
     assert_eq!(resp, 10);
