@@ -85,7 +85,9 @@ async fn test_unknown_service() {
             <Sub5Service as Handler<Payload>>::path(),
         )),
         "Server should reject unknown service with message."
-    )
+    );
+
+    server.shutdown();
 }
 
 #[tokio::test]
@@ -119,5 +121,7 @@ async fn test_unknown_message() {
             <Sub5Service as Handler<Payload>>::path(),
         )),
         "Server should reject unknown message with message."
-    )
+    );
+
+    server.shutdown();
 }

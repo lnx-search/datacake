@@ -99,4 +99,6 @@ async fn test_multiple_msgs() {
     };
     let resp = rpc_client.send(&msg).await.unwrap();
     assert_eq!(resp, 2);
+
+    server.shutdown();
 }

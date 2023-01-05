@@ -82,4 +82,6 @@ async fn test_multiple_services() {
     let subtract_client = add_client.new_client::<Sub5Service>();
     let resp = subtract_client.send(&msg).await.unwrap();
     assert_eq!(resp, 0);
+
+    server.shutdown();
 }

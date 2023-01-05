@@ -62,4 +62,6 @@ async fn test_service_error() {
         Err(Status::internal("Oops! Something went wrong!")),
         "Results should match."
     );
+
+    server.shutdown();
 }
