@@ -340,6 +340,18 @@ mod tests {
     const TEST_TS: Duration = Duration::from_secs(1);
 
     #[test]
+    fn test_unix_timestamp_conversion() {
+        let unix_ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+        let dc_ts = get_datacake_timestamp();
+        let converted_ts = dc_ts + DATACAKE_EPOCH;
+
+        let fractional = (unix_ts.subsec_millis() / 4) * 4;
+
+        assert_eq!(converted_ts.as_secs(), unix_ts.as_secs());
+        assert_eq!(converted_ts.subsec_millis(), fractional);
+    }
+
+    #[test]
     fn test_parse() {
         let ts = HLCTimestamp::new(TEST_TS, 0, 0);
 
