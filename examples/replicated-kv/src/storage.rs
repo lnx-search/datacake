@@ -32,7 +32,7 @@ impl ShardedStorage {
 
         let mut shards = Vec::with_capacity(num_shards);
         for shard_id in 0..num_shards {
-            let db_path = path.join(format!("shard-{}.db", shard_id));
+            let db_path = path.join(format!("shard-{shard_id}.db"));
             let db = SqliteStorage::open(db_path).await?;
             shards.push(db);
         }

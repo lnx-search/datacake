@@ -166,7 +166,7 @@ impl ChitchatNode {
                         }
                     })
                     .collect::<BTreeMap<_, _>>();
-                members.insert(me.node_id.clone(), me.clone());
+                members.insert(me.node_id, me.clone());
 
                 statistics
                     .num_live_members
@@ -264,7 +264,7 @@ fn build_cluster_member<'a>(
     let node_id = chitchat_id
         .id
         .parse::<crate::NodeId>()
-        .map_err(|e| format!("Invalid node ID: {}", e))?;
+        .map_err(|e| format!("Invalid node ID: {e}"))?;
 
     Ok(ClusterMember::new(
         node_id,

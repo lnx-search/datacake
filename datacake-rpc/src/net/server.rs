@@ -73,7 +73,7 @@ async fn handle_message(
     let uri = req.uri.path();
     match state.get_handler(uri) {
         None => {
-            let status = Status::unavailable(format!("Unknown service {}", uri));
+            let status = Status::unavailable(format!("Unknown service {uri}"));
             let buffer =
                 rkyv::to_bytes::<_, SCRATCH_SPACE>(&status).unwrap_or_else(|e| {
                     warn!(error = ?e, "Failed to serialize error message.");
