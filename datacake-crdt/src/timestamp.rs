@@ -11,6 +11,10 @@ use rkyv::{Archive, Deserialize, Serialize};
 /// The maximum allowed clock drift between nodes.
 pub const MAX_CLOCK_DRIFT: Duration = Duration::from_secs(4_100);
 pub const TIMESTAMP_MAX: u64 = (1 << 32) - 1;
+/// The UNIX timestamp which datacake timestamps start counting from.
+///
+/// This is essentially the `1st Jan, 2023`.
+pub const DATACAKE_EPOCH: Duration = Duration::from_secs(1672534861);
 
 #[derive(Debug, Hash, Copy, Clone, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(C)]
@@ -38,13 +42,13 @@ pub const TIMESTAMP_MAX: u64 = (1 << 32) - 1;
 ///
 /// ```
 /// use std::time::Duration;
-/// use datacake_crdt::{HLCTimestamp, get_unix_timestamp};
+/// use datacake_crdt::HLCTimestamp;
 ///
 /// // Let's make two clocks, but we'll refer to them as our nodes, node-a and node-b.
 /// let mut node_a = HLCTimestamp::now(0, 0);
 ///
 /// // Node-b has a clock drift of 5 seconds.
-/// let mut node_b = HLCTimestamp::new(node_a.as_duration() + Duration::from_secs(5), 0, 1);
+/// let mut node_b = HLCTimestamp::new(node_a.datacake_timestamp() + Duration::from_secs(5), 0, 1);
 ///
 /// // Node-b sends a payload with a new timestamp which we get by calling `send()`.
 /// // this makes sure our timestamp is unique and monotonic.
@@ -74,7 +78,7 @@ impl HLCTimestamp {
     ///
     /// This internally gets the current UNIX timestamp in seconds.
     pub fn now(counter: u16, node: u8) -> Self {
-        let duration = get_unix_timestamp_dur();
+        let duration = get_datacake_timestamp();
         Self::new(duration, counter, node)
     }
 
@@ -91,7 +95,10 @@ impl HLCTimestamp {
     }
 
     #[inline]
-    /// The UNIX timestamp as sections
+    /// The datacake timestamp as seconds.
+    ///
+    /// This is NOT a UNIX timestamp, it is from a custom point in time.
+    /// To get a UNIX timestamp use the `as_duration` method.
     pub fn seconds(&self) -> u64 {
         self.0 >> 32
     }
@@ -105,10 +112,23 @@ impl HLCTimestamp {
     }
 
     #[inline]
-    /// The clock timestamp as a duration.
+    /// The unix timestamp as a duration.
     ///
     /// This is probably the method you want to use for display purposes.
-    pub fn as_duration(&self) -> Duration {
+    ///
+    /// NOTE:
+    /// This adds the [DATACAKE_EPOCH] back to the duration to convert
+    /// the timestamp back to a unix epoch.
+    pub fn unix_timestamp(&self) -> Duration {
+        parts_as_duration(self.seconds(), self.fractional()) + DATACAKE_EPOCH
+    }
+
+    #[inline]
+    /// The datacake timestamp as a duration.
+    ///
+    /// NOTE:
+    /// This does not add the original [DATACAKE_EPOCH] back to the duration.
+    pub fn datacake_timestamp(&self) -> Duration {
         parts_as_duration(self.seconds(), self.fractional())
     }
 
@@ -131,9 +151,9 @@ impl HLCTimestamp {
     /// Timestamp send. Generates a unique, monotonic timestamp suitable
     /// for transmission to another system.
     pub fn send(&mut self) -> Result<Self, TimestampError> {
-        let ts = get_unix_timestamp_dur();
+        let ts = get_datacake_timestamp();
 
-        let ts_old = self.as_duration();
+        let ts_old = self.datacake_timestamp();
         let c_old = self.counter();
 
         // Calculate the next logical time and counter
@@ -164,10 +184,10 @@ impl HLCTimestamp {
             return Err(TimestampError::DuplicatedNode(msg.node()));
         }
 
-        let ts = get_unix_timestamp_dur();
+        let ts = get_datacake_timestamp();
 
         // Unpack the message wall time/counter
-        let ts_msg = msg.as_duration();
+        let ts_msg = msg.datacake_timestamp();
         let c_msg = msg.counter();
 
         // Assert the remote clock drift
@@ -176,7 +196,7 @@ impl HLCTimestamp {
         }
 
         // Unpack the clock.timestamp logical time and counter
-        let ts_old = self.as_duration();
+        let ts_old = self.datacake_timestamp();
         let c_old = self.counter();
 
         // Calculate the next logical time and counter.
@@ -302,22 +322,14 @@ pub fn get_unix_timestamp_ms() -> u64 {
         .as_millis() as u64
 }
 
-/// Get the current time since the [DATACAKE_EPOCH] in seconds.
-pub fn get_unix_timestamp() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
-}
-
 /// Get the current time since the [DATACAKE_EPOCH] as [Duration].
 ///
 /// This timestamp is ensured to be accurate taking into account the
 /// resolution lost when converting the timestamp.
-fn get_unix_timestamp_dur() -> Duration {
+pub fn get_datacake_timestamp() -> Duration {
     let duration = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
 
-    let (seconds, fractional) = duration_to_parts(duration);
+    let (seconds, fractional) = duration_to_parts(duration - DATACAKE_EPOCH);
     parts_as_duration(seconds, fractional)
 }
 
@@ -351,17 +363,17 @@ mod tests {
         let drift = MAX_CLOCK_DRIFT + Duration::from_secs(1000);
 
         let mut ts1 = HLCTimestamp::now(0, 0);
-        let ts2 = HLCTimestamp::new(ts1.as_duration() + drift, 0, 1);
+        let ts2 = HLCTimestamp::new(ts1.datacake_timestamp() + drift, 0, 1);
         assert!(matches!(ts1.recv(&ts2), Err(TimestampError::ClockDrift)));
 
-        let mut ts = HLCTimestamp::new(ts1.as_duration() + drift, 0, 1);
+        let mut ts = HLCTimestamp::new(ts1.datacake_timestamp() + drift, 0, 1);
         assert!(matches!(ts.send(), Err(TimestampError::ClockDrift)));
     }
 
     #[test]
     fn test_clock_overflow_error() {
         let mut ts1 = HLCTimestamp::now(u16::MAX, 0);
-        let ts2 = HLCTimestamp::new(ts1.as_duration(), u16::MAX, 1);
+        let ts2 = HLCTimestamp::new(ts1.datacake_timestamp(), u16::MAX, 1);
 
         assert!(matches!(ts1.recv(&ts2), Err(TimestampError::Overflow)));
     }
@@ -378,7 +390,7 @@ mod tests {
     #[test]
     fn test_timestamp_recv() {
         let mut ts1 = HLCTimestamp::now(0, 0);
-        let mut ts2 = HLCTimestamp::new(ts1.as_duration(), 3, 1);
+        let mut ts2 = HLCTimestamp::new(ts1.datacake_timestamp(), 3, 1);
 
         let ts3 = ts1.recv(&ts2).unwrap();
 
@@ -419,7 +431,7 @@ mod tests {
         assert!(ts2 < ts3);
 
         let mut ts1 = HLCTimestamp::now(0, 0);
-        let ts2 = HLCTimestamp::new(ts1.as_duration(), 1, 1);
+        let ts2 = HLCTimestamp::new(ts1.datacake_timestamp(), 1, 1);
         let _ts3 = ts1.recv(&ts2).unwrap();
         assert!(ts1 > ts2);
     }

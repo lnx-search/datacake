@@ -94,7 +94,7 @@ mod tests {
         assert!(ts2 < ts3);
 
         let drift_ts =
-            HLCTimestamp::new(ts3.as_duration() + Duration::from_secs(50), 0, 1);
+            HLCTimestamp::new(ts3.datacake_timestamp() + Duration::from_secs(50), 0, 1);
         clock.register_ts(drift_ts).await;
         let ts = clock.get_time().await;
         assert!(
@@ -102,7 +102,8 @@ mod tests {
             "New timestamp should be monotonic relative to drifted ts."
         );
 
-        let old_ts = HLCTimestamp::new(ts3.as_duration() + Duration::from_secs(5), 0, 1);
+        let old_ts =
+            HLCTimestamp::new(ts3.datacake_timestamp() + Duration::from_secs(5), 0, 1);
         clock.register_ts(old_ts).await;
     }
 }
