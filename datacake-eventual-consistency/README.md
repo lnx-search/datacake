@@ -6,7 +6,7 @@ detection are managed by [Quickwit's Chitchat](https://github.com/quickwit-oss/c
 and replication is managed by [Datacake CRDT](https://github.com/lnx-search/datacake/tree/main/datacake-crdt).
 
 This library is focused around providing a simple and easy to build framework for your distributed apps without
-being overwhelming. In fact, you can be up and running just by implementing 2 async traits.
+being overwhelming. In fact, you can be up and running just by implementing 1 async trait.
 
 ## Basic Example
 
