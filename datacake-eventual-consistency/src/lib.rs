@@ -158,7 +158,7 @@ where
     S: Storage + Send + Sync + 'static,
 {
     type Output = EventuallyConsistentStore<S>;
-    type Error = error::StoreError<S::Error>;
+    type Error = StoreError<S::Error>;
 
     async fn init_extension(
         self,
@@ -197,7 +197,7 @@ where
         datastore: S,
         repair_interval: Duration,
         node: &DatacakeNode,
-    ) -> Result<Self, error::StoreError<S::Error>> {
+    ) -> Result<Self, StoreError<S::Error>> {
         let storage = Arc::new(datastore);
 
         let group = KeyspaceGroup::new(storage.clone(), node.clock().clone()).await;
@@ -366,7 +366,7 @@ where
         doc_id: Key,
         data: D,
         consistency: Consistency,
-    ) -> Result<(), error::StoreError<S::Error>>
+    ) -> Result<(), StoreError<S::Error>>
     where
         D: Into<Vec<u8>>,
     {
@@ -374,7 +374,7 @@ where
             .node
             .select_nodes(consistency)
             .await
-            .map_err(error::StoreError::ConsistencyError)?;
+            .map_err(StoreError::ConsistencyError)?;
 
         let last_updated = self.node.clock().get_time().await;
         let document = Document::new(doc_id, last_updated, data);
@@ -411,9 +411,9 @@ where
                         self.node.me().public_addr,
                     )
                     .await
-                    .map_err(|e| error::StoreError::RpcError(node, e))?;
+                    .map_err(|e| StoreError::RpcError(node, e))?;
 
-                Ok::<_, error::StoreError<S::Error>>(())
+                Ok::<_, StoreError<S::Error>>(())
             }
         };
 
@@ -426,7 +426,7 @@ where
         keyspace: &str,
         documents: I,
         consistency: Consistency,
-    ) -> Result<(), error::StoreError<S::Error>>
+    ) -> Result<(), StoreError<S::Error>>
     where
         D: Into<Vec<u8>>,
         T: Iterator<Item = (Key, D)> + Send,
@@ -436,7 +436,7 @@ where
             .node
             .select_nodes(consistency)
             .await
-            .map_err(error::StoreError::ConsistencyError)?;
+            .map_err(StoreError::ConsistencyError)?;
 
         let last_updated = self.node.clock().get_time().await;
         let docs = documents
@@ -477,9 +477,9 @@ where
                         self_member.public_addr,
                     )
                     .await
-                    .map_err(|e| error::StoreError::RpcError(node, e))?;
+                    .map_err(|e| StoreError::RpcError(node, e))?;
 
-                Ok::<_, error::StoreError<S::Error>>(())
+                Ok::<_, StoreError<S::Error>>(())
             }
         };
 
@@ -492,12 +492,12 @@ where
         keyspace: &str,
         doc_id: Key,
         consistency: Consistency,
-    ) -> Result<(), error::StoreError<S::Error>> {
+    ) -> Result<(), StoreError<S::Error>> {
         let nodes = self
             .node
             .select_nodes(consistency)
             .await
-            .map_err(error::StoreError::ConsistencyError)?;
+            .map_err(StoreError::ConsistencyError)?;
 
         let last_updated = self.node.clock().get_time().await;
 
@@ -530,9 +530,9 @@ where
                 client
                     .del(keyspace, doc_id, last_updated)
                     .await
-                    .map_err(|e| error::StoreError::RpcError(node, e))?;
+                    .map_err(|e| StoreError::RpcError(node, e))?;
 
-                Ok::<_, error::StoreError<S::Error>>(())
+                Ok::<_, StoreError<S::Error>>(())
             }
         };
 
@@ -545,7 +545,7 @@ where
         keyspace: &str,
         doc_ids: I,
         consistency: Consistency,
-    ) -> Result<(), error::StoreError<S::Error>>
+    ) -> Result<(), StoreError<S::Error>>
     where
         T: Iterator<Item = Key> + Send,
         I: IntoIterator<IntoIter = T> + Send,
@@ -554,7 +554,7 @@ where
             .node
             .select_nodes(consistency)
             .await
-            .map_err(error::StoreError::ConsistencyError)?;
+            .map_err(StoreError::ConsistencyError)?;
 
         let last_updated = self.node.clock().get_time().await;
         let docs = doc_ids
@@ -588,9 +588,9 @@ where
                 client
                     .multi_del(keyspace, docs)
                     .await
-                    .map_err(|e| error::StoreError::RpcError(node, e))?;
+                    .map_err(|e| StoreError::RpcError(node, e))?;
 
-                Ok::<_, error::StoreError<S::Error>>(())
+                Ok::<_, StoreError<S::Error>>(())
             }
         };
 
@@ -646,7 +646,7 @@ where
         doc_id: Key,
         data: Vec<u8>,
         consistency: Consistency,
-    ) -> Result<(), error::StoreError<S::Error>> {
+    ) -> Result<(), StoreError<S::Error>> {
         self.inner
             .put(self.keyspace.as_ref(), doc_id, data, consistency)
             .await
@@ -657,7 +657,7 @@ where
         &self,
         documents: I,
         consistency: Consistency,
-    ) -> Result<(), error::StoreError<S::Error>>
+    ) -> Result<(), StoreError<S::Error>>
     where
         T: Iterator<Item = (Key, Vec<u8>)> + Send,
         I: IntoIterator<IntoIter = T> + Send,
@@ -672,7 +672,7 @@ where
         &self,
         doc_id: Key,
         consistency: Consistency,
-    ) -> Result<(), error::StoreError<S::Error>> {
+    ) -> Result<(), StoreError<S::Error>> {
         self.inner
             .del(self.keyspace.as_ref(), doc_id, consistency)
             .await
@@ -683,7 +683,7 @@ where
         &self,
         doc_ids: I,
         consistency: Consistency,
-    ) -> Result<(), error::StoreError<S::Error>>
+    ) -> Result<(), StoreError<S::Error>>
     where
         T: Iterator<Item = Key> + Send,
         I: IntoIterator<IntoIter = T> + Send,
@@ -712,11 +712,11 @@ async fn watch_membership_changes(
 async fn handle_consistency_distribution<S, CB, F>(
     nodes: Vec<SocketAddr>,
     factory: CB,
-) -> Result<(), error::StoreError<S::Error>>
+) -> Result<(), StoreError<S::Error>>
 where
     S: Storage,
     CB: FnMut(SocketAddr) -> F,
-    F: Future<Output = Result<(), error::StoreError<S::Error>>>,
+    F: Future<Output = Result<(), StoreError<S::Error>>>,
 {
     let mut num_success = 0;
     let num_required = nodes.len();
@@ -731,14 +731,14 @@ where
             Ok(()) => {
                 num_success += 1;
             },
-            Err(error::StoreError::RpcError(node, error)) => {
+            Err(StoreError::RpcError(node, error)) => {
                 error!(
                     error = ?error,
                     target_node = %node,
                     "Replica failed to acknowledge change to meet consistency level requirement."
                 );
             },
-            Err(error::StoreError::TransportError(node, error)) => {
+            Err(StoreError::TransportError(node, error)) => {
                 error!(
                     error = ?error,
                     target_node = %node,
@@ -755,7 +755,7 @@ where
     }
 
     if num_success != num_required {
-        Err(error::StoreError::ConsistencyError(
+        Err(StoreError::ConsistencyError(
             ConsistencyError::ConsistencyFailure {
                 responses: num_success,
                 required: num_required,
