@@ -1,0 +1,18 @@
+[package]
+name = "benchmarks"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1"
+slog = "2.7.0"
+slog-async = "2.7.0"
+slog-term = "2.9.0"
+protobuf = "2"
+regex = "1.7.0"
+
+datacake = { path = ".." }
+raft = { git = "https://github.com/tikv/raft-rs.git", rev = "5ce52b4" }
+tokio = { version = "1", features = ["full"] }

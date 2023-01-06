@@ -43,6 +43,7 @@ members = [
 
     # Utils
     "test-helper",
+    "benchmarks",
 
     # Example set
     "examples/replicated-kv",
