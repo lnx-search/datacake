@@ -109,6 +109,9 @@ impl SqliteStorage {
     /// # async fn main() {
     /// let storage = SqliteStorage::open("./data.db").await.expect("Create database");
     /// # drop(storage);
+    /// # let _ = std::fs::remove_file("./data.db");
+    /// # let _ = std::fs::remove_file("./data.db-shm");
+    /// # let _ = std::fs::remove_file("./data.db-wal");
     /// # }
     /// ```
     pub async fn open<P: AsRef<Path>>(path: P) -> Result<Self, rusqlite::Error> {
