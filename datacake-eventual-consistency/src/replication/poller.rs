@@ -14,7 +14,7 @@ use datacake_node::{Clock, MembershipChange, NodeId, RpcNetwork};
 use datacake_rpc::Status;
 use puppet::ActorMailbox;
 use tokio::sync::Semaphore;
-use tokio::time::{interval, MissedTickBehavior};
+use tokio::time::{interval, Instant, MissedTickBehavior};
 
 use crate::core::DocumentMetadata;
 use crate::keyspace::{
@@ -413,15 +413,19 @@ where
 
     tokio::spawn(handle_modified(client, keyspace, modified, ctx));
 
+    let start = Instant::now();
     let mut watcher = ProgressWatcher::new(progress_tracker, KEYSPACE_SYNC_TIMEOUT);
     let mut interval = interval(Duration::from_millis(250));
     loop {
         interval.tick().await;
 
         if watcher.has_expired() {
-            warn!("Storage task took too long to complete and has been left to run.");
+            warn!(total_time = ?start.elapsed(), "Storage task took too long to complete and has been left to run.");
             removal_task.await??;
-            return Err(anyhow!("Task timed out and could not be completed."));
+            return Err(anyhow!(
+                "Task timed out and could not be completed. Took {:?}",
+                start.elapsed()
+            ));
         }
 
         if watcher.is_done() {
@@ -451,8 +455,14 @@ where
         .chunks(MAX_NUMBER_OF_DOCS_PER_FETCH)
         .map(|entries| entries.iter().map(|doc| doc.id).collect::<Vec<_>>());
 
+    let total = Instant::now();
+    let mut total_num_docs = 0;
     for doc_ids in doc_id_chunks {
+        let start = Instant::now();
         let docs = client.fetch_docs(keyspace.name(), doc_ids).await?;
+        debug!(elapsed = ?start.elapsed(), num_docs = docs.len(), "Fetched docs.");
+
+        total_num_docs += docs.len();
 
         let msg = MultiSet {
             source: READ_REPAIR_SOURCE_ID,
@@ -461,7 +471,10 @@ where
             _marker: PhantomData::<S>::default(),
         };
         keyspace.send(msg).await?;
+        ctx.progress.register_progress();
     }
+    ctx.progress.set_done();
+    info!(elapsed = ?total.elapsed(), num_docs = total_num_docs, "Doc fetching completed.");
 
     Ok(())
 }
