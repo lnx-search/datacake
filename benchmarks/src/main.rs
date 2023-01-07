@@ -5,6 +5,7 @@ mod replication;
 mod stores;
 
 use std::time::Instant;
+
 use anyhow::Result;
 use datacake::node::Consistency;
 use mimalloc::MiMalloc;
@@ -14,7 +15,10 @@ static GLOBAL: MiMalloc = MiMalloc;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    std::env::set_var("RUST_LOG", "info,datacake_node=error,datacake_eventual_consistency=error");
+    std::env::set_var(
+        "RUST_LOG",
+        "info,datacake_node=error,datacake_eventual_consistency=error",
+    );
     tracing_subscriber::fmt::init();
 
     info!("Beginning eventually consistent replication benchmark...");
@@ -44,7 +48,10 @@ async fn main() -> Result<()> {
     replication::run_datacake(3, Consistency::LocalQuorum).await?;
     replication::run_datacake(5, Consistency::LocalQuorum).await?;
 
-    info!("Benchmark Took: {}", humantime::format_duration(start.elapsed()));
+    info!(
+        "Benchmark Took: {}",
+        humantime::format_duration(start.elapsed())
+    );
 
     Ok(())
 }

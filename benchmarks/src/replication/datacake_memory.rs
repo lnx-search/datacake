@@ -1,8 +1,20 @@
 use std::ops::Range;
 use std::time::{Duration, Instant};
+
 use anyhow::Result;
-use datacake::node::{Consistency, ConnectionConfig, DCAwareSelector, DatacakeNodeBuilder, DatacakeNode};
-use datacake::eventual_consistency::{EventuallyConsistentStore, EventuallyConsistentStoreExtension, ReplicatedStoreHandle};
+use datacake::eventual_consistency::{
+    EventuallyConsistentStore,
+    EventuallyConsistentStoreExtension,
+    ReplicatedStoreHandle,
+};
+use datacake::node::{
+    ConnectionConfig,
+    Consistency,
+    DCAwareSelector,
+    DatacakeNode,
+    DatacakeNodeBuilder,
+};
+
 use crate::stores::memstore::MemStore;
 
 #[instrument(name = "datacake-ec-benchmark")]
@@ -13,22 +25,36 @@ pub async fn run_datacake(n_nodes: u8, consistency: Consistency) -> Result<()> {
 
     let start = Instant::now();
     insert_n_docs(handle.clone(), 0..1_000, consistency).await?;
-    info!("Inserting 1000 docs serially took {}", humantime::format_duration(start.elapsed()));
+    info!(
+        "Inserting 1000 docs serially took {}",
+        humantime::format_duration(start.elapsed())
+    );
 
     for concurrency in [10, 125, 256, 400, 512, 1024, 2048] {
         let start = Instant::now();
-        run_insert_concurrently(handle.clone(), concurrency, 0..1_000, consistency).await?;
-        info!("Inserting 1000 docs @ {concurrency} took {}", humantime::format_duration(start.elapsed()));
+        run_insert_concurrently(handle.clone(), concurrency, 0..1_000, consistency)
+            .await?;
+        info!(
+            "Inserting 1000 docs @ {concurrency} took {}",
+            humantime::format_duration(start.elapsed())
+        );
     }
 
     let start = Instant::now();
     remove_n_docs(handle.clone(), 0..1_000, consistency).await?;
-    info!("Removing 1000 docs serially took {}", humantime::format_duration(start.elapsed()));
+    info!(
+        "Removing 1000 docs serially took {}",
+        humantime::format_duration(start.elapsed())
+    );
 
     for concurrency in [10, 125, 256, 400, 512, 1024, 2048] {
         let start = Instant::now();
-        run_remove_concurrently(handle.clone(), concurrency, 0..1_000, consistency).await?;
-        info!("Removing 1000 docs @ {concurrency} took {}", humantime::format_duration(start.elapsed()));
+        run_remove_concurrently(handle.clone(), concurrency, 0..1_000, consistency)
+            .await?;
+        info!(
+            "Removing 1000 docs @ {concurrency} took {}",
+            humantime::format_duration(start.elapsed())
+        );
     }
 
     Ok(())
@@ -58,13 +84,7 @@ async fn remove_n_docs(
     consistency: Consistency,
 ) -> Result<()> {
     for id in range {
-        handle
-            .del(
-                "my-keyspace",
-                id,
-                consistency,
-            )
-            .await?;
+        handle.del("my-keyspace", id, consistency).await?;
     }
     Ok(())
 }
@@ -78,7 +98,11 @@ async fn run_insert_concurrently(
     let mut handles = Vec::new();
     for _ in 0..concurrency {
         let handle = handle.clone();
-        handles.push(tokio::spawn(insert_n_docs(handle, range.clone(), consistency)));
+        handles.push(tokio::spawn(insert_n_docs(
+            handle,
+            range.clone(),
+            consistency,
+        )));
     }
 
     for handle in handles {
@@ -97,7 +121,11 @@ async fn run_remove_concurrently(
     let mut handles = Vec::new();
     for _ in 0..concurrency {
         let handle = handle.clone();
-        handles.push(tokio::spawn(remove_n_docs(handle, range.clone(), consistency)));
+        handles.push(tokio::spawn(remove_n_docs(
+            handle,
+            range.clone(),
+            consistency,
+        )));
     }
 
     for handle in handles {
@@ -106,7 +134,6 @@ async fn run_remove_concurrently(
 
     Ok(())
 }
-
 
 async fn connect_nodes(n: u8) -> Result<Vec<DatacakeSystem>> {
     let mut nodes = Vec::new();
@@ -121,7 +148,8 @@ async fn connect_nodes(n: u8) -> Result<Vec<DatacakeSystem>> {
             .await
             .expect("Connect node.");
 
-        node.wait_for_nodes(&previous_node_ids, Duration::from_secs(30)).await?;
+        node.wait_for_nodes(&previous_node_ids, Duration::from_secs(30))
+            .await?;
 
         previous_node_ids.push(id);
         if previous_seeds.len() >= 2 {
@@ -134,10 +162,7 @@ async fn connect_nodes(n: u8) -> Result<Vec<DatacakeSystem>> {
             .await
             .expect("Create store.");
 
-        nodes.push(DatacakeSystem {
-           node,
-            store,
-        });
+        nodes.push(DatacakeSystem { node, store });
     }
 
     Ok(nodes)

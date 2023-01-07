@@ -1,8 +1,14 @@
 //! Copied from the test_utils file in the EC store.
-use parking_lot::RwLock;
 use std::collections::HashMap;
+
 use datacake::crdt::{HLCTimestamp, Key};
-use datacake::eventual_consistency::{BulkMutationError, Document, DocumentMetadata, Storage};
+use datacake::eventual_consistency::{
+    BulkMutationError,
+    Document,
+    DocumentMetadata,
+    Storage,
+};
+use parking_lot::RwLock;
 
 #[derive(Debug, Default)]
 /// A in-memory storage implementor.
