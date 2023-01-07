@@ -7,12 +7,15 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1"
-slog = "2.7.0"
-slog-async = "2.7.0"
-slog-term = "2.9.0"
-protobuf = "2"
-regex = "1.7.0"
+tracing = "0.1.37"
+tracing-subscriber = "0.3.16"
+tracing-futures = "0.2.5"
+humantime = "2.1.0"
+thiserror = "1.0.38"
+async-trait = "0.1.60"
+parking_lot = "0.12.1"
 
+test-helper = { path = "../test-helper" }
 datacake = { path = ".." }
-raft = { git = "https://github.com/tikv/raft-rs.git", rev = "5ce52b4" }
 tokio = { version = "1", features = ["full"] }
+mimalloc = { version = "0.1.32", default-features = false }

@@ -1,4 +1,3 @@
 mod datacake_memory;
-mod raft_memory;
 
-pub use raft_memory::run_raft;
+pub use datacake_memory::run_datacake;
