@@ -1,0 +1,21 @@
+[package]
+name = "benchmarks"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1"
+tracing = "0.1.37"
+tracing-subscriber = "0.3.16"
+tracing-futures = "0.2.5"
+humantime = "2.1.0"
+thiserror = "1.0.38"
+async-trait = "0.1.60"
+parking_lot = "0.12.1"
+
+test-helper = { path = "../test-helper" }
+datacake = { path = ".." }
+tokio = { version = "1", features = ["full"] }
+mimalloc = { version = "0.1.32", default-features = false }
