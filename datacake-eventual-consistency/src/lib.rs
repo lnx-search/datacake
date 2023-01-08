@@ -74,7 +74,11 @@ use std::time::Duration;
 use async_trait::async_trait;
 use datacake_crdt::Key;
 use datacake_node::{
-    ClusterExtension, Consistency, ConsistencyError, DatacakeHandle, DatacakeNode,
+    ClusterExtension,
+    Consistency,
+    ConsistencyError,
+    DatacakeHandle,
+    DatacakeNode,
 };
 pub use error::StoreError;
 use futures::stream::FuturesUnordered;
@@ -83,15 +87,27 @@ pub use statistics::SystemStatistics;
 #[cfg(feature = "test-utils")]
 pub use storage::test_suite;
 pub use storage::{
-    BulkMutationError, ProgressTracker, PutContext, Storage, SyncStorage,
+    BulkMutationError,
+    ProgressTracker,
+    PutContext,
+    Storage,
+    SyncStorage,
 };
 
 pub use self::core::{Document, DocumentMetadata};
 use crate::keyspace::{
-    Del, KeyspaceGroup, MultiDel, MultiSet, Set, CONSISTENCY_SOURCE_ID,
+    Del,
+    KeyspaceGroup,
+    MultiDel,
+    MultiSet,
+    Set,
+    CONSISTENCY_SOURCE_ID,
 };
 use crate::replication::{
-    Mutation, ReplicationCycleContext, ReplicationHandle, TaskDistributor,
+    Mutation,
+    ReplicationCycleContext,
+    ReplicationHandle,
+    TaskDistributor,
     TaskServiceContext,
 };
 use crate::rpc::services::consistency_impl::ConsistencyService;

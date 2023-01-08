@@ -8,11 +8,19 @@ use rkyv::AlignedVec;
 
 use crate::core::{Document, DocumentMetadata};
 use crate::rpc::services::consistency_impl::{
-    BatchPayload, ConsistencyService, Context, MultiPutPayload, MultiRemovePayload,
-    PutPayload, RemovePayload,
+    BatchPayload,
+    ConsistencyService,
+    Context,
+    MultiPutPayload,
+    MultiRemovePayload,
+    PutPayload,
+    RemovePayload,
 };
 use crate::rpc::services::replication_impl::{
-    FetchDocs, GetState, PollKeyspace, ReplicationService,
+    FetchDocs,
+    GetState,
+    PollKeyspace,
+    ReplicationService,
 };
 use crate::SyncStorage;
 

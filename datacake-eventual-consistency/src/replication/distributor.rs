@@ -13,7 +13,10 @@ use tokio::time::{interval, MissedTickBehavior};
 use crate::core::DocumentMetadata;
 use crate::replication::MAX_CONCURRENT_REQUESTS;
 use crate::rpc::services::consistency_impl::{
-    BatchPayload, Context, MultiPutPayload, MultiRemovePayload,
+    BatchPayload,
+    Context,
+    MultiPutPayload,
+    MultiRemovePayload,
 };
 use crate::{ConsistencyClient, Document, SyncStorage};
 

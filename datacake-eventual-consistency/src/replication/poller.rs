@@ -18,7 +18,13 @@ use tokio::time::{interval, Instant, MissedTickBehavior};
 
 use crate::core::DocumentMetadata;
 use crate::keyspace::{
-    Del, Diff, KeyspaceActor, KeyspaceGroup, KeyspaceTimestamps, MultiDel, MultiSet,
+    Del,
+    Diff,
+    KeyspaceActor,
+    KeyspaceGroup,
+    KeyspaceTimestamps,
+    MultiDel,
+    MultiSet,
     READ_REPAIR_SOURCE_ID,
 };
 use crate::replication::MAX_CONCURRENT_REQUESTS;
