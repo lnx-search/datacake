@@ -565,6 +565,3 @@ impl Storage for MemStore {
         Ok(docs.into_iter())
     }
 }
-
-unsafe impl Send for MemStore {}
-unsafe impl Sync for MemStore {}
