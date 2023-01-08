@@ -17,7 +17,7 @@ use tokio::time::interval;
 use super::NUM_SOURCES;
 use crate::keyspace::messages::PurgeDeletes;
 use crate::keyspace::KeyspaceActor;
-use crate::SyncStorage;
+use crate::Storage;
 
 const PURGE_DELETES_INTERVAL: Duration = if cfg!(test) {
     Duration::from_secs(1)
@@ -28,7 +28,7 @@ type KeyspaceMap<S> = BTreeMap<Cow<'static, str>, ActorMailbox<KeyspaceActor<S>>
 
 pub struct KeyspaceGroup<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     clock: Clock,
     storage: Arc<S>,
@@ -38,7 +38,7 @@ where
 
 impl<S> Clone for KeyspaceGroup<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     fn clone(&self) -> Self {
         Self {
@@ -52,7 +52,7 @@ where
 
 impl<S> KeyspaceGroup<S>
 where
-    S: SyncStorage + Default,
+    S: Storage + Default,
 {
     #[cfg(any(test, feature = "test-utils"))]
     #[allow(unused)]
@@ -66,7 +66,7 @@ where
 
 impl<S> KeyspaceGroup<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     /// Creates a new, empty keyspace group with a given storage implementation.
     pub async fn new(storage: Arc<S>, clock: Clock) -> Self {
@@ -239,7 +239,7 @@ where
 
 async fn keyspace_purge_task<S>(handle: KeyspaceGroup<S>)
 where
-    S: SyncStorage,
+    S: Storage,
 {
     let mut interval = interval(PURGE_DELETES_INTERVAL); // 1 hour.
 

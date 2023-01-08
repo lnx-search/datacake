@@ -162,13 +162,13 @@ async fn connect_nodes(n: u8) -> Result<Vec<DatacakeSystem>> {
             .await
             .expect("Create store.");
 
-        nodes.push(DatacakeSystem { node, store });
+        nodes.push(DatacakeSystem { _node: node, store });
     }
 
     Ok(nodes)
 }
 
 struct DatacakeSystem {
-    node: DatacakeNode,
+    _node: DatacakeNode,
     store: EventuallyConsistentStore<MemStore>,
 }

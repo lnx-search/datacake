@@ -11,7 +11,7 @@ use super::messages::{Del, Diff, MultiDel, MultiSet, Set, SymDiff};
 use crate::keyspace::messages::{CorruptedState, PurgeDeletes, Serialize, NUM_SOURCES};
 use crate::keyspace::LastUpdated;
 use crate::storage::BulkMutationError;
-use crate::SyncStorage;
+use crate::Storage;
 
 /// Spawns a new keyspace actor, returning the actor's mailbox.
 pub async fn spawn_keyspace<S>(
@@ -22,7 +22,7 @@ pub async fn spawn_keyspace<S>(
     change_timestamp: Arc<AtomicCell<HLCTimestamp>>,
 ) -> ActorMailbox<KeyspaceActor<S>>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     let ks = KeyspaceActor {
         name: name.clone(),
@@ -37,7 +37,7 @@ where
 
 pub struct KeyspaceActor<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     name: Cow<'static, str>,
     clock: Clock,
@@ -49,7 +49,7 @@ where
 #[puppet_actor]
 impl<S> KeyspaceActor<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     async fn inc_change_timestamp(&self) {
         let ts = self.clock.get_time().await;

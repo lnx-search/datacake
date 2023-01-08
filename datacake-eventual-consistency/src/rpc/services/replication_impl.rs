@@ -4,18 +4,18 @@ use datacake_rpc::{Handler, Request, RpcService, ServiceRegistry, Status};
 use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::keyspace::{KeyspaceGroup, KeyspaceInfo, LastUpdated};
-use crate::{Document, SyncStorage};
+use crate::{Document, Storage};
 
 pub struct ReplicationService<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     group: KeyspaceGroup<S>,
 }
 
 impl<S> ReplicationService<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     pub fn new(group: KeyspaceGroup<S>) -> Self {
         Self { group }
@@ -24,7 +24,7 @@ where
 
 impl<S> RpcService for ReplicationService<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     fn register_handlers(registry: &mut ServiceRegistry<Self>) {
         registry.add_handler::<PollKeyspace>();
@@ -36,7 +36,7 @@ where
 #[datacake_rpc::async_trait]
 impl<S> Handler<PollKeyspace> for ReplicationService<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     type Reply = KeyspaceInfo;
 
@@ -55,7 +55,7 @@ where
 #[datacake_rpc::async_trait]
 impl<S> Handler<GetState> for ReplicationService<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     type Reply = KeyspaceOrSwotSet;
 
@@ -83,7 +83,7 @@ where
 #[datacake_rpc::async_trait]
 impl<S> Handler<FetchDocs> for ReplicationService<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     type Reply = FetchedDocs;
 

@@ -195,7 +195,7 @@ where
 /// The generic storage trait which encapsulates all the required persistence logic.
 ///
 /// A test suite is available for ensuring correct behavour of stores.
-pub trait Storage {
+pub trait Storage: Send + Sync + 'static {
     type Error: Error + Send + Sync + 'static;
     type DocsIter: Iterator<Item = Document>;
     type MetadataIter: Iterator<Item = (Key, HLCTimestamp, bool)>;
@@ -342,8 +342,6 @@ pub trait Storage {
     ) -> Result<Self::DocsIter, Self::Error>;
 }
 
-pub trait SyncStorage: Storage + Send + Sync + 'static {}
-
 #[cfg(any(test, feature = "test-utils"))]
 pub mod test_suite {
     use std::any::type_name;
@@ -353,7 +351,7 @@ pub mod test_suite {
     use datacake_crdt::{HLCTimestamp, Key};
 
     use crate::core::Document;
-    use crate::storage::{Storage, SyncStorage};
+    use crate::storage::Storage;
     use crate::test_utils::InstrumentedStorage;
     use crate::DocumentMetadata;
 
@@ -364,7 +362,7 @@ pub mod test_suite {
         run_test_suite(MemStore::default()).await
     }
 
-    pub async fn run_test_suite<S: SyncStorage>(storage: S) {
+    pub async fn run_test_suite<S: Storage>(storage: S) {
         let mut clock = HLCTimestamp::now(0, 0);
         info!("Starting test suite for storage: {}", type_name::<S>());
 

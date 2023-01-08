@@ -18,7 +18,7 @@ use crate::rpc::services::consistency_impl::{
     MultiPutPayload,
     MultiRemovePayload,
 };
-use crate::{ConsistencyClient, Document, SyncStorage};
+use crate::{ConsistencyClient, Document, Storage};
 
 const BATCHING_INTERVAL: Duration = Duration::from_secs(1);
 
@@ -95,7 +95,7 @@ pub(crate) async fn start_task_distributor_service<S>(
     ctx: TaskServiceContext,
 ) -> TaskDistributor
 where
-    S: SyncStorage,
+    S: Storage,
 {
     let kill_switch = Arc::new(AtomicBool::new(false));
     let (tx, rx) = unbounded();
@@ -110,7 +110,7 @@ async fn task_distributor_service<S>(
     rx: Receiver<Op>,
     kill_switch: Arc<AtomicBool>,
 ) where
-    S: SyncStorage,
+    S: Storage,
 {
     info!("Task distributor service is running.");
 
@@ -203,7 +203,7 @@ async fn execute_batch<S>(
     batch: BatchPayload,
 ) -> anyhow::Result<()>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     let batch = Arc::new(batch);
     let limiter = Arc::new(Semaphore::new(MAX_CONCURRENT_REQUESTS));

@@ -86,13 +86,7 @@ use futures::StreamExt;
 pub use statistics::SystemStatistics;
 #[cfg(feature = "test-utils")]
 pub use storage::test_suite;
-pub use storage::{
-    BulkMutationError,
-    ProgressTracker,
-    PutContext,
-    Storage,
-    SyncStorage,
-};
+pub use storage::{BulkMutationError, ProgressTracker, PutContext, Storage};
 
 pub use self::core::{Document, DocumentMetadata};
 use crate::keyspace::{
@@ -132,7 +126,7 @@ const DEFAULT_REPAIR_INTERVAL: Duration = if cfg!(any(test, feature = "test-util
 /// to make is distributed.
 pub struct EventuallyConsistentStoreExtension<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     datastore: S,
     repair_interval: Duration,
@@ -140,7 +134,7 @@ where
 
 impl<S> EventuallyConsistentStoreExtension<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     /// Creates a new extension with a given data store, using the default repair
     /// interval.
@@ -161,7 +155,7 @@ where
 #[async_trait]
 impl<S> ClusterExtension for EventuallyConsistentStoreExtension<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     type Output = EventuallyConsistentStore<S>;
     type Error = StoreError<S::Error>;
@@ -186,7 +180,7 @@ where
 /// to make is distributed.
 pub struct EventuallyConsistentStore<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     node: DatacakeHandle,
     group: KeyspaceGroup<S>,
@@ -197,7 +191,7 @@ where
 
 impl<S> EventuallyConsistentStore<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     async fn create(
         datastore: S,
@@ -282,7 +276,7 @@ where
 
 impl<S> Drop for EventuallyConsistentStore<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     fn drop(&mut self) {
         self.task_service.kill();
@@ -293,7 +287,7 @@ where
 /// A cheaply cloneable handle to control the data store.
 pub struct ReplicatedStoreHandle<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     node: DatacakeHandle,
     group: KeyspaceGroup<S>,
@@ -303,7 +297,7 @@ where
 
 impl<S> Clone for ReplicatedStoreHandle<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     fn clone(&self) -> Self {
         Self {
@@ -317,7 +311,7 @@ where
 
 impl<S> ReplicatedStoreHandle<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     #[inline]
     /// Gets the live cluster statistics.
@@ -607,7 +601,7 @@ where
 /// A convenience wrapper which creates a new handle with a preset keyspace.
 pub struct ReplicatorKeyspaceHandle<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     inner: ReplicatedStoreHandle<S>,
     keyspace: Cow<'static, str>,
@@ -615,7 +609,7 @@ where
 
 impl<S> Clone for ReplicatorKeyspaceHandle<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     fn clone(&self) -> Self {
         Self {
@@ -627,7 +621,7 @@ where
 
 impl<S> ReplicatorKeyspaceHandle<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     /// Retrieves a document from the underlying storage.
     pub async fn get(&self, doc_id: Key) -> Result<Option<Document>, S::Error> {

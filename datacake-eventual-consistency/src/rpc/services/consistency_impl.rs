@@ -9,7 +9,7 @@ use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::core::{Document, DocumentMetadata};
 use crate::keyspace::{KeyspaceGroup, CONSISTENCY_SOURCE_ID};
-use crate::{ProgressTracker, PutContext, SyncStorage};
+use crate::{ProgressTracker, PutContext, Storage};
 
 macro_rules! try_send {
     ($keyspace:expr, $msg:expr) => {{
@@ -24,7 +24,7 @@ macro_rules! try_send {
 
 pub struct ConsistencyService<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     group: KeyspaceGroup<S>,
     network: RpcNetwork,
@@ -32,7 +32,7 @@ where
 
 impl<S> ConsistencyService<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     pub fn new(group: KeyspaceGroup<S>, network: RpcNetwork) -> Self {
         Self { group, network }
@@ -58,7 +58,7 @@ where
 
 impl<S> RpcService for ConsistencyService<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     fn register_handlers(registry: &mut ServiceRegistry<Self>) {
         registry.add_handler::<PutPayload>();
@@ -72,7 +72,7 @@ where
 #[datacake_rpc::async_trait]
 impl<S> Handler<PutPayload> for ConsistencyService<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     type Reply = HLCTimestamp;
 
@@ -103,7 +103,7 @@ where
 #[datacake_rpc::async_trait]
 impl<S> Handler<MultiPutPayload> for ConsistencyService<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     type Reply = HLCTimestamp;
 
@@ -132,7 +132,7 @@ where
 #[datacake_rpc::async_trait]
 impl<S> Handler<RemovePayload> for ConsistencyService<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     type Reply = HLCTimestamp;
 
@@ -159,7 +159,7 @@ where
 #[datacake_rpc::async_trait]
 impl<S> Handler<MultiRemovePayload> for ConsistencyService<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     type Reply = HLCTimestamp;
 
@@ -186,7 +186,7 @@ where
 #[datacake_rpc::async_trait]
 impl<S> Handler<BatchPayload> for ConsistencyService<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     type Reply = HLCTimestamp;
 

@@ -8,7 +8,7 @@ use parking_lot::{Mutex, RwLock};
 
 use crate::core::DocumentMetadata;
 use crate::storage::BulkMutationError;
-use crate::{Document, PutContext, Storage, SyncStorage};
+use crate::{Document, PutContext, Storage};
 
 /// A wrapping type around another `Storage` implementation that
 /// logs all the activity going into and out of the store.
@@ -23,7 +23,7 @@ impl<S: Storage + Clone> Clone for InstrumentedStorage<S> {
 }
 
 #[async_trait::async_trait]
-impl<S: SyncStorage> Storage for InstrumentedStorage<S> {
+impl<S: Storage> Storage for InstrumentedStorage<S> {
     type Error = S::Error;
     type DocsIter = S::DocsIter;
     type MetadataIter = S::MetadataIter;

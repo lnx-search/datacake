@@ -22,12 +22,12 @@ use crate::rpc::services::replication_impl::{
     PollKeyspace,
     ReplicationService,
 };
-use crate::SyncStorage;
+use crate::Storage;
 
 /// A high level wrapper around the consistency GRPC service.
 pub struct ConsistencyClient<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     clock: Clock,
     inner: RpcClient<ConsistencyService<S>>,
@@ -35,7 +35,7 @@ where
 
 impl<S> ConsistencyClient<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     pub fn new(clock: Clock, channel: Channel) -> Self {
         Self {
@@ -47,7 +47,7 @@ where
 
 impl<S> ConsistencyClient<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     /// Adds a document to the remote node's state.
     pub async fn put(
@@ -155,7 +155,7 @@ where
 /// A high level wrapper around the replication GRPC service.
 pub struct ReplicationClient<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     clock: Clock,
     inner: RpcClient<ReplicationService<S>>,
@@ -163,7 +163,7 @@ where
 
 impl<S> ReplicationClient<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     pub fn new(clock: Clock, channel: Channel) -> Self {
         Self {
@@ -175,7 +175,7 @@ where
 
 impl<S> ReplicationClient<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     /// Fetches the newest version of the node's keyspace timestamps.
     pub async fn poll_keyspace(

@@ -30,7 +30,7 @@ use crate::keyspace::{
 use crate::replication::MAX_CONCURRENT_REQUESTS;
 use crate::rpc::ReplicationClient;
 use crate::storage::ProgressWatcher;
-use crate::{ProgressTracker, PutContext, SyncStorage};
+use crate::{ProgressTracker, PutContext, Storage};
 
 const INITIAL_KEYSPACE_WAIT: Duration = if cfg!(any(test, feature = "test-utils")) {
     Duration::from_millis(500)
@@ -43,7 +43,7 @@ const MAX_NUMBER_OF_DOCS_PER_FETCH: usize = 50_000;
 /// The required context for the actor to run.
 pub struct ReplicationCycleContext<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     /// The time interval which should elapse between each tick.
     pub(crate) repair_interval: Duration,
@@ -56,7 +56,7 @@ where
 
 impl<S> ReplicationCycleContext<S>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     /// Gets the cluster clock.
     pub fn clock(&self) -> &Clock {
@@ -105,7 +105,7 @@ pub(crate) async fn start_replication_cycle<S>(
     ctx: ReplicationCycleContext<S>,
 ) -> ReplicationHandle
 where
-    S: SyncStorage,
+    S: Storage,
 {
     let kill_switch = Arc::new(AtomicBool::new(false));
     let (tx, rx) = crossbeam_channel::unbounded();
@@ -120,7 +120,7 @@ async fn replication_cycle<S>(
     rx: Receiver<Op>,
     kill_switch: Arc<AtomicBool>,
 ) where
-    S: SyncStorage,
+    S: Storage,
 {
     let mut live_members = BTreeMap::new();
     let mut keyspace_tracker = KeyspaceTracker::default();
@@ -190,7 +190,7 @@ async fn read_repair_members<S>(
     live_members: &BTreeMap<NodeId, SocketAddr>,
     keyspace_tracker: &mut KeyspaceTracker,
 ) where
-    S: SyncStorage,
+    S: Storage,
 {
     for (node_id, addr) in live_members {
         let res = check_node_changes(ctx, *node_id, *addr, keyspace_tracker).await;
@@ -254,7 +254,7 @@ async fn check_node_changes<S>(
     keyspace_tracker: &mut KeyspaceTracker,
 ) -> Result<NodeChangeInfo, anyhow::Error>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     info!(
         target_node_id = %target_node_id,
@@ -347,7 +347,7 @@ async fn get_keyspace_diff<S>(
     mut client: ReplicationClient<S>,
 ) -> Result<KeyspaceDiff, GetDiffError>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     let keyspace = group.get_or_create_keyspace(&keyspace_name).await;
     let (last_updated, set) =
@@ -392,7 +392,7 @@ async fn begin_keyspace_sync<S>(
     modified: Vec<DocumentMetadata>,
 ) -> Result<(), anyhow::Error>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     let channel = ctx.network.get_or_connect(target_rpc_addr);
     let keyspace = ctx.group.get_or_create_keyspace(&keyspace_name).await;
@@ -449,7 +449,7 @@ async fn handle_modified<S>(
     ctx: PutContext,
 ) -> Result<(), anyhow::Error>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     let doc_id_chunks = modified
         .chunks(MAX_NUMBER_OF_DOCS_PER_FETCH)
@@ -490,7 +490,7 @@ async fn handle_removals<S>(
     mut removed: Vec<DocumentMetadata>,
 ) -> Result<(), anyhow::Error>
 where
-    S: SyncStorage,
+    S: Storage,
 {
     if removed.is_empty() {
         return Ok(());
