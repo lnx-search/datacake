@@ -74,11 +74,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use datacake_crdt::Key;
 use datacake_node::{
-    ClusterExtension,
-    Consistency,
-    ConsistencyError,
-    DatacakeHandle,
-    DatacakeNode,
+    ClusterExtension, Consistency, ConsistencyError, DatacakeHandle, DatacakeNode,
 };
 pub use error::StoreError;
 use futures::stream::FuturesUnordered;
@@ -86,22 +82,16 @@ use futures::StreamExt;
 pub use statistics::SystemStatistics;
 #[cfg(feature = "test-utils")]
 pub use storage::test_suite;
-pub use storage::{BulkMutationError, ProgressTracker, PutContext, Storage};
+pub use storage::{
+    BulkMutationError, ProgressTracker, PutContext, Storage, SyncStorage,
+};
 
 pub use self::core::{Document, DocumentMetadata};
 use crate::keyspace::{
-    Del,
-    KeyspaceGroup,
-    MultiDel,
-    MultiSet,
-    Set,
-    CONSISTENCY_SOURCE_ID,
+    Del, KeyspaceGroup, MultiDel, MultiSet, Set, CONSISTENCY_SOURCE_ID,
 };
 use crate::replication::{
-    Mutation,
-    ReplicationCycleContext,
-    ReplicationHandle,
-    TaskDistributor,
+    Mutation, ReplicationCycleContext, ReplicationHandle, TaskDistributor,
     TaskServiceContext,
 };
 use crate::rpc::services::consistency_impl::ConsistencyService;
@@ -126,7 +116,7 @@ const DEFAULT_REPAIR_INTERVAL: Duration = if cfg!(any(test, feature = "test-util
 /// to make is distributed.
 pub struct EventuallyConsistentStoreExtension<S>
 where
-    S: Storage + Send + Sync + 'static,
+    S: SyncStorage,
 {
     datastore: S,
     repair_interval: Duration,
@@ -134,7 +124,7 @@ where
 
 impl<S> EventuallyConsistentStoreExtension<S>
 where
-    S: Storage + Send + Sync + 'static,
+    S: SyncStorage,
 {
     /// Creates a new extension with a given data store, using the default repair
     /// interval.
@@ -155,7 +145,7 @@ where
 #[async_trait]
 impl<S> ClusterExtension for EventuallyConsistentStoreExtension<S>
 where
-    S: Storage + Send + Sync + 'static,
+    S: SyncStorage,
 {
     type Output = EventuallyConsistentStore<S>;
     type Error = StoreError<S::Error>;
@@ -180,7 +170,7 @@ where
 /// to make is distributed.
 pub struct EventuallyConsistentStore<S>
 where
-    S: Storage + Send + Sync + 'static,
+    S: SyncStorage,
 {
     node: DatacakeHandle,
     group: KeyspaceGroup<S>,
@@ -191,7 +181,7 @@ where
 
 impl<S> EventuallyConsistentStore<S>
 where
-    S: Storage + Send + Sync + 'static,
+    S: SyncStorage,
 {
     async fn create(
         datastore: S,
@@ -276,7 +266,7 @@ where
 
 impl<S> Drop for EventuallyConsistentStore<S>
 where
-    S: Storage + Send + Sync + 'static,
+    S: SyncStorage,
 {
     fn drop(&mut self) {
         self.task_service.kill();
@@ -287,7 +277,7 @@ where
 /// A cheaply cloneable handle to control the data store.
 pub struct ReplicatedStoreHandle<S>
 where
-    S: Storage + Send + Sync + 'static,
+    S: SyncStorage,
 {
     node: DatacakeHandle,
     group: KeyspaceGroup<S>,
@@ -297,7 +287,7 @@ where
 
 impl<S> Clone for ReplicatedStoreHandle<S>
 where
-    S: Storage + Send + Sync + 'static,
+    S: SyncStorage,
 {
     fn clone(&self) -> Self {
         Self {
@@ -311,7 +301,7 @@ where
 
 impl<S> ReplicatedStoreHandle<S>
 where
-    S: Storage + Send + Sync + 'static,
+    S: SyncStorage,
 {
     #[inline]
     /// Gets the live cluster statistics.
@@ -601,7 +591,7 @@ where
 /// A convenience wrapper which creates a new handle with a preset keyspace.
 pub struct ReplicatorKeyspaceHandle<S>
 where
-    S: Storage + Send + Sync + 'static,
+    S: SyncStorage,
 {
     inner: ReplicatedStoreHandle<S>,
     keyspace: Cow<'static, str>,
@@ -609,7 +599,7 @@ where
 
 impl<S> Clone for ReplicatorKeyspaceHandle<S>
 where
-    S: Storage + Send + Sync + 'static,
+    S: SyncStorage,
 {
     fn clone(&self) -> Self {
         Self {
@@ -621,7 +611,7 @@ where
 
 impl<S> ReplicatorKeyspaceHandle<S>
 where
-    S: Storage + Send + Sync + 'static,
+    S: SyncStorage,
 {
     /// Retrieves a document from the underlying storage.
     pub async fn get(&self, doc_id: Key) -> Result<Option<Document>, S::Error> {

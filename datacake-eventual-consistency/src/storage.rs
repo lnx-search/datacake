@@ -342,6 +342,8 @@ pub trait Storage {
     ) -> Result<Self::DocsIter, Self::Error>;
 }
 
+pub trait SyncStorage: Storage + Send + Sync + 'static {}
+
 #[cfg(any(test, feature = "test-utils"))]
 pub mod test_suite {
     use std::any::type_name;
@@ -351,7 +353,7 @@ pub mod test_suite {
     use datacake_crdt::{HLCTimestamp, Key};
 
     use crate::core::Document;
-    use crate::storage::Storage;
+    use crate::storage::{Storage, SyncStorage};
     use crate::test_utils::InstrumentedStorage;
     use crate::DocumentMetadata;
 
@@ -362,7 +364,7 @@ pub mod test_suite {
         run_test_suite(MemStore::default()).await
     }
 
-    pub async fn run_test_suite<S: Storage + Send + Sync + 'static>(storage: S) {
+    pub async fn run_test_suite<S: SyncStorage>(storage: S) {
         let mut clock = HLCTimestamp::now(0, 0);
         info!("Starting test suite for storage: {}", type_name::<S>());
 

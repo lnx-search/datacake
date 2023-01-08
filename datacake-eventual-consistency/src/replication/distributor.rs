@@ -13,12 +13,9 @@ use tokio::time::{interval, MissedTickBehavior};
 use crate::core::DocumentMetadata;
 use crate::replication::MAX_CONCURRENT_REQUESTS;
 use crate::rpc::services::consistency_impl::{
-    BatchPayload,
-    Context,
-    MultiPutPayload,
-    MultiRemovePayload,
+    BatchPayload, Context, MultiPutPayload, MultiRemovePayload,
 };
-use crate::{ConsistencyClient, Document, Storage};
+use crate::{ConsistencyClient, Document, SyncStorage};
 
 const BATCHING_INTERVAL: Duration = Duration::from_secs(1);
 
@@ -95,7 +92,7 @@ pub(crate) async fn start_task_distributor_service<S>(
     ctx: TaskServiceContext,
 ) -> TaskDistributor
 where
-    S: Storage + Send + Sync + 'static,
+    S: SyncStorage,
 {
     let kill_switch = Arc::new(AtomicBool::new(false));
     let (tx, rx) = unbounded();
@@ -110,7 +107,7 @@ async fn task_distributor_service<S>(
     rx: Receiver<Op>,
     kill_switch: Arc<AtomicBool>,
 ) where
-    S: Storage + Send + Sync + 'static,
+    S: SyncStorage,
 {
     info!("Task distributor service is running.");
 
@@ -203,7 +200,7 @@ async fn execute_batch<S>(
     batch: BatchPayload,
 ) -> anyhow::Result<()>
 where
-    S: Storage + Send + Sync + 'static,
+    S: SyncStorage,
 {
     let batch = Arc::new(batch);
     let limiter = Arc::new(Semaphore::new(MAX_CONCURRENT_REQUESTS));

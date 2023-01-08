@@ -8,26 +8,18 @@ use rkyv::AlignedVec;
 
 use crate::core::{Document, DocumentMetadata};
 use crate::rpc::services::consistency_impl::{
-    BatchPayload,
-    ConsistencyService,
-    Context,
-    MultiPutPayload,
-    MultiRemovePayload,
-    PutPayload,
-    RemovePayload,
+    BatchPayload, ConsistencyService, Context, MultiPutPayload, MultiRemovePayload,
+    PutPayload, RemovePayload,
 };
 use crate::rpc::services::replication_impl::{
-    FetchDocs,
-    GetState,
-    PollKeyspace,
-    ReplicationService,
+    FetchDocs, GetState, PollKeyspace, ReplicationService,
 };
-use crate::Storage;
+use crate::SyncStorage;
 
 /// A high level wrapper around the consistency GRPC service.
 pub struct ConsistencyClient<S>
 where
-    S: Storage + Send + Sync + 'static,
+    S: SyncStorage,
 {
     clock: Clock,
     inner: RpcClient<ConsistencyService<S>>,
@@ -35,7 +27,7 @@ where
 
 impl<S> ConsistencyClient<S>
 where
-    S: Storage + Send + Sync + 'static,
+    S: SyncStorage,
 {
     pub fn new(clock: Clock, channel: Channel) -> Self {
         Self {
@@ -47,7 +39,7 @@ where
 
 impl<S> ConsistencyClient<S>
 where
-    S: Storage + Send + Sync + 'static,
+    S: SyncStorage,
 {
     /// Adds a document to the remote node's state.
     pub async fn put(
@@ -155,7 +147,7 @@ where
 /// A high level wrapper around the replication GRPC service.
 pub struct ReplicationClient<S>
 where
-    S: Storage + Send + Sync + 'static,
+    S: SyncStorage,
 {
     clock: Clock,
     inner: RpcClient<ReplicationService<S>>,
@@ -163,7 +155,7 @@ where
 
 impl<S> ReplicationClient<S>
 where
-    S: Storage + Send + Sync + 'static,
+    S: SyncStorage,
 {
     pub fn new(clock: Clock, channel: Channel) -> Self {
         Self {
@@ -175,7 +167,7 @@ where
 
 impl<S> ReplicationClient<S>
 where
-    S: Storage + Send + Sync + 'static,
+    S: SyncStorage,
 {
     /// Fetches the newest version of the node's keyspace timestamps.
     pub async fn poll_keyspace(
