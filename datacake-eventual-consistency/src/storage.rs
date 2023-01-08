@@ -195,7 +195,7 @@ where
 /// The generic storage trait which encapsulates all the required persistence logic.
 ///
 /// A test suite is available for ensuring correct behavour of stores.
-pub trait Storage {
+pub trait Storage: Send + Sync + 'static {
     type Error: Error + Send + Sync + 'static;
     type DocsIter: Iterator<Item = Document>;
     type MetadataIter: Iterator<Item = (Key, HLCTimestamp, bool)>;
@@ -362,7 +362,7 @@ pub mod test_suite {
         run_test_suite(MemStore::default()).await
     }
 
-    pub async fn run_test_suite<S: Storage + Send + Sync + 'static>(storage: S) {
+    pub async fn run_test_suite<S: Storage>(storage: S) {
         let mut clock = HLCTimestamp::now(0, 0);
         info!("Starting test suite for storage: {}", type_name::<S>());
 

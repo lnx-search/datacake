@@ -23,7 +23,7 @@ impl<S: Storage + Clone> Clone for InstrumentedStorage<S> {
 }
 
 #[async_trait::async_trait]
-impl<S: Storage + Send + Sync + 'static> Storage for InstrumentedStorage<S> {
+impl<S: Storage> Storage for InstrumentedStorage<S> {
     type Error = S::Error;
     type DocsIter = S::DocsIter;
     type MetadataIter = S::MetadataIter;
