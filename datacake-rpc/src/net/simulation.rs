@@ -1,9 +1,13 @@
+use std::io;
+use std::io::ErrorKind;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use hyper::client::conn::SendRequest;
 use hyper::Body;
 use tokio::sync::{Mutex, OnceCell};
+use tokio::time::timeout;
 
 use crate::net::Error;
 
@@ -32,7 +36,9 @@ impl LazyClient {
             return Ok(existing);
         }
 
-        let io = turmoil::net::TcpStream::connect(self.addr).await?;
+        let io = timeout(Duration::from_secs(2), turmoil::net::TcpStream::connect(self.addr))
+            .await
+            .map_err(|_| Error::Io(io::Error::new(ErrorKind::TimedOut, "Failed to connect within deadline")))??;
 
         let (sender, connection) = hyper::client::conn::Builder::new()
             .http2_keep_alive_while_idle(true)
