@@ -1,11 +1,22 @@
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
-use turmoil::{Builder, lookup};
+
 use bytecheck::CheckBytes;
-use datacake::rpc::{Channel, ErrorCode, Handler, Request, RpcClient, RpcService, Server, ServiceRegistry, Status};
+use datacake::rpc::{
+    Channel,
+    ErrorCode,
+    Handler,
+    Request,
+    RpcClient,
+    RpcService,
+    Server,
+    ServiceRegistry,
+    Status,
+};
 use rkyv::{Archive, Deserialize, Serialize};
+use turmoil::{lookup, Builder};
 
 const PORT: u16 = 9999;
 
@@ -17,7 +28,9 @@ fn network_partition_connect() -> turmoil::Result {
         let message_count = Arc::new(AtomicUsize::new(0));
 
         let server = Server::listen(get_listen_addr()).await?;
-        server.add_service(MyService { message_count: message_count.clone() });
+        server.add_service(MyService {
+            message_count: message_count.clone(),
+        });
 
         tokio::time::sleep(Duration::from_secs(3)).await;
 
@@ -35,21 +48,24 @@ fn network_partition_connect() -> turmoil::Result {
 
         let msg = MyMessage {
             name: "Bob".to_string(),
-            age: 120
+            age: 120,
         };
 
         let result = client.send(&msg).await;
         assert!(result.is_err(), "Client should fail to connect to server.");
 
         let err = result.unwrap_err();
-        assert_eq!(err.code, ErrorCode::ConnectionError, "Returned error should be a connection error.");
+        assert_eq!(
+            err.code,
+            ErrorCode::ConnectionError,
+            "Returned error should be a connection error."
+        );
 
         Ok(())
     });
 
     sim.run()
 }
-
 
 #[test]
 fn network_timeout_connect() -> turmoil::Result {
@@ -59,7 +75,9 @@ fn network_timeout_connect() -> turmoil::Result {
         let message_count = Arc::new(AtomicUsize::new(0));
 
         let server = Server::listen(get_listen_addr()).await?;
-        server.add_service(MyService { message_count: message_count.clone() });
+        server.add_service(MyService {
+            message_count: message_count.clone(),
+        });
 
         tokio::time::sleep(Duration::from_secs(3)).await;
 
@@ -79,21 +97,24 @@ fn network_timeout_connect() -> turmoil::Result {
 
         let msg = MyMessage {
             name: "Bob".to_string(),
-            age: 120
+            age: 120,
         };
 
         let result = client.send(&msg).await;
         assert!(result.is_err(), "Client should fail to connect to server.");
 
         let err = result.unwrap_err();
-        assert_eq!(err.code, ErrorCode::ConnectionError, "Returned error should be a connection error.");
+        assert_eq!(
+            err.code,
+            ErrorCode::ConnectionError,
+            "Returned error should be a connection error."
+        );
 
         Ok(())
     });
 
     sim.run()
 }
-
 
 #[test]
 fn network_partition_after_init() -> turmoil::Result {
@@ -103,7 +124,9 @@ fn network_partition_after_init() -> turmoil::Result {
         let message_count = Arc::new(AtomicUsize::new(0));
 
         let server = Server::listen(get_listen_addr()).await?;
-        server.add_service(MyService { message_count: message_count.clone() });
+        server.add_service(MyService {
+            message_count: message_count.clone(),
+        });
 
         tokio::time::sleep(Duration::from_secs(3)).await;
 
@@ -120,7 +143,7 @@ fn network_partition_after_init() -> turmoil::Result {
 
         let msg = MyMessage {
             name: "Bob".to_string(),
-            age: 120
+            age: 120,
         };
 
         let result = client.send(&msg).await;
@@ -134,14 +157,17 @@ fn network_partition_after_init() -> turmoil::Result {
         assert!(result.is_err(), "Client should fail to connect to server.");
 
         let err = result.unwrap_err();
-        assert_eq!(err.code, ErrorCode::Timeout, "Returned error should be a timeout error.");
+        assert_eq!(
+            err.code,
+            ErrorCode::Timeout,
+            "Returned error should be a timeout error."
+        );
 
         Ok(())
     });
 
     sim.run()
 }
-
 
 fn get_listen_addr() -> SocketAddr {
     (IpAddr::from(Ipv4Addr::UNSPECIFIED), PORT).into()

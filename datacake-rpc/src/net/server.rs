@@ -7,9 +7,9 @@ use http::{Request, Response, StatusCode};
 use hyper::body::HttpBody;
 #[cfg(not(feature = "simulation"))]
 use hyper::server::conn::AddrStream;
+use hyper::server::conn::Http;
 use hyper::service::service_fn;
 use hyper::Body;
-use hyper::server::conn::Http;
 use rkyv::AlignedVec;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
@@ -38,13 +38,16 @@ pub(crate) async fn start_rpc_server(
                 Ok(accepted) => accepted,
                 Err(e) => {
                     warn!(error = ?e, "Failed to accept client.");
-                    continue
-                }
+                    continue;
+                },
             };
 
             let state = state.clone();
-            tokio::task::spawn(async move {let state = state.clone();
-                let handler = service_fn(move |req| handle_connection(req, state.clone(), remote_addr));
+            tokio::task::spawn(async move {
+                let state = state.clone();
+                let handler = service_fn(move |req| {
+                    handle_connection(req, state.clone(), remote_addr)
+                });
 
                 let connection = Http::new()
                     .http2_only(true)

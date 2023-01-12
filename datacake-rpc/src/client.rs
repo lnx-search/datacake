@@ -151,7 +151,9 @@ where
         let msg_bytes =
             rkyv::to_bytes::<_, SCRATCH_SPACE>(msg).map_err(|_| Status::invalid())?;
 
-        let future = self.channel.send_msg(metadata, Bytes::from(msg_bytes.into_vec()));
+        let future = self
+            .channel
+            .send_msg(metadata, Bytes::from(msg_bytes.into_vec()));
         let result = match self.timeout {
             Some(duration) => tokio::time::timeout(duration, future)
                 .await
