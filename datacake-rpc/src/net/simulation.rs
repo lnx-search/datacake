@@ -11,6 +11,7 @@ use tokio::time::timeout;
 
 use crate::net::Error;
 
+#[derive(Clone)]
 /// A client used for simulation testing via turmoil.
 ///
 /// This is not a production grade client and is only really meant for testing not
