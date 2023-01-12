@@ -1,15 +1,13 @@
 use std::net::SocketAddr;
 
-use rkyv::AlignedVec;
 use http::{Method, Request};
 use hyper::body::{Bytes, HttpBody};
 use hyper::{Body, StatusCode};
-
-use crate::net::Error;
+use rkyv::AlignedVec;
 
 #[cfg(feature = "simulation")]
 use super::simulation::LazyClient;
-
+use crate::net::Error;
 use crate::request::MessageMetadata;
 
 #[derive(Clone)]
@@ -78,13 +76,8 @@ impl Channel {
         let resp = self.connection.request(request).await?;
         #[cfg(feature = "simulation")]
         let resp = {
-            let conn = self.connection
-                .get_or_init()
-                .await?;
-            conn.lock()
-                .await
-                .send_request(request)
-                .await?
+            let conn = self.connection.get_or_init().await?;
+            conn.lock().await.send_request(request).await?
         };
 
         let (req, mut body) = resp.into_parts();

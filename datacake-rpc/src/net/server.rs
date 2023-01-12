@@ -3,18 +3,17 @@ use std::net::SocketAddr;
 
 use http::{Request, Response, StatusCode};
 use hyper::body::HttpBody;
+#[cfg(not(feature = "simulation"))]
+use hyper::server::conn::AddrStream;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Body;
 use rkyv::AlignedVec;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
-#[cfg(not(feature = "simulation"))]
-use hyper::server::conn::AddrStream;
-
+use crate::net::Error;
 use crate::server::ServerState;
 use crate::{Status, SCRATCH_SPACE};
-use crate::net::Error;
 
 /// Starts the RPC server.
 ///
@@ -25,7 +24,8 @@ pub(crate) async fn start_rpc_server(
 ) -> Result<(oneshot::Sender<()>, JoinHandle<()>), Error> {
     #[cfg(feature = "simulation")]
     let make_service = make_service_fn(move |socket: &turmoil::net::TcpStream| {
-        let remote_addr = socket.peer_addr()
+        let remote_addr = socket
+            .peer_addr()
             .expect("Socket should be able to obtain remote addr.");
         let state = state.clone();
 

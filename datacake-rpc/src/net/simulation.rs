@@ -1,7 +1,8 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
-use hyper::Body;
+
 use hyper::client::conn::SendRequest;
+use hyper::Body;
 use tokio::sync::{Mutex, OnceCell};
 
 use crate::net::Error;
@@ -31,8 +32,7 @@ impl LazyClient {
             return Ok(existing);
         }
 
-        let io = turmoil::net::TcpStream::connect(self.addr)
-            .await?;
+        let io = turmoil::net::TcpStream::connect(self.addr).await?;
 
         let (sender, connection) = hyper::client::conn::Builder::new()
             .http2_keep_alive_while_idle(true)

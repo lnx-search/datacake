@@ -112,11 +112,10 @@ use std::hash::{Hash, Hasher};
 pub use async_trait::async_trait;
 pub use client::{MessageReply, RpcClient};
 pub use handler::{Handler, RpcService, ServiceRegistry};
-pub use net::{ArchivedErrorCode, ArchivedStatus, Channel, ErrorCode, Status};
+pub use net::{ArchivedErrorCode, ArchivedStatus, Channel, Error, ErrorCode, Status};
 pub use request::Request;
 pub use server::Server;
 pub use view::{DataView, InvalidView};
-pub use net::Error;
 
 pub(crate) fn hash<H: Hash + ?Sized>(v: &H) -> u64 {
     let mut hasher = DefaultHasher::new();

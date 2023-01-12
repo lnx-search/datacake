@@ -6,10 +6,10 @@ mod status;
 mod simulation;
 
 use std::io;
+
 pub use client::Channel;
 pub(crate) use server::start_rpc_server;
 pub use status::{ArchivedErrorCode, ArchivedStatus, ErrorCode, Status};
-
 
 #[derive(Debug, thiserror::Error)]
 /// A failure in an RPC operation.
@@ -21,4 +21,3 @@ pub enum Error {
     /// The operation failed due an error originating in hyper.
     Hyper(#[from] hyper::Error),
 }
-
