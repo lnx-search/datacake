@@ -3,12 +3,14 @@ use std::net::SocketAddr;
 
 use http::{Request, Response, StatusCode};
 use hyper::body::HttpBody;
-use hyper::server::conn::AddrStream;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Body;
 use rkyv::AlignedVec;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
+
+#[cfg(not(feature = "simulation"))]
+use hyper::server::conn::AddrStream;
 
 use crate::server::ServerState;
 use crate::{Status, SCRATCH_SPACE};
@@ -21,6 +23,19 @@ pub(crate) async fn start_rpc_server(
     bind_addr: SocketAddr,
     state: ServerState,
 ) -> Result<(oneshot::Sender<()>, JoinHandle<()>), Error> {
+    #[cfg(feature = "simulation")]
+    let make_service = make_service_fn(move |socket: &turmoil::net::TcpStream| {
+        let remote_addr = socket.peer_addr()
+            .expect("Socket should be able to obtain remote addr.");
+        let state = state.clone();
+
+        async move {
+            let service = move |req| handle_connection(req, state.clone(), remote_addr);
+            Ok::<_, Infallible>(service_fn(service))
+        }
+    });
+
+    #[cfg(not(feature = "simulation"))]
     let make_service = make_service_fn(move |socket: &AddrStream| {
         let remote_addr = socket.remote_addr();
         let state = state.clone();
@@ -32,7 +47,7 @@ pub(crate) async fn start_rpc_server(
     });
 
     // We used a custom listener for turmoil testing.
-    #[cfg(feature = "turmoil")]
+    #[cfg(feature = "simulation")]
     let accept = {
         let listener = turmoil::net::TcpListener::bind(bind_addr).await?;
         hyper::server::accept::from_stream(async_stream::stream! {
@@ -43,7 +58,7 @@ pub(crate) async fn start_rpc_server(
     let (ready, waiter) = oneshot::channel();
     let (shutdown, shutdown_waiter) = oneshot::channel();
     let handle = tokio::spawn(async move {
-        #[cfg(feature = "turmoil")]
+        #[cfg(feature = "simulation")]
         let server = hyper::Server::builder(accept)
             .http2_only(true)
             .http2_adaptive_window(true)
@@ -53,7 +68,7 @@ pub(crate) async fn start_rpc_server(
                 let _ = shutdown_waiter.await;
             });
 
-        #[cfg(not(feature = "turmoil"))]
+        #[cfg(not(feature = "simulation"))]
         let server = hyper::Server::bind(&bind_addr)
             .tcp_nodelay(false)
             .http2_only(true)

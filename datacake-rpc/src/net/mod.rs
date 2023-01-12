@@ -2,7 +2,7 @@ mod client;
 mod server;
 mod status;
 
-#[cfg(feature = "turmoil")]
+#[cfg(feature = "simulation")]
 mod simulation;
 
 use std::io;

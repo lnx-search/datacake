@@ -7,7 +7,7 @@ use hyper::{Body, StatusCode};
 
 use crate::net::Error;
 
-#[cfg(feature = "turmoil")]
+#[cfg(feature = "simulation")]
 use super::simulation::LazyClient;
 
 use crate::request::MessageMetadata;
@@ -15,17 +15,17 @@ use crate::request::MessageMetadata;
 #[derive(Clone)]
 /// A raw client connection which can produce multiplexed streams.
 pub struct Channel {
-    #[cfg(not(feature = "turmoil"))]
+    #[cfg(not(feature = "simulation"))]
     connection: hyper::Client<hyper::client::HttpConnector, Body>,
 
-    #[cfg(feature = "turmoil")]
+    #[cfg(feature = "simulation")]
     connection: LazyClient,
 
     remote_addr: SocketAddr,
 }
 
 impl Channel {
-    #[cfg(not(feature = "turmoil"))]
+    #[cfg(not(feature = "simulation"))]
     /// Connects to a remote RPC server.
     pub fn connect(remote_addr: SocketAddr) -> Self {
         let mut http = hyper::client::HttpConnector::new();
@@ -45,7 +45,7 @@ impl Channel {
         }
     }
 
-    #[cfg(feature = "turmoil")]
+    #[cfg(feature = "simulation")]
     /// Connects to a remote RPC server with turmoil simulation enabled.
     pub fn connect(remote_addr: SocketAddr) -> Self {
         let client = LazyClient::connect(remote_addr);
@@ -74,9 +74,9 @@ impl Channel {
             .body(Body::from(msg))
             .unwrap();
 
-        #[cfg(not(feature = "turmoil"))]
+        #[cfg(not(feature = "simulation"))]
         let resp = self.connection.request(request).await?;
-        #[cfg(feature = "turmoil")]
+        #[cfg(feature = "simulation")]
         let resp = {
             let conn = self.connection
                 .get_or_init()
