@@ -1,5 +1,4 @@
 use std::convert::Infallible;
-use std::io;
 use std::net::SocketAddr;
 
 use http::{Request, Response, StatusCode};
@@ -13,6 +12,7 @@ use tokio::task::JoinHandle;
 
 use crate::server::ServerState;
 use crate::{Status, SCRATCH_SPACE};
+use crate::net::Error;
 
 /// Starts the RPC server.
 ///
@@ -20,7 +20,7 @@ use crate::{Status, SCRATCH_SPACE};
 pub(crate) async fn start_rpc_server(
     bind_addr: SocketAddr,
     state: ServerState,
-) -> io::Result<(oneshot::Sender<()>, JoinHandle<()>)> {
+) -> Result<(oneshot::Sender<()>, JoinHandle<()>), Error> {
     let make_service = make_service_fn(move |socket: &AddrStream| {
         let remote_addr = socket.remote_addr();
         let state = state.clone();
@@ -31,9 +31,29 @@ pub(crate) async fn start_rpc_server(
         }
     });
 
+    // We used a custom listener for turmoil testing.
+    #[cfg(feature = "turmoil")]
+    let accept = {
+        let listener = turmoil::net::TcpListener::bind(bind_addr).await?;
+        hyper::server::accept::from_stream(async_stream::stream! {
+            yield listener.accept().await.map(|(s, _)| s);
+        })
+    };
+
     let (ready, waiter) = oneshot::channel();
     let (shutdown, shutdown_waiter) = oneshot::channel();
     let handle = tokio::spawn(async move {
+        #[cfg(feature = "turmoil")]
+        let server = hyper::Server::builder(accept)
+            .http2_only(true)
+            .http2_adaptive_window(true)
+            .serve(make_service)
+            .with_graceful_shutdown(async {
+                let _ = ready.send(());
+                let _ = shutdown_waiter.await;
+            });
+
+        #[cfg(not(feature = "turmoil"))]
         let server = hyper::Server::bind(&bind_addr)
             .tcp_nodelay(false)
             .http2_only(true)
