@@ -55,4 +55,4 @@ jobs:
         run: cargo test --doc --features test-utils --workspace
 
       - name: Run simulation tests
-        run: cargo nextest run --features test-utils --features simulation -p simulation-tests --retries 3
+        run: cargo nextest run -p simulation-tests --retries 3
