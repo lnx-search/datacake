@@ -25,6 +25,7 @@ anyhow = "1"
 [features]
 test-utils = ["datacake-eventual-consistency/test-utils"]
 rkyv = ["datacake-crdt/rkyv-support"]
+simulation = ["datacake-rpc/simulation"]
 default = [
     "datacake-crdt",
     "datacake-rpc",
@@ -44,6 +45,7 @@ members = [
     # Utils
     "test-helper",
     "benchmarks",
+    "simulation-tests",
 
     # Example set
     "examples/replicated-kv",
