@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::marker::PhantomData;
+use std::time::Duration;
 
 use bytecheck::CheckBytes;
 use bytes::Bytes;
@@ -75,6 +76,7 @@ where
     Svc: RpcService,
 {
     channel: Channel,
+    timeout: Option<Duration>,
     _p: PhantomData<Svc>,
 }
 
@@ -85,6 +87,7 @@ where
     fn clone(&self) -> Self {
         Self {
             channel: self.channel.clone(),
+            timeout: self.timeout.clone(),
             _p: PhantomData,
         }
     }
@@ -100,8 +103,16 @@ where
     pub fn new(channel: Channel) -> Self {
         Self {
             channel,
+            timeout: None,
             _p: PhantomData,
         }
+    }
+
+    /// Sets a timeout of a given amount of time.
+    ///
+    /// If any requests exceed this amount of time `Status::timeout` is returned.
+    pub fn set_timeout(&mut self, timeout: Duration) {
+        self.timeout = Some(timeout);
     }
 
     /// Creates a new RPC client which can handle a new service type.
@@ -114,6 +125,7 @@ where
     {
         RpcClient {
             channel: self.channel.clone(),
+            timeout: None,
             _p: PhantomData,
         }
     }
@@ -139,11 +151,16 @@ where
         let msg_bytes =
             rkyv::to_bytes::<_, SCRATCH_SPACE>(msg).map_err(|_| Status::invalid())?;
 
-        let result = self
+        let future = self
             .channel
-            .send_msg(metadata, Bytes::from(msg_bytes.into_vec()))
-            .await
-            .map_err(Status::connection)?;
+            .send_msg(metadata, Bytes::from(msg_bytes.into_vec()));
+        let result = match self.timeout {
+            Some(duration) => tokio::time::timeout(duration, future)
+                .await
+                .map_err(|_| Status::timeout())?
+                .map_err(Status::connection)?,
+            None => future.await.map_err(Status::connection)?,
+        };
 
         match result {
             Ok(buffer) => {

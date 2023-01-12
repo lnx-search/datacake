@@ -1,11 +1,12 @@
 use std::convert::Infallible;
 use std::io;
 use std::net::SocketAddr;
+use std::time::Duration;
 
 use http::{Request, Response, StatusCode};
 use hyper::body::HttpBody;
-use hyper::server::conn::AddrStream;
-use hyper::service::{make_service_fn, service_fn};
+use hyper::server::conn::Http;
+use hyper::service::service_fn;
 use hyper::Body;
 use rkyv::AlignedVec;
 use tokio::sync::oneshot;
@@ -20,38 +21,48 @@ use crate::{Status, SCRATCH_SPACE};
 pub(crate) async fn start_rpc_server(
     bind_addr: SocketAddr,
     state: ServerState,
-) -> io::Result<(oneshot::Sender<()>, JoinHandle<()>)> {
-    let make_service = make_service_fn(move |socket: &AddrStream| {
-        let remote_addr = socket.remote_addr();
-        let state = state.clone();
-
-        async move {
-            let service = move |req| handle_connection(req, state.clone(), remote_addr);
-            Ok::<_, Infallible>(service_fn(service))
-        }
-    });
+) -> io::Result<JoinHandle<()>> {
+    #[cfg(not(feature = "simulation"))]
+    let listener = tokio::net::TcpListener::bind(bind_addr).await?;
+    #[cfg(feature = "simulation")]
+    let listener = turmoil::net::TcpListener::bind(bind_addr).await?;
 
     let (ready, waiter) = oneshot::channel();
-    let (shutdown, shutdown_waiter) = oneshot::channel();
     let handle = tokio::spawn(async move {
-        let server = hyper::Server::bind(&bind_addr)
-            .tcp_nodelay(false)
-            .http2_only(true)
-            .http2_adaptive_window(true)
-            .serve(make_service)
-            .with_graceful_shutdown(async {
-                let _ = ready.send(());
-                let _ = shutdown_waiter.await;
-            });
+        let _ = ready.send(());
 
-        if let Err(e) = server.await {
-            error!(error = ?e, "Server failed to handle requests.");
+        loop {
+            let (io, remote_addr) = match listener.accept().await {
+                Ok(accepted) => accepted,
+                Err(e) => {
+                    warn!(error = ?e, "Failed to accept client.");
+                    continue;
+                },
+            };
+
+            let state = state.clone();
+            tokio::task::spawn(async move {
+                let state = state.clone();
+                let handler = service_fn(move |req| {
+                    handle_connection(req, state.clone(), remote_addr)
+                });
+
+                let connection = Http::new()
+                    .http2_only(true)
+                    .http2_adaptive_window(true)
+                    .http2_keep_alive_timeout(Duration::from_secs(10))
+                    .serve_connection(io, handler);
+
+                if let Err(e) = connection.await {
+                    error!(error = ?e, "Error while serving HTTP connection.");
+                }
+            });
         }
     });
 
     let _ = waiter.await;
 
-    Ok((shutdown, handle))
+    Ok(handle)
 }
 
 /// A single connection handler.

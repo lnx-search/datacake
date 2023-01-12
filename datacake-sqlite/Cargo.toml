@@ -22,7 +22,7 @@ thiserror = "1"
 tokio = { version = "1", default-features = false, features = ["rt"] }
 
 datacake-crdt = { version = "0.4", path = "../datacake-crdt" }
-datacake-eventual-consistency = { version = "0.2", path = "../datacake-eventual-consistency" }
+datacake-eventual-consistency = { version = "0.3", path = "../datacake-eventual-consistency" }
 
 [features]
 bundled = ["rusqlite/bundled"]
@@ -34,5 +34,5 @@ tracing-subscriber = "0.3.16"
 
 test-helper = { path = "../test-helper" }
 uuid = { version = "1", features = ["v4"] }
-datacake-node = { version = "0.1", path = "../datacake-node" }
-datacake-eventual-consistency = { version = "0.2", path = "../datacake-eventual-consistency", features = ["test-utils"] }
+datacake-node = { version = "0.2", path = "../datacake-node" }
+datacake-eventual-consistency = { version = "0.3", path = "../datacake-eventual-consistency", features = ["test-utils"] }

@@ -15,6 +15,10 @@ pub enum NodeError {
     /// An IO error has occurred,
     IO(#[from] io::Error),
 
+    #[error("{0}")]
+    /// An RPC error has occurred,
+    Rpc(#[from] datacake_rpc::Error),
+
     #[error("Failed to complete operation due to consistency level failure: {0}")]
     /// The operation succeeded on the local node but failed to meet the required
     /// consistency level within the timeout period. (2 seconds)
