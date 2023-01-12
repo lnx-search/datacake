@@ -11,7 +11,6 @@ use tokio::time::timeout;
 
 use crate::net::Error;
 
-#[derive(Clone)]
 /// A client used for simulation testing via turmoil.
 ///
 /// This is not a production grade client and is only really meant for testing not
@@ -57,7 +56,7 @@ impl LazyClient {
 
         tokio::spawn(async move {
             if let Err(e) = connection.await {
-                eprintln!("Error in connection: {}", e);
+                error!(error = ?e, "Error in client connection");
             }
         });
 
