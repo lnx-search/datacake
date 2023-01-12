@@ -5,8 +5,6 @@ use std::time::Duration;
 
 use http::{Request, Response, StatusCode};
 use hyper::body::HttpBody;
-#[cfg(not(feature = "simulation"))]
-use hyper::server::conn::AddrStream;
 use hyper::server::conn::Http;
 use hyper::service::service_fn;
 use hyper::Body;
