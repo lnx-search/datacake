@@ -54,12 +54,11 @@ impl Status {
         }
     }
 
-    /// The RPC channel was closed before the message could be completed.
-    pub fn closed() -> Self {
+    /// The operation took too long to be completed and was aborted.
+    pub fn timeout() -> Self {
         Self {
-            code: ErrorCode::ConnectionError,
-            message: "The connection was closed before the message could be received."
-                .to_string(),
+            code: ErrorCode::Timeout,
+            message: "The operation took to long to be completed.".to_string(),
         }
     }
 }
@@ -97,8 +96,8 @@ pub enum ErrorCode {
     InvalidPayload,
     /// The connection is closed or interrupted during the operation.
     ConnectionError,
-    /// The RPC channel was closed before the message could be completed.
-    ChannelClosed,
+    /// The operation took too long to be completed and was aborted.
+    Timeout,
 }
 
 #[cfg(test)]
@@ -124,7 +123,6 @@ mod tests {
     #[test]
     fn test_variants() {
         test_status_variant(Status::invalid());
-        test_status_variant(Status::closed());
         test_status_variant(Status::connection("Test connection failed."));
         test_status_variant(Status::unavailable("Test unavailable."));
         test_status_variant(Status::internal("Test internal error."));

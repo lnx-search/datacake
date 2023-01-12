@@ -115,7 +115,8 @@ fn network_partition_after_init() -> turmoil::Result {
 
     sim.client("client", async {
         let channel = Channel::connect(addr("server"));
-        let client = RpcClient::<MyService>::new(channel);
+        let mut client = RpcClient::<MyService>::new(channel);
+        client.set_timeout(Duration::from_secs(2));
 
         let msg = MyMessage {
             name: "Bob".to_string(),
@@ -133,7 +134,7 @@ fn network_partition_after_init() -> turmoil::Result {
         assert!(result.is_err(), "Client should fail to connect to server.");
 
         let err = result.unwrap_err();
-        assert_eq!(err.code, ErrorCode::ConnectionError, "Returned error should be a connection error.");
+        assert_eq!(err.code, ErrorCode::Timeout, "Returned error should be a timeout error.");
 
         Ok(())
     });
@@ -185,6 +186,7 @@ impl Handler<MyMessage> for MyService {
     // Our `Request` gives us a zero-copy view to our message, this doesn't actually
     // allocate the message type.
     async fn on_message(&self, msg: Request<MyMessage>) -> Result<Self::Reply, Status> {
+        println!("On-message");
         self.message_count.fetch_add(1, Ordering::Relaxed);
         Ok(msg.to_owned().unwrap().name)
     }
