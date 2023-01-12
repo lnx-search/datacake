@@ -1,6 +1,6 @@
 [package]
 name = "datacake-node"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "The core cluster membership system built ontop of Quickwit's chitchat."
 license = "MIT"
@@ -24,7 +24,7 @@ futures = "0.3"
 crc32fast = "1.3.2"
 bytecheck = "0.6.9"
 
-datacake-rpc = { version = "0.3", path = "../datacake-rpc" }
+datacake-rpc = { version = "0.4", path = "../datacake-rpc" }
 datacake-crdt = { version = "0.4", path = "../datacake-crdt", features = ["rkyv-support"] }
 chitchat = { version = "0.5.1", package  = "datacake-chitchat-fork" }
 tokio = { version = "1", default-features = false, features = ["sync", "time"] }
@@ -34,5 +34,5 @@ rkyv = { version = "0.7.39", features = ["validation"] }
 tracing-subscriber = "0.3.16"
 tokio = { version = "1", features = ["full"] }
 test-helper = { path = "../test-helper" }
-datacake-rpc = { version = "0.3", path = "../datacake-rpc", features = ["test-utils"] }
+datacake-rpc = { version = "0.4", path = "../datacake-rpc", features = ["test-utils"] }
 
