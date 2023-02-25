@@ -101,8 +101,8 @@ mod handler;
 mod net;
 mod request;
 mod server;
-mod view;
 mod utils;
+mod view;
 
 pub(crate) const SCRATCH_SPACE: usize = 4096;
 

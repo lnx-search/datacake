@@ -7,7 +7,8 @@ use crate::net::{Channel, Status};
 use crate::request::{MessageMetadata, RequestContents};
 
 /// A type alias for the returned data view of the RPC message reply.
-pub type MessageReply<Svc, Msg> = <<Svc as Handler<Msg>>::Reply as RequestContents>::Content;
+pub type MessageReply<Svc, Msg> =
+    <<Svc as Handler<Msg>>::Reply as RequestContents>::Content;
 
 /// A RPC client handle for a given service.
 ///
@@ -139,9 +140,7 @@ where
 
         let msg_bytes = msg.try_into_body()?;
 
-        let future = self
-            .channel
-            .send_msg(metadata, msg_bytes);
+        let future = self.channel.send_msg(metadata, msg_bytes);
 
         let result = match self.timeout {
             Some(duration) => tokio::time::timeout(duration, future)

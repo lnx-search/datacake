@@ -81,7 +81,6 @@ impl Channel {
 
         let (req, body) = resp.into_parts();
 
-
         if req.status == StatusCode::OK {
             Ok(Ok(Body::new(body)))
         } else {

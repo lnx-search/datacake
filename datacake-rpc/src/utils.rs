@@ -1,9 +1,11 @@
 use bytes::Buf;
-use hyper::Body;
 use hyper::body::HttpBody;
+use hyper::Body;
 use rkyv::AlignedVec;
 
-pub async fn to_aligned(mut body: Body) -> Result<AlignedVec, <Body as HttpBody>::Error> {
+pub async fn to_aligned(
+    mut body: Body,
+) -> Result<AlignedVec, <Body as HttpBody>::Error> {
     // If there's only 1 chunk, we can just return Buf::to_bytes()
     let first = if let Some(buf) = body.data().await {
         buf?

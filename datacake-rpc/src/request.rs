@@ -2,14 +2,14 @@ use std::borrow::Cow;
 use std::fmt::{Debug, Formatter};
 use std::net::SocketAddr;
 use std::ops::{Deref, DerefMut};
-use async_trait::async_trait;
 
+use async_trait::async_trait;
 use bytecheck::CheckBytes;
 use rkyv::validation::validators::DefaultValidator;
 use rkyv::{Archive, Deserialize, Serialize};
-use crate::Status;
 
 use crate::view::DataView;
+use crate::Status;
 
 /// A wrapper type around the internal [hyper::Body]
 pub struct Body(hyper::Body);
@@ -27,7 +27,7 @@ impl Body {
 
 impl<T> From<T> for Body
 where
-    T: Into<hyper::Body>
+    T: Into<hyper::Body>,
 {
     fn from(value: T) -> Self {
         Self(value.into())
@@ -77,8 +77,7 @@ where
             .await
             .map_err(Status::internal)?;
 
-        DataView::using(bytes)
-            .map_err(|_| Status::invalid())
+        DataView::using(bytes).map_err(|_| Status::invalid())
     }
 }
 
@@ -137,10 +136,7 @@ where
     Msg: RequestContents,
 {
     pub(crate) fn new(remote_addr: SocketAddr, view: Msg::Content) -> Self {
-        Self {
-            remote_addr,
-            view,
-        }
+        Self { remote_addr, view }
     }
     /// Consumes the request into the value of the message.
     pub fn into_inner(self) -> Msg::Content {
