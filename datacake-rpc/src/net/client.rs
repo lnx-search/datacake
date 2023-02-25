@@ -13,7 +13,7 @@ use crate::request::{Body, MessageMetadata};
 /// A raw client connection which can produce multiplexed streams.
 pub struct Channel {
     #[cfg(not(feature = "simulation"))]
-    connection: hyper::Client<hyper::client::HttpConnector, Body>,
+    connection: hyper::Client<hyper::client::HttpConnector, hyper::Body>,
 
     #[cfg(feature = "simulation")]
     connection: LazyClient,

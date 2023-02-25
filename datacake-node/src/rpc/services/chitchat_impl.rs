@@ -81,7 +81,8 @@ mod tests {
             timestamp,
             data: message.serialize_to_vec(),
             source,
-        });
+        })
+        .await;
 
         service.on_message(msg_req).await.expect("Send message");
 

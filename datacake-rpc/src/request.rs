@@ -104,6 +104,13 @@ where
     Msg: RequestContents,
 {
     pub(crate) remote_addr: SocketAddr,
+
+    // A small hack to stop linters miss-guiding users
+    // into thinking their messages are `!Sized` when in fact they are.
+    // We don't want to box in release mode however.
+    #[cfg(debug_assertions)]
+    pub(crate) view: Box<Msg::Content>,
+    #[cfg(not(debug_assertions))]
     pub(crate) view: Msg::Content,
 }
 
@@ -136,8 +143,22 @@ where
     Msg: RequestContents,
 {
     pub(crate) fn new(remote_addr: SocketAddr, view: Msg::Content) -> Self {
-        Self { remote_addr, view }
+        Self {
+            remote_addr,
+            #[cfg(debug_assertions)]
+            view: Box::new(view),
+            #[cfg(not(debug_assertions))]
+            view,
+        }
     }
+
+    #[cfg(debug_assertions)]
+    /// Consumes the request into the value of the message.
+    pub fn into_inner(self) -> Msg::Content {
+        *self.view
+    }
+
+    #[cfg(not(debug_assertions))]
     /// Consumes the request into the value of the message.
     pub fn into_inner(self) -> Msg::Content {
         self.view
@@ -152,18 +173,24 @@ where
 #[cfg(feature = "test-utils")]
 impl<Msg> Request<Msg>
 where
-    Msg: RequestContents,
+    Msg: RequestContents
+        + rkyv::Serialize<
+            rkyv::ser::serializers::AllocSerializer<{ crate::SCRATCH_SPACE }>,
+        >,
 {
     /// A test utility for creating a mocked request.
     ///
     /// This takes the owned value of the msg and acts like the target request.
     ///
     /// This should be used for testing only.
-    pub fn using_owned(msg: Msg::Content) -> Self {
+    pub async fn using_owned(msg: Msg) -> Self {
+        let bytes = rkyv::to_bytes(&msg).unwrap();
+        let contents = Msg::from_body(Body::from(bytes.to_vec())).await.unwrap();
+
         use std::net::{Ipv4Addr, SocketAddrV4};
 
         let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::from([127, 0, 0, 1]), 80));
-        Self::new(addr, msg)
+        Self::new(addr, contents)
     }
 }
 
