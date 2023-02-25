@@ -55,6 +55,11 @@ where
     pub fn as_bytes(&self) -> &[u8] {
         &self.data
     }
+
+    /// Consumes the bytes representation of the dataview.
+    pub fn into_data(self) -> D {
+        self.data
+    }
 }
 
 impl<T, D> DataView<T, D>

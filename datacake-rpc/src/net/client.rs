@@ -1,14 +1,13 @@
 use std::net::SocketAddr;
 
 use http::{Method, Request};
-use hyper::body::{Bytes, HttpBody};
-use hyper::{Body, StatusCode};
+use hyper::StatusCode;
 use rkyv::AlignedVec;
 
 #[cfg(feature = "simulation")]
 use super::simulation::LazyClient;
 use crate::net::Error;
-use crate::request::MessageMetadata;
+use crate::request::{Body, MessageMetadata};
 
 #[derive(Clone)]
 /// A raw client connection which can produce multiplexed streams.
@@ -59,8 +58,8 @@ impl Channel {
     pub(crate) async fn send_msg(
         &self,
         metadata: MessageMetadata,
-        msg: Bytes,
-    ) -> Result<Result<AlignedVec, AlignedVec>, Error> {
+        msg: Body,
+    ) -> Result<Result<Body, AlignedVec>, Error> {
         let uri = format!(
             "http://{}{}",
             self.remote_addr,
@@ -69,7 +68,7 @@ impl Channel {
         let request = Request::builder()
             .method(Method::POST)
             .uri(uri)
-            .body(Body::from(msg))
+            .body(msg.into_inner())
             .unwrap();
 
         #[cfg(not(feature = "simulation"))]
@@ -80,17 +79,13 @@ impl Channel {
             conn.lock().await.send_request(request).await?
         };
 
-        let (req, mut body) = resp.into_parts();
+        let (req, body) = resp.into_parts();
 
-        let size = body.size_hint().lower();
-        let mut buffer = AlignedVec::with_capacity(size as usize);
-        while let Some(chunk) = body.data().await {
-            buffer.extend_from_slice(&chunk?);
-        }
 
         if req.status == StatusCode::OK {
-            Ok(Ok(buffer))
+            Ok(Ok(Body::new(body)))
         } else {
+            let buffer = crate::utils::to_aligned(body).await?;
             Ok(Err(buffer))
         }
     }

@@ -4,15 +4,14 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use http::{Request, Response, StatusCode};
-use hyper::body::HttpBody;
 use hyper::server::conn::Http;
 use hyper::service::service_fn;
-use hyper::Body;
 use rkyv::AlignedVec;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
 use crate::server::ServerState;
+use crate::request::Body;
 use crate::{Status, SCRATCH_SPACE};
 
 /// Starts the RPC server.
@@ -70,14 +69,14 @@ pub(crate) async fn start_rpc_server(
 /// This accepts new streams being created and spawns concurrent tasks to handle
 /// them.
 async fn handle_connection(
-    req: Request<Body>,
+    req: Request<hyper::Body>,
     state: ServerState,
     remote_addr: SocketAddr,
-) -> Result<Response<Body>, Infallible> {
+) -> Result<Response<hyper::Body>, Infallible> {
     match handle_message(req, state, remote_addr).await {
         Ok(r) => Ok(r),
         Err(e) => {
-            let mut response = Response::new(Body::from(e.to_string()));
+            let mut response = Response::new(e.to_string().into());
             (*response.status_mut()) = StatusCode::INTERNAL_SERVER_ERROR;
             Ok(response)
         },
@@ -85,11 +84,11 @@ async fn handle_connection(
 }
 
 async fn handle_message(
-    req: Request<Body>,
+    req: Request<hyper::Body>,
     state: ServerState,
     remote_addr: SocketAddr,
-) -> anyhow::Result<Response<Body>> {
-    let (req, mut body) = req.into_parts();
+) -> anyhow::Result<Response<hyper::Body>> {
+    let (req, body) = req.into_parts();
     let uri = req.uri.path();
     match state.get_handler(uri) {
         None => {
@@ -100,28 +99,22 @@ async fn handle_message(
                     AlignedVec::new()
                 });
 
-            let mut response = Response::new(Body::from(buffer.into_vec()));
+            let mut response = Response::new(buffer.to_vec().into());
             (*response.status_mut()) = StatusCode::BAD_REQUEST;
 
             Ok(response)
         },
         Some(handler) => {
-            let size = body.size_hint().upper().unwrap_or(1024);
-            let mut data = AlignedVec::with_capacity(size as usize);
-            while let Some(chunk) = body.data().await {
-                data.extend_from_slice(&chunk?);
-            }
-
-            let reply = handler.try_handle(remote_addr, data).await;
+            let reply = handler.try_handle(remote_addr, Body::new(body)).await;
 
             match reply {
-                Ok(buffer) => {
-                    let mut response = Response::new(Body::from(buffer.into_vec()));
+                Ok(body) => {
+                    let mut response = Response::new(body.into_inner());
                     (*response.status_mut()) = StatusCode::OK;
                     Ok(response)
                 },
                 Err(buffer) => {
-                    let mut response = Response::new(Body::from(buffer.into_vec()));
+                    let mut response = Response::new(buffer.to_vec().into());
                     (*response.status_mut()) = StatusCode::BAD_REQUEST;
                     Ok(response)
                 },
