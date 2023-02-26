@@ -1,13 +1,54 @@
 use std::borrow::Cow;
 use std::fmt::{Debug, Formatter};
 use std::net::SocketAddr;
+use std::ops::Deref;
 
+use async_trait::async_trait;
 use bytecheck::CheckBytes;
-use rkyv::de::deserializers::SharedDeserializeMap;
 use rkyv::validation::validators::DefaultValidator;
 use rkyv::{Archive, Deserialize, Serialize};
 
-use crate::view::{DataView, InvalidView};
+use crate::view::DataView;
+use crate::{Body, Status};
+
+#[async_trait]
+/// The deserializer trait for converting the request body into
+/// the desired type specified by [Self::Content].
+///
+/// This trait is automatically implemented for the [Body] type
+/// and any type implementing [rkyv]'s (de)serializer traits.
+pub trait RequestContents {
+    /// The deserialized message type.
+    type Content: Send + Sized + 'static;
+
+    async fn from_body(body: Body) -> Result<Self::Content, Status>;
+}
+
+#[async_trait]
+impl RequestContents for Body {
+    type Content = Self;
+
+    async fn from_body(body: Body) -> Result<Self, Status> {
+        Ok(body)
+    }
+}
+
+#[async_trait]
+impl<Msg> RequestContents for Msg
+where
+    Msg: Archive + Send + Sync + 'static,
+    Msg::Archived: CheckBytes<DefaultValidator<'static>> + Send + Sync + 'static,
+{
+    type Content = DataView<Self>;
+
+    async fn from_body(body: Body) -> Result<Self::Content, Status> {
+        let bytes = crate::utils::to_aligned(body.0)
+            .await
+            .map_err(Status::internal)?;
+
+        DataView::using(bytes).map_err(|_| Status::invalid())
+    }
+}
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive, PartialEq)]
@@ -29,25 +70,23 @@ pub struct MessageMetadata {
 /// the 'view' of the given message type.
 pub struct Request<Msg>
 where
-    Msg: Archive,
-    Msg::Archived: 'static,
+    Msg: RequestContents,
 {
     pub(crate) remote_addr: SocketAddr,
 
-    // A small hack around how linters behave to prevent
-    // them raising incorrect errors which may be confusing
-    // for users who are implementing the required traits.
+    // A small hack to stop linters miss-guiding users
+    // into thinking their messages are `!Sized` when in fact they are.
+    // We don't want to box in release mode however.
     #[cfg(debug_assertions)]
-    pub(crate) view: Box<DataView<Msg>>,
-
+    pub(crate) view: Box<Msg::Content>,
     #[cfg(not(debug_assertions))]
-    pub(crate) view: DataView<Msg>,
+    pub(crate) view: Msg::Content,
 }
 
 impl<Msg> Debug for Request<Msg>
 where
-    Msg: Archive,
-    Msg::Archived: CheckBytes<DefaultValidator<'static>> + Debug + 'static,
+    Msg: RequestContents,
+    Msg::Content: Debug,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Request")
@@ -57,31 +96,40 @@ where
     }
 }
 
+impl<Msg> Deref for Request<Msg>
+where
+    Msg: RequestContents,
+{
+    type Target = Msg::Content;
+
+    fn deref(&self) -> &Self::Target {
+        &self.view
+    }
+}
+
 impl<Msg> Request<Msg>
 where
-    Msg: Archive,
-    Msg::Archived: CheckBytes<DefaultValidator<'static>> + 'static,
+    Msg: RequestContents,
 {
-    pub(crate) fn new(remote_addr: SocketAddr, view: DataView<Msg>) -> Self {
+    pub(crate) fn new(remote_addr: SocketAddr, view: Msg::Content) -> Self {
         Self {
             remote_addr,
             #[cfg(debug_assertions)]
             view: Box::new(view),
-
             #[cfg(not(debug_assertions))]
             view,
         }
     }
 
     #[cfg(debug_assertions)]
-    /// Consumes the request into the data view of the message.
-    pub fn into_view(self) -> DataView<Msg> {
+    /// Consumes the request into the value of the message.
+    pub fn into_inner(self) -> Msg::Content {
         *self.view
     }
 
     #[cfg(not(debug_assertions))]
-    /// Consumes the request into the data view of the message.
-    pub fn into_view(self) -> DataView<Msg> {
+    /// Consumes the request into the value of the message.
+    pub fn into_inner(self) -> Msg::Content {
         self.view
     }
 
@@ -91,36 +139,27 @@ where
     }
 }
 
-impl<Msg> Request<Msg>
-where
-    Msg: Archive,
-    Msg::Archived: Deserialize<Msg, SharedDeserializeMap> + 'static,
-{
-    /// Deserializes the view into it's owned value T.
-    pub fn to_owned(&self) -> Result<Msg, InvalidView> {
-        self.view.to_owned()
-    }
-}
-
 #[cfg(feature = "test-utils")]
 impl<Msg> Request<Msg>
 where
-    Msg: Archive
-        + Serialize<rkyv::ser::serializers::AllocSerializer<{ crate::SCRATCH_SPACE }>>,
-    Msg::Archived: CheckBytes<DefaultValidator<'static>> + 'static,
+    Msg: RequestContents
+        + rkyv::Serialize<
+            rkyv::ser::serializers::AllocSerializer<{ crate::SCRATCH_SPACE }>,
+        >,
 {
     /// A test utility for creating a mocked request.
     ///
     /// This takes the owned value of the msg and acts like the target request.
     ///
     /// This should be used for testing only.
-    pub fn using_owned(msg: Msg) -> Self {
+    pub async fn using_owned(msg: Msg) -> Self {
+        let bytes = rkyv::to_bytes(&msg).unwrap();
+        let contents = Msg::from_body(Body::from(bytes.to_vec())).await.unwrap();
+
         use std::net::{Ipv4Addr, SocketAddrV4};
 
-        let buf = rkyv::to_bytes::<_, { crate::SCRATCH_SPACE }>(&msg).unwrap();
-        let view = DataView::using(buf).unwrap();
         let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::from([127, 0, 0, 1]), 80));
-        Self::new(addr, view)
+        Self::new(addr, contents)
     }
 }
 
@@ -151,7 +190,7 @@ mod tests {
         let bytes = rkyv::to_bytes::<_, 1024>(&msg).expect("Serialize");
         let view: DataView<MessageMetadata, _> =
             DataView::using(bytes).expect("Create view");
-        let req = Request::new(addr, view);
+        let req = Request::<MessageMetadata>::new(addr, view);
         assert_eq!(req.remote_addr(), addr, "Remote addr should match.");
         assert_eq!(
             req.to_owned().unwrap(),

@@ -184,7 +184,7 @@ mod tests {
         let service = ReplicationService::new(group.clone());
 
         let timestamp = clock.get_time().await;
-        let poll_req = Request::using_owned(PollKeyspace(timestamp));
+        let poll_req = Request::using_owned(PollKeyspace(timestamp)).await;
         let resp = service
             .on_message(poll_req)
             .await
@@ -196,7 +196,7 @@ mod tests {
         let _keyspace = group.get_or_create_keyspace(KEYSPACE).await;
 
         let timestamp = clock.get_time().await;
-        let poll_req = Request::using_owned(PollKeyspace(timestamp));
+        let poll_req = Request::using_owned(PollKeyspace(timestamp)).await;
         let resp = service
             .on_message(poll_req)
             .await
@@ -242,7 +242,8 @@ mod tests {
         let state_req = Request::using_owned(GetState {
             timestamp,
             keyspace: KEYSPACE.to_string(),
-        });
+        })
+        .await;
 
         let resp = service
             .on_message(state_req)
@@ -281,7 +282,8 @@ mod tests {
             timestamp,
             keyspace: KEYSPACE.to_string(),
             doc_ids: vec![1],
-        });
+        })
+        .await;
 
         let resp = service
             .on_message(fetch_docs_req)

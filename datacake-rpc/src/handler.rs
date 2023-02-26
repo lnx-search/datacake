@@ -4,14 +4,12 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use bytecheck::CheckBytes;
 use rkyv::ser::serializers::AllocSerializer;
-use rkyv::validation::validators::DefaultValidator;
 use rkyv::{AlignedVec, Archive, Serialize};
 
 use crate::net::Status;
-use crate::request::Request;
-use crate::{DataView, SCRATCH_SPACE};
+use crate::request::{Request, RequestContents};
+use crate::{Body, SCRATCH_SPACE};
 
 /// A specific handler key.
 ///
@@ -112,8 +110,7 @@ where
     /// by the service via the generic.
     pub fn add_handler<Msg>(&mut self)
     where
-        Msg: Archive + Send + Sync + 'static,
-        Msg::Archived: CheckBytes<DefaultValidator<'static>> + Send + Sync + 'static,
+        Msg: RequestContents + Sync + Send + 'static,
         Svc: Handler<Msg>,
     {
         let phantom = PhantomHandler {
@@ -209,12 +206,11 @@ pub trait RpcService: Sized {
 /// ```
 pub trait Handler<Msg>: RpcService
 where
-    Msg: Archive,
-    Msg::Archived: CheckBytes<DefaultValidator<'static>> + 'static,
+    Msg: RequestContents,
 {
     /// Our reply can be any type that implements [Archive] and [Serialize] as part
     /// of the [rkyv] package. Here we're just echoing the message back.
-    type Reply: Archive + Serialize<AllocSerializer<SCRATCH_SPACE>>;
+    type Reply: TryIntoBody;
 
     /// The path of the message, this is similar to the service name which can
     /// be used to avoid conflicts, by default this uses the name of the message type.
@@ -223,7 +219,9 @@ where
     }
 
     /// Process a message.
-    /// We get passed a [Request] which is a thin wrapper around the [DataView] type.
+    /// We get passed a [Request] which is a thin wrapper around the inner content of
+    /// the specified type as defined by [RequestContents::Content]
+    ///
     /// This means we are simply being given a zero-copy view of the message rather
     /// than a owned value. If you need a owned version which is not tied ot the
     /// request buffer, you can use the `to_owned` method which will attempt to
@@ -236,14 +234,14 @@ pub(crate) trait OpaqueMessageHandler: Send + Sync {
     async fn try_handle(
         &self,
         remote_addr: SocketAddr,
-        data: AlignedVec,
-    ) -> Result<AlignedVec, AlignedVec>;
+        data: Body,
+    ) -> Result<Body, AlignedVec>;
 }
 
 struct PhantomHandler<H, Msg>
 where
     H: Send + Sync + 'static,
-    Msg: Send + Sync + 'static,
+    Msg: Send + 'static,
 {
     handler: Arc<H>,
     _msg: PhantomData<Msg>,
@@ -252,19 +250,17 @@ where
 #[async_trait]
 impl<H, Msg> OpaqueMessageHandler for PhantomHandler<H, Msg>
 where
-    Msg: Archive + Send + Sync + 'static,
-    Msg::Archived: CheckBytes<DefaultValidator<'static>> + Send + Sync + 'static,
+    Msg: RequestContents + Send + Sync + 'static,
     H: Handler<Msg> + Send + Sync + 'static,
 {
     async fn try_handle(
         &self,
         remote_addr: SocketAddr,
-        data: AlignedVec,
-    ) -> Result<AlignedVec, AlignedVec> {
-        let view = match DataView::using(data) {
+        data: Body,
+    ) -> Result<Body, AlignedVec> {
+        let view = match Msg::from_body(data).await {
             Ok(view) => view,
-            Err(crate::view::InvalidView) => {
-                let status = Status::invalid();
+            Err(status) => {
                 let error = rkyv::to_bytes::<_, SCRATCH_SPACE>(&status)
                     .unwrap_or_else(|_| AlignedVec::new());
                 return Err(error);
@@ -276,13 +272,59 @@ where
         self.handler
             .on_message(msg)
             .await
-            .map(|reply| {
-                rkyv::to_bytes::<_, SCRATCH_SPACE>(&reply)
-                    .unwrap_or_else(|_| AlignedVec::new())
-            })
+            .and_then(|reply| reply.try_into_body())
             .map_err(|status| {
                 rkyv::to_bytes::<_, SCRATCH_SPACE>(&status)
                     .unwrap_or_else(|_| AlignedVec::new())
             })
+    }
+}
+
+/// The serializer trait converting replies into hyper bodies.
+///
+/// This is a light abstraction to allow users to be able to
+/// stream data across the RPC system which may not fit in memory.
+///
+/// Any types which implement [TryAsBody] will implement this type.
+pub trait TryIntoBody {
+    /// Try convert the reply into a body or return an error
+    /// status.
+    fn try_into_body(self) -> Result<Body, Status>;
+}
+
+/// The serializer trait for converting replies into hyper bodies
+/// using a reference to self.
+///
+/// This will work for most implementations but if you want to stream
+/// hyper bodies for example, you cannot implement this trait.
+pub trait TryAsBody {
+    /// Try convert the reply into a body or return an error
+    /// status.
+    fn try_as_body(&self) -> Result<Body, Status>;
+}
+
+impl<T> TryAsBody for T
+where
+    T: Archive + Serialize<AllocSerializer<SCRATCH_SPACE>>,
+{
+    fn try_as_body(&self) -> Result<Body, Status> {
+        rkyv::to_bytes::<_, SCRATCH_SPACE>(self)
+            .map(|v| Body::from(v.to_vec()))
+            .map_err(|e| Status::internal(e.to_string()))
+    }
+}
+
+impl<T> TryIntoBody for T
+where
+    T: TryAsBody,
+{
+    fn try_into_body(self) -> Result<Body, Status> {
+        <Self as TryAsBody>::try_as_body(&self)
+    }
+}
+
+impl TryIntoBody for Body {
+    fn try_into_body(self) -> Result<Body, Status> {
+        Ok(self)
     }
 }
