@@ -80,7 +80,7 @@ where
         &self,
         msg: Request<PutPayload>,
     ) -> Result<HLCTimestamp, Status> {
-        let payload = msg.to_owned().map_err(Status::internal)?;
+        let payload = msg.into_inner().to_owned().map_err(Status::internal)?;
 
         let doc = payload.document;
         let ctx = self.get_put_ctx(payload.ctx)?;
@@ -111,7 +111,7 @@ where
         &self,
         msg: Request<MultiPutPayload>,
     ) -> Result<Self::Reply, Status> {
-        let payload = msg.to_owned().map_err(Status::internal)?;
+        let payload = msg.into_inner().to_owned().map_err(Status::internal)?;
 
         let ctx = self.get_put_ctx(payload.ctx)?;
         self.group.clock().register_ts(payload.timestamp).await;
@@ -140,7 +140,7 @@ where
         &self,
         msg: Request<RemovePayload>,
     ) -> Result<Self::Reply, Status> {
-        let payload = msg.to_owned().map_err(Status::internal)?;
+        let payload = msg.into_inner().to_owned().map_err(Status::internal)?;
 
         self.group.clock().register_ts(payload.timestamp).await;
 
@@ -167,7 +167,7 @@ where
         &self,
         msg: Request<MultiRemovePayload>,
     ) -> Result<Self::Reply, Status> {
-        let payload = msg.to_owned().map_err(Status::internal)?;
+        let payload = msg.into_inner().to_owned().map_err(Status::internal)?;
 
         self.group.clock().register_ts(payload.timestamp).await;
 
@@ -194,7 +194,7 @@ where
         &self,
         msg: Request<BatchPayload>,
     ) -> Result<Self::Reply, Status> {
-        let msg = msg.to_owned().map_err(Status::internal)?;
+        let msg = msg.into_inner().to_owned().map_err(Status::internal)?;
 
         self.group.clock().register_ts(msg.timestamp).await;
 
@@ -302,7 +302,8 @@ mod tests {
             document: doc.clone(),
             ctx: None,
             timestamp: clock.get_time().await,
-        });
+        })
+        .await;
 
         service
             .on_message(put_req)
@@ -338,13 +339,10 @@ mod tests {
         let put_req = Request::using_owned(MultiPutPayload {
             keyspace: KEYSPACE.to_string(),
             ctx: None,
-            documents: vec![
-                doc_1.clone().into(),
-                doc_2.clone().into(),
-                doc_3.clone().into(),
-            ],
+            documents: vec![doc_1.clone(), doc_2.clone(), doc_3.clone()],
             timestamp: clock.get_time().await,
-        });
+        })
+        .await;
 
         service
             .on_message(put_req)
@@ -410,7 +408,8 @@ mod tests {
             keyspace: KEYSPACE.to_string(),
             document: doc.metadata,
             timestamp: clock.get_time().await,
-        });
+        })
+        .await;
 
         service
             .on_message(remove_req)
@@ -469,7 +468,8 @@ mod tests {
             keyspace: KEYSPACE.to_string(),
             documents: vec![doc_1.metadata, doc_2.metadata],
             timestamp: clock.get_time().await,
-        });
+        })
+        .await;
 
         service
             .on_message(remove_req)
@@ -516,7 +516,8 @@ mod tests {
             ctx: None,
             documents,
             timestamp,
-        });
+        })
+        .await;
 
         service
             .on_message(put_req)

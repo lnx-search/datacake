@@ -201,10 +201,7 @@ async fn create_store() -> EventuallyConsistentStore<MemStore> {
         .await
         .expect("Connect node.");
 
-    let store = node
-        .add_extension(EventuallyConsistentStoreExtension::new(MemStore::default()))
+    node.add_extension(EventuallyConsistentStoreExtension::new(MemStore::default()))
         .await
-        .expect("Create store.");
-
-    store
+        .expect("Create store.")
 }
