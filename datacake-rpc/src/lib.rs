@@ -114,7 +114,7 @@ use std::hash::{Hash, Hasher};
 pub use async_trait::async_trait;
 pub use body::Body;
 pub use client::{MessageReply, RpcClient};
-pub use handler::{Handler, RpcService, ServiceRegistry, TryIntoBody, TryAsBody};
+pub use handler::{Handler, RpcService, ServiceRegistry, TryAsBody, TryIntoBody};
 pub use net::{ArchivedErrorCode, ArchivedStatus, Channel, Error, ErrorCode, Status};
 pub use request::{Request, RequestContents};
 pub use server::Server;
