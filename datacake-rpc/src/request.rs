@@ -12,7 +12,13 @@ use crate::view::DataView;
 use crate::{Body, Status};
 
 #[async_trait]
+/// The deserializer trait for converting the request body into
+/// the desired type specified by [Self::Content].
+///
+/// This trait is automatically implemented for the [Body] type
+/// and any type implementing [rkyv]'s (de)serializer traits.
 pub trait RequestContents {
+    /// The deserialized message type.
     type Content: Send + Sized + 'static;
 
     async fn from_body(body: Body) -> Result<Self::Content, Status>;

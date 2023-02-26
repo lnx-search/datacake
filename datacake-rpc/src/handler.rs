@@ -219,7 +219,9 @@ where
     }
 
     /// Process a message.
-    /// We get passed a [Request] which is a thin wrapper around the [DataView] type.
+    /// We get passed a [Request] which is a thin wrapper around the inner content of
+    /// the specified type as defined by [RequestContents::Content]
+    ///
     /// This means we are simply being given a zero-copy view of the message rather
     /// than a owned value. If you need a owned version which is not tied ot the
     /// request buffer, you can use the `to_owned` method which will attempt to

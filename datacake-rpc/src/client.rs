@@ -131,7 +131,7 @@ where
     /// avoid excess copies when it isn't needed.
     ///
     /// In the event you need to send a [Body] or type which must consume `self`
-    /// you can use [send_owned]
+    /// you can use [Self::send_owned]
     pub async fn send<Msg>(&self, msg: &Msg) -> Result<MessageReply<Svc, Msg>, Status>
     where
         Msg: RequestContents + TryAsBody,
@@ -152,7 +152,7 @@ where
     /// Sends a message to the server and wait for a reply using an owned
     /// message value.
     ///
-    /// This allows you to send types implementing [TryIntoBody] like [Body].f
+    /// This allows you to send types implementing [TryIntoBody] like [Body].
     pub async fn send_owned<Msg>(
         &self,
         msg: Msg,
