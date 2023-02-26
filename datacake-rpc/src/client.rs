@@ -82,7 +82,7 @@ where
     fn clone(&self) -> Self {
         Self {
             channel: self.channel.clone(),
-            timeout: self.timeout.clone(),
+            timeout: self.timeout,
             _p: PhantomData,
         }
     }
