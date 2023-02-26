@@ -6,8 +6,9 @@ use rkyv::AlignedVec;
 
 #[cfg(feature = "simulation")]
 use super::simulation::LazyClient;
+use crate::body::Body;
 use crate::net::Error;
-use crate::request::{Body, MessageMetadata};
+use crate::request::MessageMetadata;
 
 #[derive(Clone)]
 /// A raw client connection which can produce multiplexed streams.

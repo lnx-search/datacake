@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::fmt::{Debug, Formatter};
 use std::net::SocketAddr;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 
 use async_trait::async_trait;
 use bytecheck::CheckBytes;
@@ -9,44 +9,7 @@ use rkyv::validation::validators::DefaultValidator;
 use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::view::DataView;
-use crate::Status;
-
-/// A wrapper type around the internal [hyper::Body]
-pub struct Body(hyper::Body);
-
-impl Body {
-    pub fn new(inner: hyper::Body) -> Self {
-        Self(inner)
-    }
-
-    /// Consumes the body returning the inner hyper object.
-    pub fn into_inner(self) -> hyper::Body {
-        self.0
-    }
-}
-
-impl<T> From<T> for Body
-where
-    T: Into<hyper::Body>,
-{
-    fn from(value: T) -> Self {
-        Self(value.into())
-    }
-}
-
-impl Deref for Body {
-    type Target = hyper::Body;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for Body {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
+use crate::{Body, Status};
 
 #[async_trait]
 pub trait RequestContents {

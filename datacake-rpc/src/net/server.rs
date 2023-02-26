@@ -10,7 +10,7 @@ use rkyv::AlignedVec;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
-use crate::request::Body;
+use crate::body::Body;
 use crate::server::ServerState;
 use crate::{Status, SCRATCH_SPACE};
 

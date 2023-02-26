@@ -1,8 +1,9 @@
 use std::borrow::Cow;
 use std::marker::PhantomData;
 use std::time::Duration;
+use crate::Body;
 
-use crate::handler::{Handler, RpcService, TryIntoBody};
+use crate::handler::{Handler, RpcService, TryAsBody, TryIntoBody};
 use crate::net::{Channel, Status};
 use crate::request::{MessageMetadata, RequestContents};
 
@@ -127,6 +128,27 @@ where
     /// Sends a message to the server and wait for a reply.
     pub async fn send<Msg>(&self, msg: &Msg) -> Result<MessageReply<Svc, Msg>, Status>
     where
+        Msg: RequestContents + TryAsBody,
+        Svc: Handler<Msg>,
+        // Due to some interesting compiler errors, we couldn't use GATs here to enforce
+        // this on the trait side, which is a shame.
+        <Svc as Handler<Msg>>::Reply: RequestContents + TryIntoBody,
+    {
+        let metadata = MessageMetadata {
+            service_name: Cow::Borrowed(<Svc as RpcService>::service_name()),
+            path: Cow::Borrowed(<Svc as Handler<Msg>>::path()),
+        };
+
+        let body = msg.try_as_body()?;
+        self.send_body(body, metadata).await
+    }
+
+    /// Sends a message to the server and wait for a reply.
+    pub async fn send_owned<Msg>(
+        &self,
+        msg: Msg,
+    ) -> Result<MessageReply<Svc, Msg>, Status>
+    where
         Msg: RequestContents + TryIntoBody,
         Svc: Handler<Msg>,
         // Due to some interesting compiler errors, we couldn't use GATs here to enforce
@@ -138,9 +160,19 @@ where
             path: Cow::Borrowed(<Svc as Handler<Msg>>::path()),
         };
 
-        let msg_bytes = msg.try_into_body()?;
+        let body = msg.try_into_body()?;
+        self.send_body(body, metadata).await
+    }
 
-        let future = self.channel.send_msg(metadata, msg_bytes);
+    async fn send_body<Msg>(&self, body: Body, metadata: MessageMetadata)-> Result<MessageReply<Svc, Msg>, Status>
+    where
+        Msg: RequestContents,
+        Svc: Handler<Msg>,
+        // Due to some interesting compiler errors, we couldn't use GATs here to enforce
+        // this on the trait side, which is a shame.
+        <Svc as Handler<Msg>>::Reply: RequestContents + TryIntoBody,
+    {
+        let future = self.channel.send_msg(metadata, body);
 
         let result = match self.timeout {
             Some(duration) => tokio::time::timeout(duration, future)

@@ -8,8 +8,8 @@ use rkyv::ser::serializers::AllocSerializer;
 use rkyv::{AlignedVec, Archive, Serialize};
 
 use crate::net::Status;
-use crate::request::{Body, Request, RequestContents};
-use crate::SCRATCH_SPACE;
+use crate::request::{Request, RequestContents};
+use crate::{Body, SCRATCH_SPACE};
 
 /// A specific handler key.
 ///
@@ -282,19 +282,47 @@ where
 ///
 /// This is a light abstraction to allow users to be able to
 /// stream data across the RPC system which may not fit in memory.
+///
+/// Any types which implement [TryAsBody] will implement this type.
 pub trait TryIntoBody {
     /// Try convert the reply into a body or return an error
     /// status.
-    fn try_into_body(&self) -> Result<Body, Status>;
+    fn try_into_body(self) -> Result<Body, Status>;
+}
+
+/// The serializer trait for converting replies into hyper bodies
+/// using a reference to self.
+///
+/// This will work for most implementations but if you want to stream
+/// hyper bodies for example, you cannot implement this trait.
+pub trait TryAsBody {
+    /// Try convert the reply into a body or return an error
+    /// status.
+    fn try_as_body(&self) -> Result<Body, Status>;
+}
+
+impl<T> TryAsBody for T
+where
+    T: Archive + Serialize<AllocSerializer<SCRATCH_SPACE>>,
+{
+    fn try_as_body(&self) -> Result<Body, Status> {
+        rkyv::to_bytes::<_, SCRATCH_SPACE>(self)
+            .map(|v| Body::from(v.to_vec()))
+            .map_err(|e| Status::internal(e.to_string()))
+    }
 }
 
 impl<T> TryIntoBody for T
 where
-    T: Archive + Serialize<AllocSerializer<SCRATCH_SPACE>>,
+    T: TryAsBody,
 {
-    fn try_into_body(&self) -> Result<Body, Status> {
-        rkyv::to_bytes::<_, SCRATCH_SPACE>(self)
-            .map(|v| Body::from(v.to_vec()))
-            .map_err(|e| Status::internal(e.to_string()))
+    fn try_into_body(self) -> Result<Body, Status> {
+        <Self as TryAsBody>::try_as_body(&self)
+    }
+}
+
+impl TryIntoBody for Body {
+    fn try_into_body(self) -> Result<Body, Status> {
+        Ok(self)
     }
 }
