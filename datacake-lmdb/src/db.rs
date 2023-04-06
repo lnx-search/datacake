@@ -36,6 +36,19 @@ impl StorageHandle {
     /// This spawns 1 background threads with actions being executed within that thread.
     ///
     /// This approach reduces the affect of writes blocking reads and vice-versa.
+    ///
+    /// If the database does not already exist it will be created.
+    ///
+    /// ```rust
+    /// use datacake_lmdb::StorageHandle;
+    ///
+    /// # #[tokio::main]
+    /// # async fn main() {
+    /// let storage = StorageHandle::open("./my-lmdb-data").await.expect("Create database");
+    /// # drop(storage);
+    /// # let _ = std::fs::remove_dir_all("./my-lmdb-data");
+    /// # }
+    /// ```
     pub async fn open(path: impl AsRef<Path>) -> heed::Result<Self> {
         let (tx, env) = setup_database(path).await?;
         Ok(Self { tx, env })
@@ -307,6 +320,10 @@ async fn setup_database(path: impl AsRef<Path>) -> heed::Result<(Sender<Task>, E
 }
 
 fn setup_disk_handle(path: &Path, tasks: Receiver<Task>) -> heed::Result<Env> {
+    if !path.exists() {
+        let _ = std::fs::create_dir_all(path); // Attempt to create the directory.
+    }
+
     let env = EnvOpenOptions::new()
         .map_size(DEFAULT_MAP_SIZE)
         .max_dbs(MAX_NUM_DBS)
