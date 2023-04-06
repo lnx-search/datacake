@@ -1,0 +1,35 @@
+[package]
+name = "datacake-lmdb"
+version = "0.1.0"
+edition = "2021"
+description = "A pre-built implementation of datacake's Storage trait using LMDB."
+license = "MIT"
+keywords = ["databases", "distributed"]
+categories = ["concurrency", "data-structures"]
+repository = "https://github.com/lnx-search/datacake"
+readme = "README.md"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-trait = "0.1"
+futures = "0.3"
+flume = "0.10"
+thiserror = "1"
+
+heed = { version = "0.20.0-alpha.0", default-features = false }
+tokio = { version = "1", default-features = false, features = ["rt"] }
+
+datacake-crdt = { version = "0.4", path = "../datacake-crdt" }
+datacake-eventual-consistency = { version = "0.4", path = "../datacake-eventual-consistency" }
+
+[dev-dependencies]
+anyhow = "1"
+tracing = "0.1.37"
+tracing-subscriber = "0.3.16"
+
+test-helper = { path = "../test-helper" }
+
+uuid = { version = "1", features = ["v4"] }
+datacake-node = { version = "0.3", path = "../datacake-node" }
+datacake-eventual-consistency = { version = "0.4", path = "../datacake-eventual-consistency", features = ["test-utils"] }

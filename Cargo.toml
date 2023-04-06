@@ -41,6 +41,7 @@ members = [
     "datacake-crdt",
     "datacake-sqlite",
     "datacake-rpc",
+    "datacake-lmdb",
 
     # Utils
     "test-helper",
