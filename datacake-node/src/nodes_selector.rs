@@ -809,12 +809,12 @@ mod tests {
             select_n_nodes(addr, "dc-2", 3, total_nodes, &mut dc).expect("get nodes");
         assert_eq!(
             nodes.as_ref(),
-            [make_addr(0, 2), make_addr(0, 0), make_addr(1, 1),],
+            [make_addr(0, 2), make_addr(1, 1), make_addr(1, 0),],
         );
 
         let nodes =
             select_n_nodes(addr, "dc-2", 2, total_nodes, &mut dc).expect("get nodes");
-        assert_eq!(nodes.as_ref(), [make_addr(0, 1), make_addr(1, 0),],);
+        assert_eq!(nodes.as_ref(), [make_addr(0, 1), make_addr(1, 1),],);
 
         let nodes =
             select_n_nodes(addr, "dc-2", 0, total_nodes, &mut dc).expect("get nodes");
