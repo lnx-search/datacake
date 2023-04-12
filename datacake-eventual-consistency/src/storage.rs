@@ -352,8 +352,132 @@ pub mod test_suite {
 
     use crate::core::Document;
     use crate::storage::Storage;
-    use crate::test_utils::InstrumentedStorage;
-    use crate::DocumentMetadata;
+    use crate::{BulkMutationError, DocumentMetadata, PutContext};
+
+    /// A wrapping type around another `Storage` implementation that
+    /// logs all the activity going into and out of the store.
+    ///
+    /// This is a very useful system for debugging issues with your store.
+    pub struct InstrumentedStorage<S: Storage>(pub S);
+
+    impl<S: Storage + Clone> Clone for InstrumentedStorage<S> {
+        fn clone(&self) -> Self {
+            Self(self.0.clone())
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl<S: Storage> Storage for InstrumentedStorage<S> {
+        type Error = S::Error;
+        type DocsIter = S::DocsIter;
+        type MetadataIter = S::MetadataIter;
+
+        async fn get_keyspace_list(&self) -> Result<Vec<String>, Self::Error> {
+            info!("get_keyspace_list");
+            self.0.get_keyspace_list().await
+        }
+
+        async fn iter_metadata(
+            &self,
+            keyspace: &str,
+        ) -> Result<Self::MetadataIter, Self::Error> {
+            info!(keyspace = keyspace, "iter_metadata");
+            self.0.iter_metadata(keyspace).await
+        }
+
+        async fn remove_tombstones(
+            &self,
+            keyspace: &str,
+            keys: impl Iterator<Item = Key> + Send,
+        ) -> Result<(), BulkMutationError<Self::Error>> {
+            let keys = keys.collect::<Vec<_>>();
+            info!(keyspace = keyspace, keys = ?keys, "remove_many_metadata");
+            self.0.remove_tombstones(keyspace, keys.into_iter()).await
+        }
+
+        async fn put_with_ctx(
+            &self,
+            keyspace: &str,
+            document: Document,
+            ctx: Option<&PutContext>,
+        ) -> Result<(), Self::Error> {
+            info!(keyspace = keyspace, document = ?document, "put_with_ctx");
+            self.0.put_with_ctx(keyspace, document, ctx).await
+        }
+
+        async fn put(
+            &self,
+            keyspace: &str,
+            document: Document,
+        ) -> Result<(), Self::Error> {
+            info!(keyspace = keyspace, document = ?document, "put");
+            self.0.put(keyspace, document).await
+        }
+
+        async fn multi_put_with_ctx(
+            &self,
+            keyspace: &str,
+            documents: impl Iterator<Item = Document> + Send,
+            ctx: Option<&PutContext>,
+        ) -> Result<(), BulkMutationError<Self::Error>> {
+            let documents = documents.collect::<Vec<_>>();
+            info!(keyspace = keyspace, documents = ?documents, "put_with_ctx");
+            self.0
+                .multi_put_with_ctx(keyspace, documents.into_iter(), ctx)
+                .await
+        }
+
+        async fn multi_put(
+            &self,
+            keyspace: &str,
+            documents: impl Iterator<Item = Document> + Send,
+        ) -> Result<(), BulkMutationError<Self::Error>> {
+            let documents = documents.collect::<Vec<_>>();
+            info!(keyspace = keyspace, documents = ?documents, "multi_put");
+            self.0.multi_put(keyspace, documents.into_iter()).await
+        }
+
+        async fn mark_as_tombstone(
+            &self,
+            keyspace: &str,
+            doc_id: Key,
+            timestamp: HLCTimestamp,
+        ) -> Result<(), Self::Error> {
+            info!(keyspace = keyspace, doc_id = doc_id, timestamp = %timestamp, "mark_as_tombstone");
+            self.0.mark_as_tombstone(keyspace, doc_id, timestamp).await
+        }
+
+        async fn mark_many_as_tombstone(
+            &self,
+            keyspace: &str,
+            documents: impl Iterator<Item = DocumentMetadata> + Send,
+        ) -> Result<(), BulkMutationError<Self::Error>> {
+            let documents = documents.collect::<Vec<_>>();
+            info!(keyspace = keyspace, documents = ?documents, "mark_many_as_tombstone");
+            self.0
+                .mark_many_as_tombstone(keyspace, documents.into_iter())
+                .await
+        }
+
+        async fn get(
+            &self,
+            keyspace: &str,
+            doc_id: Key,
+        ) -> Result<Option<Document>, Self::Error> {
+            info!(keyspace = keyspace, doc_id = doc_id, "get");
+            self.0.get(keyspace, doc_id).await
+        }
+
+        async fn multi_get(
+            &self,
+            keyspace: &str,
+            doc_ids: impl Iterator<Item = Key> + Send,
+        ) -> Result<Self::DocsIter, Self::Error> {
+            let doc_ids = doc_ids.collect::<Vec<_>>();
+            info!(keyspace = keyspace, doc_ids = ?doc_ids, "multi_get");
+            self.0.multi_get(keyspace, doc_ids.into_iter()).await
+        }
+    }
 
     #[tokio::test]
     async fn test_suite_semantics() {
