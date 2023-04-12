@@ -19,7 +19,7 @@ serde = { version = "1", features = ["derive"] }
 clap = { version = "4", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 rusqlite = { version = "0.28.0", features = ["bundled"] }
-datacake = { version = "0.7", path = "../.." }
+datacake = { version = "0.7", path = "../..", features = ["datacake-sqlite"] }
 
 [dev-dependencies]
 uuid = { version = "1", features = ["v4"] }
