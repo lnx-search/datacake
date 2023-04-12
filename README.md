@@ -20,6 +20,7 @@ Datacake provides several utility libraries as well as some pre-made data store 
   storage trait.
 - `datacake-sqlite` - A pre-built and tested implementation of the datacake `Storage` trait built 
   upon SQLite.
+- `datacake-lmdb` - A pre-built and tested implementation of the datacake `Storage` trait built upon LMDB.
 - `datacake-rpc` - A fast, zero-copy RPC framework with a familiar actor-like feel to it.
 
 ### Examples

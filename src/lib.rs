@@ -20,6 +20,8 @@
 //!   storage trait.
 //! - `datacake-sqlite` - A pre-built and tested implementation of the datacake `Storage` trait built
 //!   upon SQLite.
+//! - `datacake-lmdb` - A pre-built and tested implementation of the datacake `Storage` trait built
+//!   upon LMDB.
 //! - `datacake-rpc` - A fast, zero-copy RCP framework with a familiar actor-like feel to it.
 //!
 //! ### Examples
@@ -128,6 +130,11 @@ pub use datacake_crdt as crdt;
 /// A re-export of the `datacake-eventual_consistency` package, A pre-built cluster extension that
 /// provides you with a eventually consistent store with automatic tombstone removal.
 pub use datacake_eventual_consistency as eventual_consistency;
+#[cfg(feature = "datacake-lmdb")]
+/// A re-export of the `datacake-lmdb` package, giving you a pre-built and tested storage
+/// implementation for the eventually consistent store, although this may not be suited for
+/// all applications, it is useful for most.
+pub use datacake_lmdb as lmdb;
 #[cfg(feature = "datacake-node")]
 /// A re-export of the `datacake-node` package, the core membership system for building
 /// your own cluster system.
