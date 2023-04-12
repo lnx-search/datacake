@@ -22,7 +22,7 @@ use crate::rpc::services::replication_impl::{
     PollKeyspace,
     ReplicationService,
 };
-use crate::Storage;
+use crate::{DocVec, Storage};
 
 /// A high level wrapper around the consistency GRPC service.
 pub struct ConsistencyClient<S>
@@ -123,7 +123,7 @@ where
     pub async fn multi_del(
         &mut self,
         keyspace: impl Into<String>,
-        documents: Vec<DocumentMetadata>,
+        documents: DocVec<DocumentMetadata>,
     ) -> Result<(), Status> {
         let timestamp = self.clock.get_time().await;
         let ts = self

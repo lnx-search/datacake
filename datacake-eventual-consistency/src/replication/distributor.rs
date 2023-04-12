@@ -18,7 +18,7 @@ use crate::rpc::services::consistency_impl::{
     MultiPutPayload,
     MultiRemovePayload,
 };
-use crate::{ConsistencyClient, Document, Storage};
+use crate::{ConsistencyClient, Document, DocVec, Storage};
 
 const BATCHING_INTERVAL: Duration = Duration::from_secs(1);
 
@@ -73,7 +73,7 @@ pub enum Mutation {
     },
     MultiPut {
         keyspace: Cow<'static, str>,
-        docs: Vec<Document>,
+        docs: DocVec<Document>,
     },
     Del {
         keyspace: Cow<'static, str>,
@@ -81,7 +81,7 @@ pub enum Mutation {
     },
     MultiDel {
         keyspace: Cow<'static, str>,
-        docs: Vec<DocumentMetadata>,
+        docs: DocVec<DocumentMetadata>,
     },
 }
 
@@ -177,8 +177,8 @@ async fn task_distributor_service<S>(
 }
 
 fn register_mutation(
-    put_payloads: &mut BTreeMap<Cow<'static, str>, Vec<Document>>,
-    del_payloads: &mut BTreeMap<Cow<'static, str>, Vec<DocumentMetadata>>,
+    put_payloads: &mut BTreeMap<Cow<'static, str>, DocVec<Document>>,
+    del_payloads: &mut BTreeMap<Cow<'static, str>, DocVec<DocumentMetadata>>,
     mutation: Mutation,
 ) {
     match mutation {

@@ -30,7 +30,7 @@ use crate::keyspace::{
 use crate::replication::MAX_CONCURRENT_REQUESTS;
 use crate::rpc::ReplicationClient;
 use crate::storage::ProgressWatcher;
-use crate::{ProgressTracker, PutContext, Storage};
+use crate::{DocVec, ProgressTracker, PutContext, Storage};
 
 const INITIAL_KEYSPACE_WAIT: Duration = if cfg!(any(test, feature = "test-utils")) {
     Duration::from_millis(500)
@@ -152,7 +152,7 @@ async fn replication_cycle<S>(
             }
         }
 
-        read_repair_members(&ctx, &live_members, &mut keyspace_tracker).await;
+        repair_members(&ctx, &live_members, &mut keyspace_tracker).await;
     }
 }
 
@@ -185,7 +185,7 @@ impl KeyspaceTracker {
 /// Polls all `live_members` and works out what entries are missing from the local node.
 ///
 /// This will return a optimised plan of what nodes should have what documents retrieved.
-async fn read_repair_members<S>(
+async fn repair_members<S>(
     ctx: &ReplicationCycleContext<S>,
     live_members: &BTreeMap<NodeId, SocketAddr>,
     keyspace_tracker: &mut KeyspaceTracker,
@@ -316,8 +316,8 @@ where
 
 pub struct KeyspaceDiff {
     keyspace: String,
-    modified: Vec<DocumentMetadata>,
-    removed: Vec<DocumentMetadata>,
+    modified: DocVec<DocumentMetadata>,
+    removed: DocVec<DocumentMetadata>,
     last_updated: HLCTimestamp,
 }
 
@@ -388,8 +388,8 @@ async fn begin_keyspace_sync<S>(
     keyspace_name: String,
     target_node_id: NodeId,
     target_rpc_addr: SocketAddr,
-    removed: Vec<DocumentMetadata>,
-    modified: Vec<DocumentMetadata>,
+    removed: DocVec<DocumentMetadata>,
+    modified: DocVec<DocumentMetadata>,
 ) -> Result<(), anyhow::Error>
 where
     S: Storage,
@@ -445,7 +445,7 @@ where
 async fn handle_modified<S>(
     mut client: ReplicationClient<S>,
     keyspace: ActorMailbox<KeyspaceActor<S>>,
-    modified: Vec<DocumentMetadata>,
+    modified: DocVec<DocumentMetadata>,
     ctx: PutContext,
 ) -> Result<(), anyhow::Error>
 where
@@ -466,7 +466,7 @@ where
 
         let msg = MultiSet {
             source: READ_REPAIR_SOURCE_ID,
-            docs,
+            docs: DocVec::from_vec(docs),
             ctx: Some(ctx.clone()),
             _marker: PhantomData::<S>::default(),
         };
@@ -487,7 +487,7 @@ where
 /// as deleted along with the main data itself, but we keep a history of the deletes we've made.
 async fn handle_removals<S>(
     keyspace: ActorMailbox<KeyspaceActor<S>>,
-    mut removed: Vec<DocumentMetadata>,
+    mut removed: DocVec<DocumentMetadata>,
 ) -> Result<(), anyhow::Error>
 where
     S: Storage,

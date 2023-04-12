@@ -6,6 +6,9 @@ use bytecheck::CheckBytes;
 use datacake_crdt::{HLCTimestamp, Key};
 use rkyv::with::CopyOptimize;
 use rkyv::{Archive, Deserialize, Serialize};
+use smallvec::SmallVec;
+
+pub(crate) type DocVec<T> = SmallVec<[T; 4]>;
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive, Copy, Clone, Debug, PartialEq)]
