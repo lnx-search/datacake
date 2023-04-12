@@ -84,7 +84,7 @@ pub use error::StoreError;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 pub use statistics::SystemStatistics;
-#[cfg(feature = "test-utils")]
+#[cfg(any(feature = "test-utils", feature = "test-suite"))]
 pub use storage::test_suite;
 pub use storage::{BulkMutationError, ProgressTracker, PutContext, Storage};
 

@@ -342,7 +342,7 @@ pub trait Storage: Send + Sync + 'static {
     ) -> Result<Self::DocsIter, Self::Error>;
 }
 
-#[cfg(any(test, feature = "test-utils"))]
+#[cfg(any(test, feature = "test-utils", feature = "test-suite"))]
 pub mod test_suite {
     use std::any::type_name;
     use std::collections::HashSet;
