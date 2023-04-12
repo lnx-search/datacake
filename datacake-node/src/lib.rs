@@ -109,6 +109,7 @@ pub use nodes_selector::{
     DCAwareSelector,
     NodeSelector,
     NodeSelectorHandle,
+    Nodes,
 };
 pub use rpc::network::RpcNetwork;
 pub use statistics::ClusterStatistics;
@@ -361,7 +362,7 @@ impl DatacakeNode {
     pub async fn select_nodes(
         &self,
         consistency: Consistency,
-    ) -> Result<Vec<SocketAddr>, ConsistencyError> {
+    ) -> Result<Nodes, ConsistencyError> {
         self.selector.get_nodes(consistency).await
     }
 
@@ -448,7 +449,7 @@ impl DatacakeHandle {
     pub async fn select_nodes(
         &self,
         consistency: Consistency,
-    ) -> Result<Vec<SocketAddr>, ConsistencyError> {
+    ) -> Result<Nodes, ConsistencyError> {
         self.selector.get_nodes(consistency).await
     }
 }
@@ -533,7 +534,7 @@ async fn watch_membership_changes(
             .collect::<BTreeSet<_>>();
 
         {
-            let mut data_centers = BTreeMap::<Cow<'static, str>, Vec<SocketAddr>>::new();
+            let mut data_centers = BTreeMap::<Cow<'static, str>, Nodes>::new();
             for member in members.values() {
                 let dc = Cow::Owned(member.data_center.clone());
                 data_centers.entry(dc).or_default().push(member.public_addr);

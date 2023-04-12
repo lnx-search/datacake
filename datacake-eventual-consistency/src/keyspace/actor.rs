@@ -253,6 +253,8 @@ mod tests {
     use std::cmp::Reverse;
     use std::time::Duration;
 
+    use smallvec::smallvec;
+
     use super::*;
     use crate::core::DocumentMetadata;
     use crate::test_utils::MockStorage;
@@ -414,7 +416,7 @@ mod tests {
         keyspace
             .on_multi_set(MultiSet {
                 source: 0,
-                docs: vec![doc_1.clone(), doc_2.clone(), doc_3.clone()],
+                docs: smallvec![doc_1.clone(), doc_2.clone(), doc_3.clone()],
                 ctx: None,
                 _marker: Default::default(),
             })
@@ -477,7 +479,7 @@ mod tests {
         keyspace
             .on_multi_set(MultiSet {
                 source: 0,
-                docs: vec![doc_2.clone(), doc_4.clone()],
+                docs: smallvec![doc_2.clone(), doc_4.clone()],
                 ctx: None,
                 _marker: Default::default(),
             })
@@ -514,7 +516,12 @@ mod tests {
         keyspace
             .on_multi_set(MultiSet {
                 source: 0,
-                docs: vec![doc_4.clone(), doc_2.clone(), doc_1.clone(), doc_3.clone()],
+                docs: smallvec![
+                    doc_4.clone(),
+                    doc_2.clone(),
+                    doc_1.clone(),
+                    doc_3.clone()
+                ],
                 ctx: None,
                 _marker: Default::default(),
             })
@@ -559,7 +566,7 @@ mod tests {
         keyspace
             .on_multi_set(MultiSet {
                 source: 0,
-                docs: vec![doc_1.clone(), doc_2.clone(), doc_3.clone()],
+                docs: smallvec![doc_1.clone(), doc_2.clone(), doc_3.clone()],
                 ctx: None,
                 _marker: Default::default(),
             })
@@ -609,7 +616,7 @@ mod tests {
         keyspace
             .on_multi_set(MultiSet {
                 source: 0,
-                docs: vec![doc_1.clone(), doc_2.clone(), doc_3.clone()],
+                docs: smallvec![doc_1.clone(), doc_2.clone(), doc_3.clone()],
                 ctx: None,
                 _marker: Default::default(),
             })
@@ -618,7 +625,7 @@ mod tests {
         keyspace
             .on_multi_del(MultiDel {
                 source: 0,
-                docs: vec![
+                docs: smallvec![
                     DocumentMetadata::new(doc_1.id(), clock.get_time().await),
                     DocumentMetadata::new(doc_2.id(), clock.get_time().await),
                 ],
@@ -638,7 +645,7 @@ mod tests {
 
         let docs = [doc_1.clone(), doc_2.clone(), doc_3.clone()];
 
-        let deletes_expected = vec![
+        let deletes_expected = smallvec![
             DocumentMetadata::new(doc_3.id(), clock.get_time().await),
             DocumentMetadata::new(doc_1.id(), clock.get_time().await),
         ];
@@ -664,7 +671,7 @@ mod tests {
         keyspace
             .on_multi_set(MultiSet {
                 source: 0,
-                docs: vec![doc_1.clone(), doc_2.clone(), doc_3.clone()],
+                docs: smallvec![doc_1.clone(), doc_2.clone(), doc_3.clone()],
                 ctx: None,
                 _marker: Default::default(),
             })

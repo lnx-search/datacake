@@ -9,7 +9,7 @@ use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::core::{Document, DocumentMetadata};
 use crate::keyspace::{KeyspaceGroup, CONSISTENCY_SOURCE_ID};
-use crate::{ProgressTracker, PutContext, Storage};
+use crate::{DocVec, ProgressTracker, PutContext, Storage};
 
 macro_rules! try_send {
     ($keyspace:expr, $msg:expr) => {{
@@ -242,7 +242,7 @@ pub struct PutPayload {
 pub struct MultiPutPayload {
     pub keyspace: String,
     pub ctx: Option<Context>,
-    pub documents: Vec<Document>,
+    pub documents: DocVec<Document>,
     pub timestamp: HLCTimestamp,
 }
 
@@ -260,7 +260,7 @@ pub struct RemovePayload {
 #[archive_attr(derive(CheckBytes))]
 pub struct MultiRemovePayload {
     pub keyspace: String,
-    pub documents: Vec<DocumentMetadata>,
+    pub documents: DocVec<DocumentMetadata>,
     pub timestamp: HLCTimestamp,
 }
 
@@ -269,8 +269,8 @@ pub struct MultiRemovePayload {
 #[archive_attr(derive(CheckBytes))]
 pub struct BatchPayload {
     pub timestamp: HLCTimestamp,
-    pub modified: Vec<MultiPutPayload>,
-    pub removed: Vec<MultiRemovePayload>,
+    pub modified: DocVec<MultiPutPayload>,
+    pub removed: DocVec<MultiRemovePayload>,
 }
 
 #[repr(C)]
@@ -284,6 +284,8 @@ pub struct Context {
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
+
+    use smallvec::smallvec;
 
     use super::*;
     use crate::test_utils::MemStore;
@@ -339,7 +341,7 @@ mod tests {
         let put_req = Request::using_owned(MultiPutPayload {
             keyspace: KEYSPACE.to_string(),
             ctx: None,
-            documents: vec![doc_1.clone(), doc_2.clone(), doc_3.clone()],
+            documents: smallvec![doc_1.clone(), doc_2.clone(), doc_3.clone()],
             timestamp: clock.get_time().await,
         })
         .await;
@@ -390,7 +392,7 @@ mod tests {
             Document::new(1, clock.get_time().await, b"Hello, world 1".to_vec());
         add_docs(
             KEYSPACE,
-            vec![doc.clone()],
+            smallvec![doc.clone()],
             clock.get_time().await,
             &service,
         )
@@ -442,7 +444,7 @@ mod tests {
         let doc_3 = Document::new(3, clock.get_time().await, b"Hello, world 3".to_vec());
         add_docs(
             KEYSPACE,
-            vec![doc_1.clone(), doc_2.clone(), doc_3.clone()],
+            smallvec![doc_1.clone(), doc_2.clone(), doc_3.clone()],
             clock.get_time().await,
             &service,
         )
@@ -466,7 +468,7 @@ mod tests {
         doc_2.metadata.last_updated = clock.get_time().await;
         let remove_req = Request::using_owned(MultiRemovePayload {
             keyspace: KEYSPACE.to_string(),
-            documents: vec![doc_1.metadata, doc_2.metadata],
+            documents: smallvec![doc_1.metadata, doc_2.metadata],
             timestamp: clock.get_time().await,
         })
         .await;
@@ -507,7 +509,7 @@ mod tests {
 
     async fn add_docs(
         keyspace: &str,
-        documents: Vec<Document>,
+        documents: DocVec<Document>,
         timestamp: HLCTimestamp,
         service: &ConsistencyService<MemStore>,
     ) {

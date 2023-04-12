@@ -79,16 +79,18 @@ use datacake_node::{
     ConsistencyError,
     DatacakeHandle,
     DatacakeNode,
+    Nodes,
 };
 pub use error::StoreError;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 pub use statistics::SystemStatistics;
-#[cfg(feature = "test-utils")]
+#[cfg(any(feature = "test-utils", feature = "test-suite"))]
 pub use storage::test_suite;
 pub use storage::{BulkMutationError, ProgressTracker, PutContext, Storage};
 
 pub use self::core::{Document, DocumentMetadata};
+use crate::core::DocVec;
 use crate::keyspace::{
     Del,
     KeyspaceGroup,
@@ -442,7 +444,7 @@ where
         let docs = documents
             .into_iter()
             .map(|(id, data)| Document::new(id, last_updated, data))
-            .collect::<Vec<_>>();
+            .collect::<DocVec<_>>();
 
         let keyspace = self.group.get_or_create_keyspace(keyspace).await;
         let msg = MultiSet {
@@ -560,7 +562,7 @@ where
         let docs = doc_ids
             .into_iter()
             .map(|id| DocumentMetadata { id, last_updated })
-            .collect::<Vec<_>>();
+            .collect::<DocVec<_>>();
 
         let keyspace = self.group.get_or_create_keyspace(keyspace).await;
         let msg = MultiDel {
@@ -710,7 +712,7 @@ async fn watch_membership_changes(
 }
 
 async fn handle_consistency_distribution<S, CB, F>(
-    nodes: Vec<SocketAddr>,
+    nodes: Nodes,
     factory: CB,
 ) -> Result<(), StoreError<S::Error>>
 where

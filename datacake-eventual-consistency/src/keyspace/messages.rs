@@ -5,7 +5,7 @@ use puppet::{derive_message, Message};
 
 use crate::core::DocumentMetadata;
 use crate::storage::BulkMutationError;
-use crate::{Document, PutContext, Storage};
+use crate::{DocVec, Document, PutContext, Storage};
 
 #[derive(Debug, thiserror::Error)]
 #[error("Failed to (de)serialize state.")]
@@ -25,7 +25,7 @@ impl<S: Storage> Message for Set<S> {
 
 pub struct MultiSet<S> {
     pub source: usize,
-    pub docs: Vec<Document>,
+    pub docs: DocVec<Document>,
     pub ctx: Option<PutContext>,
     pub _marker: PhantomData<S>,
 }
@@ -44,7 +44,7 @@ impl<S: Storage> Message for Del<S> {
 
 pub struct MultiDel<S> {
     pub source: usize,
-    pub docs: Vec<DocumentMetadata>,
+    pub docs: DocVec<DocumentMetadata>,
     pub _marker: PhantomData<S>,
 }
 impl<S: Storage> Message for MultiDel<S> {
