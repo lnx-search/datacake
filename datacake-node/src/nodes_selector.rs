@@ -444,7 +444,7 @@ fn select_n_nodes(
         let num_extra_nodes_per_dc = num_extra_nodes / cmp::max(dc_count - 1, 1);
         for _ in 0..num_extra_nodes_per_dc {
             if let Some(node) = dc_nodes.next() {
-                if selected_nodes.contains(&node) {
+                if node == local_node || selected_nodes.contains(&node) {
                     continue;
                 }
 
@@ -541,6 +541,164 @@ mod tests {
 
     #[test]
     fn test_dc_aware_selector() {
+        let mut selector = DCAwareSelector::default();
+
+        let nodes = selector
+            .select_nodes(
+                make_addr(0, 0),
+                "dc-0",
+                3,
+                &mut make_dc(vec![3]),
+                Consistency::None,
+            )
+            .expect("Consistency requirements should be met");
+        assert!(nodes.is_empty(), "No nodes should be selected");
+
+        let nodes = selector
+            .select_nodes(
+                make_addr(0, 0),
+                "dc-0",
+                3,
+                &mut make_dc(vec![3]),
+                Consistency::One,
+            )
+            .expect("Consistency requirements should be met");
+        assert_eq!(nodes.len(), 1, "1 node should be selected");
+
+        let nodes = selector
+            .select_nodes(
+                make_addr(0, 0),
+                "dc-0",
+                3,
+                &mut make_dc(vec![3]),
+                Consistency::Two,
+            )
+            .expect("Consistency requirements should be met");
+        assert_eq!(nodes.len(), 2, "2 nodes should be selected");
+
+        selector
+            .select_nodes(
+                make_addr(0, 0),
+                "dc-0",
+                3,
+                &mut make_dc(vec![3]),
+                Consistency::Three,
+            )
+            .expect_err("Consistency requirements should not be met when only 2 remote nodes available");
+
+        let nodes = selector
+            .select_nodes(
+                make_addr(0, 0),
+                "dc-0",
+                3,
+                &mut make_dc(vec![3]),
+                Consistency::All,
+            )
+            .expect("Consistency requirements should be met");
+        assert_eq!(nodes.len(), 2, "2 nodes should be selected");
+
+        let nodes = selector
+            .select_nodes(
+                make_addr(0, 0),
+                "dc-0",
+                3,
+                &mut make_dc(vec![3]),
+                Consistency::Quorum,
+            )
+            .expect("Consistency requirements should be met");
+        assert_eq!(nodes.len(), 1, "1 node should be selected");
+
+        let nodes = selector
+            .select_nodes(
+                make_addr(0, 0),
+                "dc-0",
+                2,
+                &mut make_dc(vec![2]),
+                Consistency::Quorum,
+            )
+            .expect("Consistency requirements should be met");
+        assert_eq!(nodes.len(), 1, "1 node should be selected");
+
+        let nodes = selector
+            .select_nodes(
+                make_addr(0, 0),
+                "dc-0",
+                1,
+                &mut make_dc(vec![1]),
+                Consistency::Quorum,
+            )
+            .expect("Consistency requirements should be met");
+        assert!(nodes.is_empty(), "0 nodes should be selected");
+
+        let nodes = selector
+            .select_nodes(
+                make_addr(0, 0),
+                "dc-0",
+                4,
+                &mut make_dc(vec![4]),
+                Consistency::Quorum,
+            )
+            .expect("Consistency requirements should be met");
+        assert_eq!(nodes.len(), 2, "2 nodes should be selected");
+
+        let nodes = selector
+            .select_nodes(
+                make_addr(0, 0),
+                "dc-0",
+                5,
+                &mut make_dc(vec![5]),
+                Consistency::Quorum,
+            )
+            .expect("Consistency requirements should be met");
+        assert_eq!(nodes.len(), 2, "2 nodes should be selected");
+
+        let nodes = selector
+            .select_nodes(
+                make_addr(0, 0),
+                "dc-0",
+                3,
+                &mut make_dc(vec![3]),
+                Consistency::LocalQuorum,
+            )
+            .expect("Consistency requirements should be met");
+        assert_eq!(nodes.len(), 1, "1 node should be selected");
+
+        let nodes = selector
+            .select_nodes(
+                make_addr(0, 0),
+                "dc-0",
+                3,
+                &mut make_dc(vec![3]),
+                Consistency::EachQuorum,
+            )
+            .expect("Consistency requirements should be met");
+        assert_eq!(nodes.len(), 1, "1 node should be selected");
+
+        let nodes = selector
+            .select_nodes(
+                make_addr(0, 0),
+                "dc-0",
+                6,
+                &mut make_dc(vec![3, 3]),
+                Consistency::LocalQuorum,
+            )
+            .expect("Consistency requirements should be met");
+        assert_eq!(nodes.len(), 1, "1 node should be selected");
+
+        let nodes = selector
+            .select_nodes(
+                make_addr(0, 0),
+                "dc-0",
+                3,
+                &mut make_dc(vec![3, 3]),
+                Consistency::EachQuorum,
+            )
+            .expect("Consistency requirements should be met");
+        assert_eq!(nodes.len(), 3, "3 nodes should be selected");
+    }
+
+    #[test]
+    fn test_dc_aware_selector_cycling() {
         let addr = make_addr(0, 0);
         let total_nodes = 6;
         let mut dc = make_dc(vec![3, 2, 1]);
@@ -651,12 +809,12 @@ mod tests {
             select_n_nodes(addr, "dc-2", 3, total_nodes, &mut dc).expect("get nodes");
         assert_eq!(
             nodes.as_ref(),
-            [make_addr(0, 2), make_addr(0, 0), make_addr(1, 1),],
+            [make_addr(0, 2), make_addr(1, 1), make_addr(1, 0),],
         );
 
         let nodes =
             select_n_nodes(addr, "dc-2", 2, total_nodes, &mut dc).expect("get nodes");
-        assert_eq!(nodes.as_ref(), [make_addr(0, 1), make_addr(1, 0),],);
+        assert_eq!(nodes.as_ref(), [make_addr(0, 1), make_addr(1, 1),],);
 
         let nodes =
             select_n_nodes(addr, "dc-2", 0, total_nodes, &mut dc).expect("get nodes");
