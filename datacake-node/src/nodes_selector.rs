@@ -3,8 +3,8 @@ use std::cmp;
 use std::collections::{BTreeMap, HashMap};
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
-use smallvec::SmallVec;
 
+use smallvec::SmallVec;
 use tokio::sync::oneshot;
 use tracing::{debug, info, instrument, warn};
 
@@ -529,7 +529,6 @@ mod tests {
     use std::collections::BTreeMap;
     use std::fmt::Display;
     use std::net::{IpAddr, SocketAddr};
-    use crate::Nodes;
 
     use crate::nodes_selector::{
         select_n_nodes,
@@ -538,6 +537,7 @@ mod tests {
         NodeCycler,
         NodeSelector,
     };
+    use crate::Nodes;
 
     #[test]
     fn test_dc_aware_selector() {

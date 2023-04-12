@@ -73,7 +73,14 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use datacake_crdt::Key;
-use datacake_node::{ClusterExtension, Consistency, ConsistencyError, DatacakeHandle, DatacakeNode, Nodes};
+use datacake_node::{
+    ClusterExtension,
+    Consistency,
+    ConsistencyError,
+    DatacakeHandle,
+    DatacakeNode,
+    Nodes,
+};
 pub use error::StoreError;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
@@ -81,9 +88,9 @@ pub use statistics::SystemStatistics;
 #[cfg(any(feature = "test-utils", feature = "test-suite"))]
 pub use storage::test_suite;
 pub use storage::{BulkMutationError, ProgressTracker, PutContext, Storage};
-use crate::core::DocVec;
 
 pub use self::core::{Document, DocumentMetadata};
+use crate::core::DocVec;
 use crate::keyspace::{
     Del,
     KeyspaceGroup,

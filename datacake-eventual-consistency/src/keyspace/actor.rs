@@ -252,6 +252,7 @@ where
 mod tests {
     use std::cmp::Reverse;
     use std::time::Duration;
+
     use smallvec::smallvec;
 
     use super::*;
@@ -515,7 +516,12 @@ mod tests {
         keyspace
             .on_multi_set(MultiSet {
                 source: 0,
-                docs: smallvec![doc_4.clone(), doc_2.clone(), doc_1.clone(), doc_3.clone()],
+                docs: smallvec![
+                    doc_4.clone(),
+                    doc_2.clone(),
+                    doc_1.clone(),
+                    doc_3.clone()
+                ],
                 ctx: None,
                 _marker: Default::default(),
             })

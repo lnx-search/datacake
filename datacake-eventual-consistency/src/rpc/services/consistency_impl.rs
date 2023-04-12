@@ -284,6 +284,7 @@ pub struct Context {
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
+
     use smallvec::smallvec;
 
     use super::*;

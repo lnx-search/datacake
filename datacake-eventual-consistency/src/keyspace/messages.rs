@@ -5,7 +5,7 @@ use puppet::{derive_message, Message};
 
 use crate::core::DocumentMetadata;
 use crate::storage::BulkMutationError;
-use crate::{Document, DocVec, PutContext, Storage};
+use crate::{DocVec, Document, PutContext, Storage};
 
 #[derive(Debug, thiserror::Error)]
 #[error("Failed to (de)serialize state.")]

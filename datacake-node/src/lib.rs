@@ -109,13 +109,13 @@ pub use nodes_selector::{
     DCAwareSelector,
     NodeSelector,
     NodeSelectorHandle,
+    Nodes,
 };
 pub use rpc::network::RpcNetwork;
 pub use statistics::ClusterStatistics;
 use tokio::sync::watch;
 use tokio_stream::wrappers::WatchStream;
 use tracing::info;
-pub use nodes_selector::Nodes;
 
 use crate::node::NodeMembership;
 use crate::rpc::chitchat_transport::ChitchatTransport;

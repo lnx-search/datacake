@@ -18,7 +18,7 @@ use crate::rpc::services::consistency_impl::{
     MultiPutPayload,
     MultiRemovePayload,
 };
-use crate::{ConsistencyClient, Document, DocVec, Storage};
+use crate::{ConsistencyClient, DocVec, Document, Storage};
 
 const BATCHING_INTERVAL: Duration = Duration::from_secs(1);
 
