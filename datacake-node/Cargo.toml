@@ -1,6 +1,6 @@
 [package]
 name = "datacake-node"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 description = "The core cluster membership system built ontop of Quickwit's chitchat."
 license = "MIT"
