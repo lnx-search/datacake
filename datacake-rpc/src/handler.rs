@@ -43,7 +43,8 @@ pub type HandlerKey = u64;
 ///
 /// #[repr(C)]
 /// #[derive(Serialize, Deserialize, Archive, Debug)]
-/// #[archive_attr(derive(CheckBytes, Debug))]
+/// #[archive(check_bytes)]
+/// #[archive_attr(derive(Debug))]
 /// pub struct MyOtherMessage {
 ///     age: u32,
 /// }
