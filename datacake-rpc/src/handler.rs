@@ -28,14 +28,14 @@ pub type HandlerKey = u64;
 ///
 ///
 /// ```rust
-/// use bytecheck::CheckBytes;
 /// use rkyv::{Archive, Deserialize, Serialize};
 /// use datacake_rpc::{Handler, Request, RpcService, ServiceRegistry, Status, RpcClient, Channel};
 /// use std::net::SocketAddr;
 ///
 /// #[repr(C)]
 /// #[derive(Serialize, Deserialize, Archive, Debug)]
-/// #[archive_attr(derive(CheckBytes, Debug))]
+/// #[archive(check_bytes)]
+/// #[archive_attr(derive(Debug))]
 /// pub struct MyMessage {
 ///     name: String,
 ///     age: u32,
@@ -165,14 +165,14 @@ pub trait RpcService: Sized {
 /// A generic RPC message handler.
 ///
 /// ```rust
-/// use bytecheck::CheckBytes;
 /// use rkyv::{Archive, Deserialize, Serialize};
 /// use datacake_rpc::{Handler, Request, RpcService, ServiceRegistry, Status, RpcClient, Channel};
 /// use std::net::SocketAddr;
 ///
 /// #[repr(C)]
 /// #[derive(Serialize, Deserialize, Archive, Debug)]
-/// #[archive_attr(derive(CheckBytes, Debug))]
+/// #[archive(check_bytes)]
+/// #[archive_attr(derive(Debug))]
 /// pub struct MyMessage {
 ///     name: String,
 ///     age: u32,
