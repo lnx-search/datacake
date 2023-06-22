@@ -4,8 +4,6 @@ use std::str::FromStr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[cfg(feature = "rkyv-support")]
-use bytecheck::CheckBytes;
-#[cfg(feature = "rkyv-support")]
 use rkyv::{Archive, Deserialize, Serialize};
 
 /// The maximum allowed clock drift between nodes.
@@ -19,12 +17,9 @@ pub const DATACAKE_EPOCH: Duration = Duration::from_secs(1672534861);
 
 #[derive(Debug, Hash, Copy, Clone, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(C)]
-#[cfg_attr(feature = "rkyv-support", derive(Serialize, Deserialize, Archive))]
-#[cfg_attr(feature = "rkyv-support", archive(compare(PartialEq)))]
-#[cfg_attr(
-    feature = "rkyv-support",
-    archive_attr(repr(C), derive(CheckBytes, Debug))
-)]
+#[cfg_attr(feature = "rkyv", derive(Serialize, Deserialize, Archive))]
+#[cfg_attr(feature = "rkyv", archive(compare(PartialEq), check_bytes))]
+#[cfg_attr(feature = "rkyv", archive_attr(repr(C), derive(Debug)))]
 /// A HLC (Hybrid Logical Clock) timestamp implementation.
 ///
 /// This implementation is largely a port of the JavaScript implementation

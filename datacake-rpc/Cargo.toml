@@ -12,7 +12,6 @@ readme = "README.md"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bytecheck = "0.6.9"
 http = "0.2.8"
 bytes = "1.3.0"
 anyhow = "1"
@@ -22,7 +21,7 @@ parking_lot = "0.12.1"
 tracing = "0.1.37"
 
 hyper = { version = "0.14.23", features = ["full"] }
-rkyv = { version = "0.7.39", features = ["validation"] }
+rkyv = { version = "0.7.42", features = ["strict", "validation"] }
 tokio = { version = "1", default-features = false, features = ["rt"] }
 
 # Used for simulation

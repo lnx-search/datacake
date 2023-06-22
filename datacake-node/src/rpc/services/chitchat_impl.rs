@@ -1,6 +1,5 @@
 use std::net::SocketAddr;
 
-use bytecheck::CheckBytes;
 use chitchat::serialize::Serializable;
 use chitchat::ChitchatMessage;
 use datacake_crdt::HLCTimestamp;
@@ -11,7 +10,7 @@ use crate::Clock;
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive)]
-#[archive_attr(derive(CheckBytes))]
+#[archive(check_bytes)]
 pub struct ChitchatRpcMessage {
     pub data: Vec<u8>,
     pub source: SocketAddr,
