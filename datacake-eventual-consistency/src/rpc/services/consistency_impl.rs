@@ -1,7 +1,6 @@
 use std::marker::PhantomData;
 use std::net::SocketAddr;
 
-use bytecheck::CheckBytes;
 use datacake_crdt::HLCTimestamp;
 use datacake_node::{NodeId, RpcNetwork};
 use datacake_rpc::{Handler, Request, RpcService, ServiceRegistry, Status};
@@ -228,7 +227,7 @@ where
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive)]
-#[archive_attr(derive(CheckBytes))]
+#[archive(check_bytes)]
 pub struct PutPayload {
     pub keyspace: String,
     pub ctx: Option<Context>,
@@ -238,7 +237,7 @@ pub struct PutPayload {
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive, Debug)]
-#[archive_attr(derive(CheckBytes))]
+#[archive(check_bytes)]
 pub struct MultiPutPayload {
     pub keyspace: String,
     pub ctx: Option<Context>,
@@ -248,7 +247,7 @@ pub struct MultiPutPayload {
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive, Debug)]
-#[archive_attr(derive(CheckBytes))]
+#[archive(check_bytes)]
 pub struct RemovePayload {
     pub keyspace: String,
     pub document: DocumentMetadata,
@@ -257,7 +256,7 @@ pub struct RemovePayload {
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive, Debug)]
-#[archive_attr(derive(CheckBytes))]
+#[archive(check_bytes)]
 pub struct MultiRemovePayload {
     pub keyspace: String,
     pub documents: DocVec<DocumentMetadata>,
@@ -266,7 +265,7 @@ pub struct MultiRemovePayload {
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive, Debug)]
-#[archive_attr(derive(CheckBytes))]
+#[archive(check_bytes)]
 pub struct BatchPayload {
     pub timestamp: HLCTimestamp,
     pub modified: DocVec<MultiPutPayload>,
@@ -275,7 +274,7 @@ pub struct BatchPayload {
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive, Debug)]
-#[archive_attr(derive(CheckBytes))]
+#[archive(check_bytes)]
 pub struct Context {
     pub node_id: NodeId,
     pub node_addr: SocketAddr,

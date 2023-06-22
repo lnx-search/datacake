@@ -4,9 +4,8 @@ use std::net::SocketAddr;
 use std::ops::Deref;
 
 use async_trait::async_trait;
-use bytecheck::CheckBytes;
 use rkyv::validation::validators::DefaultValidator;
-use rkyv::{Archive, Deserialize, Serialize};
+use rkyv::{Archive, CheckBytes, Deserialize, Serialize};
 
 use crate::view::DataView;
 use crate::{Body, Status};
@@ -53,7 +52,7 @@ where
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive, PartialEq)]
 #[cfg_attr(test, derive(Debug))]
-#[archive_attr(derive(CheckBytes))]
+#[archive(check_bytes)]
 pub struct MessageMetadata {
     #[with(rkyv::with::AsOwned)]
     /// The name of the service being targeted.

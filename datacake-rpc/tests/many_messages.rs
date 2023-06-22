@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 
-use bytecheck::CheckBytes;
 use datacake_rpc::{
     Channel,
     Handler,
@@ -16,7 +15,8 @@ use rkyv::{Archive, Deserialize, Serialize};
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive, Debug)]
-#[archive_attr(derive(CheckBytes, Debug))]
+#[archive(check_bytes)]
+#[archive_attr(derive(Debug))]
 pub struct IncCounter {
     name: String,
     value: u64,
@@ -24,7 +24,8 @@ pub struct IncCounter {
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive, Debug)]
-#[archive_attr(derive(CheckBytes, Debug))]
+#[archive(check_bytes)]
+#[archive_attr(derive(Debug))]
 pub struct DecCounter {
     name: String,
     value: u64,

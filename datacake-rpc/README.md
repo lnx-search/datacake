@@ -16,7 +16,6 @@ which can lead to massive performance improvements when processing lots of big m
 ```rust                                                                                         
 use std::net::SocketAddr;                                                                      
                                                                                                 
-use bytecheck::CheckBytes;                                                                      
 use datacake_rpc::{                                                                             
     Channel,                                                                                    
     Handler,                                                                                    
@@ -36,8 +35,8 @@ use rkyv::{Archive, Deserialize, Serialize};
 // Checkout rkyv for more information!                                                          
 #[repr(C)]                                                                                      
 #[derive(Serialize, Deserialize, Archive, PartialEq, Debug)]                                    
-#[archive(compare(PartialEq))]                                                                  
-#[archive_attr(derive(CheckBytes, PartialEq, Debug))]                                           
+#[archive(compare(PartialEq), check_bytes)]                                                                  
+#[archive_attr(derive(PartialEq, Debug))]                                           
 pub struct MyMessage {                                                                          
     name: String,                                                                               
     age: u32,                                                                                   

@@ -1,4 +1,3 @@
-use bytecheck::CheckBytes;
 use datacake_crdt::{HLCTimestamp, Key};
 use datacake_rpc::{Handler, Request, RpcService, ServiceRegistry, Status};
 use rkyv::{Archive, Deserialize, Serialize};
@@ -127,12 +126,12 @@ where
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive)]
-#[archive_attr(derive(CheckBytes))]
+#[archive(check_bytes)]
 pub struct PollKeyspace(pub HLCTimestamp);
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive)]
-#[archive_attr(derive(CheckBytes))]
+#[archive(check_bytes)]
 pub struct GetState {
     pub keyspace: String,
     pub timestamp: HLCTimestamp,
@@ -140,7 +139,7 @@ pub struct GetState {
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive)]
-#[archive_attr(derive(CheckBytes))]
+#[archive(check_bytes)]
 pub struct KeyspaceOrSwotSet {
     pub timestamp: HLCTimestamp,
     pub last_updated: HLCTimestamp,
@@ -150,7 +149,7 @@ pub struct KeyspaceOrSwotSet {
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive)]
-#[archive_attr(derive(CheckBytes))]
+#[archive(check_bytes)]
 pub struct FetchDocs {
     pub keyspace: String,
     #[with(rkyv::with::CopyOptimize)]
@@ -160,7 +159,7 @@ pub struct FetchDocs {
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive)]
-#[archive_attr(derive(CheckBytes))]
+#[archive(check_bytes)]
 pub struct FetchedDocs {
     pub documents: Vec<Document>,
     pub timestamp: HLCTimestamp,

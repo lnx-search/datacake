@@ -1,6 +1,6 @@
 [package]
 name = "datacake"
-version = "0.7.0"
+version = "0.7.1"
 edition = "2021"
 description = "A batteries included framework for building fault-tolerance distributed data systems."
 license = "MIT"

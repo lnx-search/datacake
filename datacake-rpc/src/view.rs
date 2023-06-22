@@ -2,10 +2,9 @@ use std::fmt::{Debug, Formatter};
 use std::mem;
 use std::ops::Deref;
 
-use bytecheck::CheckBytes;
 use rkyv::de::deserializers::SharedDeserializeMap;
 use rkyv::validation::validators::DefaultValidator;
-use rkyv::{AlignedVec, Archive, Deserialize};
+use rkyv::{AlignedVec, Archive, CheckBytes, Deserialize};
 
 #[derive(Debug, thiserror::Error)]
 #[error("View cannot be made for type with provided data.")]
@@ -135,15 +134,14 @@ where
 
 #[cfg(test)]
 mod tests {
-    use bytecheck::CheckBytes;
     use rkyv::{Archive, Deserialize, Serialize};
 
     use super::*;
 
     #[repr(C)]
     #[derive(Serialize, Deserialize, Archive, PartialEq, Eq, Debug)]
-    #[archive(compare(PartialEq))]
-    #[archive_attr(derive(CheckBytes, Debug, PartialEq, Eq))]
+    #[archive(compare(PartialEq), check_bytes)]
+    #[archive_attr(derive(Debug, PartialEq, Eq))]
     struct Demo {
         a: String,
         b: u64,

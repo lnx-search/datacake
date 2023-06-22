@@ -1,6 +1,6 @@
 [package]
 name = "datacake-crdt"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 description = "A conflict free replicated datatype based on a hybrid logical clock implementation for building eventually consistent data stores."
 license = "MIT"
@@ -14,9 +14,8 @@ readme = "README.md"
 [dependencies]
 thiserror = "1.0.33"
 
-bytecheck = { version = "0.6.9", optional = true }
-rkyv = { version = "0.7.39", features = ["validation"], optional = true }
+rkyv = { version = "0.7.42", features = ["validation"], optional = true }
 
 [features]
 # Enables (de)serialization support for all data types.
-rkyv-support = ["rkyv", "bytecheck"]
+rkyv-support = ["rkyv"]

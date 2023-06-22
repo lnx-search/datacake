@@ -1,4 +1,3 @@
-use bytecheck::CheckBytes;
 use datacake_rpc::{
     Body,
     Channel,
@@ -14,7 +13,8 @@ use rkyv::{Archive, Deserialize, Serialize};
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive, Debug)]
-#[archive_attr(derive(CheckBytes, Debug))]
+#[archive(check_bytes)]
+#[archive_attr(derive(Debug))]
 pub struct MyMessage {
     name: String,
     age: u32,

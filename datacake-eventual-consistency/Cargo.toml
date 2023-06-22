@@ -1,6 +1,6 @@
 [package]
 name = "datacake-eventual-consistency"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2021"
 description = "Eventually consistent state replication as a library (consensus, RPC and conflict resolution) for building your own eventually consistent databases."
 license = "MIT"
@@ -25,13 +25,12 @@ crossbeam-utils = "0.8.14"
 async-trait = "0.1.58"
 anyhow = "1"
 rand = "0.8.5"
-bytecheck = "0.6.9"
 puppet = "0.4.0"
 smallvec = "1"
 
 chitchat = { version = "0.5.1", package  = "datacake-chitchat-fork" }
 tokio = { version = "1", default-features = false, features = ["sync", "time"] }
-rkyv = { version = "0.7.9", features = ["validation", "smallvec"] }
+rkyv = { version = "0.7.42", features = ["strict", "validation", "smallvec"] }
 
 datacake-rpc = { path = "../datacake-rpc", version = "0.5" }
 datacake-node = { path = "../datacake-node", version = "0.4" }

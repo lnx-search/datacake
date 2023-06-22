@@ -2,7 +2,6 @@ use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
-use bytecheck::CheckBytes;
 use datacake_crdt::{HLCTimestamp, Key};
 use rkyv::with::CopyOptimize;
 use rkyv::{Archive, Deserialize, Serialize};
@@ -12,7 +11,8 @@ pub(crate) type DocVec<T> = SmallVec<[T; 4]>;
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive, Copy, Clone, Debug, PartialEq)]
-#[archive_attr(repr(C), derive(CheckBytes))]
+#[archive(check_bytes)]
+#[archive_attr(repr(C))]
 /// The metadata attached to each document.
 pub struct DocumentMetadata {
     /// The unique id of the document.
@@ -32,7 +32,8 @@ impl DocumentMetadata {
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive, Clone)]
-#[archive_attr(repr(C), derive(CheckBytes))]
+#[archive(check_bytes)]
+#[archive_attr(repr(C))]
 /// A single document managed by the store.
 pub struct Document {
     /// The metadata associated with the document.
@@ -105,7 +106,8 @@ impl Debug for Document {
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive, PartialEq, Clone)]
-#[archive_attr(repr(C), derive(CheckBytes))]
+#[archive(check_bytes)]
+#[archive_attr(repr(C))]
 /// A new type wrapper around a `Vec<u8>` to implement the
 /// [CopyOptimize] optimisations from [rkyv].
 pub struct Bytes {

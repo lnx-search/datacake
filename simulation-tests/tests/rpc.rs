@@ -3,7 +3,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use bytecheck::CheckBytes;
 use datacake::rpc::{
     Channel,
     ErrorCode,
@@ -335,8 +334,8 @@ fn addr(name: &str) -> SocketAddr {
 // Checkout rkyv for more information!
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive, PartialEq, Debug)]
-#[archive(compare(PartialEq))]
-#[archive_attr(derive(CheckBytes, PartialEq, Debug))]
+#[archive(compare(PartialEq), check_bytes)]
+#[archive_attr(derive(PartialEq, Debug))]
 pub struct MyMessage {
     name: String,
     age: u32,

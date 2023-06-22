@@ -14,15 +14,14 @@ use crate::handler::{HandlerKey, OpaqueMessageHandler, RpcService, ServiceRegist
 /// coming from clients.
 ///
 /// ```rust
-/// use bytecheck::CheckBytes;
 /// use rkyv::{Archive, Deserialize, Serialize};
 /// use datacake_rpc::{Server, Handler, Request, RpcService, ServiceRegistry, Status};
 /// use std::net::SocketAddr;
 ///
 /// #[repr(C)]
 /// #[derive(Serialize, Deserialize, Archive, PartialEq, Debug)]
-/// #[archive(compare(PartialEq))]
-/// #[archive_attr(derive(CheckBytes, PartialEq, Debug))]
+/// #[archive(compare(PartialEq), check_bytes)]
+/// #[archive_attr(derive(PartialEq, Debug))]
 /// pub struct MyMessage {
 ///     name: String,
 ///     age: u32,

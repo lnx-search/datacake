@@ -5,8 +5,6 @@ use std::time::Duration;
 use std::{cmp, mem};
 
 #[cfg(feature = "rkyv-support")]
-use bytecheck::CheckBytes;
-#[cfg(feature = "rkyv-support")]
 use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::timestamp::HLCTimestamp;
@@ -26,7 +24,7 @@ pub const FORGIVENESS_PERIOD: Duration = if cfg!(test) {
     Duration::from_secs(3_600)
 };
 
-#[cfg(feature = "rkyv-support")]
+#[cfg(feature = "rkyv")]
 #[derive(Debug, thiserror::Error)]
 #[error("The set cannot be (de)serialized from the provided set of bytes.")]
 /// The set cannot be (de)serialized to or from the byte buffer.
@@ -34,9 +32,8 @@ pub struct BadState;
 
 #[derive(Debug, Clone)]
 #[repr(C)]
-#[cfg_attr(feature = "rkyv-support", derive(Serialize, Deserialize, Archive))]
-#[cfg_attr(feature = "rkyv-support", archive(compare(PartialEq)))]
-#[cfg_attr(feature = "rkyv-support", archive_attr(derive(CheckBytes)))]
+#[cfg_attr(feature = "rkyv", derive(Serialize, Deserialize, Archive))]
+#[cfg_attr(feature = "rkyv", archive(compare(PartialEq), check_bytes))]
 pub struct NodeVersions<const N: usize> {
     nodes_max_stamps: [BTreeMap<u8, HLCTimestamp>; N],
     safe_last_stamps: BTreeMap<u8, HLCTimestamp>,
@@ -140,8 +137,7 @@ impl<const N: usize> NodeVersions<N> {
 #[derive(Debug, Default, Clone)]
 #[repr(C)]
 #[cfg_attr(feature = "rkyv", derive(Serialize, Deserialize, Archive))]
-#[cfg_attr(feature = "rkyv", archive(compare(PartialEq)))]
-#[cfg_attr(feature = "rkyv", archive_attr(derive(CheckBytes)))]
+#[cfg_attr(feature = "rkyv", archive(compare(PartialEq), check_bytes))]
 /// A CRDT which supports purging of deleted entry tombstones.
 ///
 /// This implementation is largely based on the Riak DB implementations

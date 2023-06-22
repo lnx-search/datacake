@@ -5,7 +5,6 @@ use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use bytecheck::CheckBytes;
 use crossbeam_utils::atomic::AtomicCell;
 use datacake_crdt::{HLCTimestamp, Key, OrSWotSet};
 use datacake_node::Clock;
@@ -261,7 +260,7 @@ where
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive)]
-#[archive_attr(derive(CheckBytes))]
+#[archive(check_bytes)]
 pub struct KeyspaceInfo {
     pub timestamp: HLCTimestamp,
     pub keyspace_timestamps: BTreeMap<String, HLCTimestamp>,

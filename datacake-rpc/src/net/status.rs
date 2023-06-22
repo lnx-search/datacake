@@ -1,13 +1,12 @@
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 
-use bytecheck::CheckBytes;
 use rkyv::{Archive, Deserialize, Serialize};
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive, PartialEq, Eq)]
-#[archive(compare(PartialEq))]
-#[archive_attr(derive(CheckBytes, PartialEq, Eq, Debug))]
+#[archive(compare(PartialEq), check_bytes)]
+#[archive_attr(derive(PartialEq, Eq, Debug))]
 /// Status information around the cause of a message request failing.
 ///
 /// This includes a generic status code and message.
@@ -82,8 +81,8 @@ impl Error for Status {}
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive, PartialEq, Eq, Debug)]
-#[archive(compare(PartialEq))]
-#[archive_attr(derive(CheckBytes, Debug, PartialEq, Eq))]
+#[archive(compare(PartialEq), check_bytes)]
+#[archive_attr(derive(Debug, PartialEq, Eq))]
 /// A generic error code describing the high level reason why the request failed.
 pub enum ErrorCode {
     /// The server is running but the specified service does not exist
