@@ -38,8 +38,7 @@ async fn main() -> Result<()> {
         args.seeds.into_iter(),
     );
 
-    let node_id: u8 = args.node_id.parse().unwrap();
-    let node = DatacakeNodeBuilder::<DCAwareSelector>::new(node_id, connection_cfg)
+    let node = DatacakeNodeBuilder::<DCAwareSelector>::new(args.node_id, connection_cfg)
         .connect()
         .await?;
     let store = node
@@ -67,7 +66,7 @@ async fn main() -> Result<()> {
 pub struct Args {
     #[arg(long)]
     /// The unique ID of the node.
-    node_id: String,
+    node_id: u8,
 
     #[arg(long = "seed")]
     /// The set of seed nodes.
