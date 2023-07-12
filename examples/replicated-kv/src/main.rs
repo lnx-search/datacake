@@ -38,7 +38,8 @@ async fn main() -> Result<()> {
         args.seeds.into_iter(),
     );
 
-    let node = DatacakeNodeBuilder::<DCAwareSelector>::new(1, connection_cfg)
+    let node_id: u8 = args.node_id.parse().unwrap();
+    let node = DatacakeNodeBuilder::<DCAwareSelector>::new(node_id, connection_cfg)
         .connect()
         .await?;
     let store = node
