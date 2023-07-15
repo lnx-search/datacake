@@ -224,3 +224,46 @@ async fn test_keyspace_list() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_keyspace_keys() -> anyhow::Result<()> {
+    let _ = tracing_subscriber::fmt::try_init();
+
+    let node_addr = test_helper::get_unused_addr();
+    let connection_cfg =
+        ConnectionConfig::new(node_addr, node_addr, Vec::<String>::new());
+
+    let node_1 = DatacakeNodeBuilder::<DCAwareSelector>::new(1, connection_cfg)
+        .connect()
+        .await?;
+    let store_1 = node_1
+        .add_extension(EventuallyConsistentStoreExtension::new(MemStore::default()))
+        .await?;
+
+    let handle = store_1.handle();
+
+    handle.put(KEYSPACE_1,1,b"Hello, world! From keyspace 1. Key 1".to_vec(),Consistency::All,)
+        .await
+        .expect("Put doc.");
+    handle.put(KEYSPACE_1,2,b"Hello, world! From keyspace 1. Key 2".to_vec(),Consistency::All,)
+        .await
+        .expect("Put doc.");
+    handle.put(KEYSPACE_1,3,b"Hello, world! From keyspace 1. Key 3".to_vec(),Consistency::All,)
+        .await
+        .expect("Put doc.");
+    handle.put(KEYSPACE_2,1,b"Hello, world! From keyspace 1. Key 1".to_vec(),Consistency::All,)
+    .await
+    .expect("Put doc.");
+
+    let doc = handle.get_keyspace_keys(KEYSPACE_1).await.unwrap();
+    let mut keys: Vec<u64> = doc.iter().map(|entry| entry.0).collect();
+    let mut result: Vec<u64> = vec![1,2,3];
+    assert_eq!(keys.sort(), result.sort());
+
+    let doc = handle.get_keyspace_keys(KEYSPACE_2).await.unwrap();
+    let mut keys: Vec<u64> = doc.iter().map(|entry| entry.0).collect();
+    let mut result: Vec<u64> = vec![1];
+    assert_eq!(keys.sort(), result.sort());
+
+    Ok(())
+}
