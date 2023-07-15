@@ -72,7 +72,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use datacake_crdt::{Key, HLCTimestamp};
+use datacake_crdt::Key;
 use datacake_node::{
     ClusterExtension,
     Consistency,
@@ -343,17 +343,12 @@ where
     }
 
     /// Retrieves all keys contained within the store.
-    pub async fn get_keyspace_keys(
+    pub async fn iter_metadata(
         &self,
         keyspace: &str,
-    ) -> Result<Vec<(Key, HLCTimestamp, bool)>, S::Error> {
+    ) -> Result<S::MetadataIter, S::Error> {
         let storage = self.group.storage();
-        let res = storage
-            .iter_metadata(keyspace)
-            .await?
-            .collect::<Vec<(Key, HLCTimestamp, bool)>>();
-
-        Ok(res)
+        storage.iter_metadata(keyspace).await
     }
 
     
