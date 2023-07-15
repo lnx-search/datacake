@@ -159,3 +159,68 @@ async fn test_multi_node() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+
+#[tokio::test]
+async fn test_keyspace_list() -> anyhow::Result<()> {
+    let _ = tracing_subscriber::fmt::try_init();
+
+    let node_addr = test_helper::get_unused_addr();
+    let connection_cfg =
+        ConnectionConfig::new(node_addr, node_addr, Vec::<String>::new());
+
+    let node_1 = DatacakeNodeBuilder::<DCAwareSelector>::new(1, connection_cfg)
+        .connect()
+        .await?;
+    let store_1 = node_1
+        .add_extension(EventuallyConsistentStoreExtension::new(MemStore::default()))
+        .await?;
+
+    let handle = store_1.handle();
+
+    handle
+        .put(
+            KEYSPACE_1,
+            1,
+            b"Hello, world! From keyspace 1.".to_vec(),
+            Consistency::All,
+        )
+        .await
+        .expect("Put doc.");
+
+    let doc = handle.get_keyspace_list().await.unwrap();
+    let result = vec![KEYSPACE_1.to_string()];
+    assert_eq!(doc, result);
+
+    handle
+        .put(
+            KEYSPACE_2,
+            1,
+            b"Hello, world! From keyspace 2.".to_vec(),
+            Consistency::All,
+        )
+        .await
+        .expect("Put doc.");
+
+    let doc = handle.get_keyspace_list().await.unwrap().sort();
+    let result = vec![KEYSPACE_1.to_string(), KEYSPACE_2.to_string()].sort();
+    assert_eq!(doc, result);
+    
+
+    handle
+    .put(
+        KEYSPACE_3,
+        1,
+        b"Hello, world! From keyspace 3.".to_vec(),
+        Consistency::All,
+    )
+    .await
+    .expect("Put doc.");
+
+    let doc = handle.get_keyspace_list().await.unwrap().sort();
+    let result = vec![KEYSPACE_1.to_string(), KEYSPACE_2.to_string(), KEYSPACE_3.to_string()].sort();
+    assert_eq!(doc, result);
+
+
+    Ok(())
+}

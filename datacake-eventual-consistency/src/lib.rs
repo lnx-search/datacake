@@ -334,6 +334,14 @@ where
         }
     }
 
+    /// Retrieves the list of keyspaces from the underlying storage.
+    pub async fn get_keyspace_list(
+        &self,
+    ) -> Result<Vec<String>, S::Error> {
+        let storage = self.group.storage();
+        storage.get_keyspace_list().await
+    }
+    
     /// Retrieves a document from the underlying storage.
     pub async fn get(
         &self,
