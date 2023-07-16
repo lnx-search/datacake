@@ -160,7 +160,6 @@ async fn test_multi_node() -> anyhow::Result<()> {
     Ok(())
 }
 
-
 #[tokio::test]
 async fn test_keyspace_list() -> anyhow::Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
@@ -205,20 +204,24 @@ async fn test_keyspace_list() -> anyhow::Result<()> {
     let doc = handle.get_keyspace_list().await.unwrap();
     let result = vec![KEYSPACE_1.to_string(), KEYSPACE_2.to_string()];
     assert!(doc.iter().all(|item| result.contains(item)));
-    
+
     handle
-    .put(
-        KEYSPACE_3,
-        1,
-        b"Hello, world! From keyspace 3.".to_vec(),
-        Consistency::All,
-    )
-    .await
-    .expect("Put doc.");
+        .put(
+            KEYSPACE_3,
+            1,
+            b"Hello, world! From keyspace 3.".to_vec(),
+            Consistency::All,
+        )
+        .await
+        .expect("Put doc.");
 
     let doc = handle.get_keyspace_list().await.unwrap();
-    let result = vec![KEYSPACE_1.to_string(), KEYSPACE_2.to_string(), KEYSPACE_3.to_string()];
-    assert!(doc.iter().all(|item| result.contains(item)));    
+    let result = vec![
+        KEYSPACE_1.to_string(),
+        KEYSPACE_2.to_string(),
+        KEYSPACE_3.to_string(),
+    ];
+    assert!(doc.iter().all(|item| result.contains(item)));
 
     Ok(())
 }
@@ -240,34 +243,66 @@ async fn test_iter_metadata() -> anyhow::Result<()> {
 
     let handle = store_1.handle();
 
-    handle.put(KEYSPACE_1,1,b"Hello, world! From keyspace 1. Key 1".to_vec(),Consistency::All,)
+    handle
+        .put(
+            KEYSPACE_1,
+            1,
+            b"Hello, world! From keyspace 1. Key 1".to_vec(),
+            Consistency::All,
+        )
         .await
         .expect("Put doc.");
-    handle.put(KEYSPACE_1,2,b"Hello, world! From keyspace 1. Key 2".to_vec(),Consistency::All,)
+    handle
+        .put(
+            KEYSPACE_1,
+            2,
+            b"Hello, world! From keyspace 1. Key 2".to_vec(),
+            Consistency::All,
+        )
         .await
         .expect("Put doc.");
-    handle.put(KEYSPACE_1,3,b"Hello, world! From keyspace 1. Key 3".to_vec(),Consistency::All,)
+    handle
+        .put(
+            KEYSPACE_1,
+            3,
+            b"Hello, world! From keyspace 1. Key 3".to_vec(),
+            Consistency::All,
+        )
         .await
         .expect("Put doc.");
-    handle.put(KEYSPACE_2,100,b"Hello, world! From keyspace 100. Key 1".to_vec(),Consistency::All,)
+    handle
+        .put(
+            KEYSPACE_2,
+            100,
+            b"Hello, world! From keyspace 2. Key 100".to_vec(),
+            Consistency::All,
+        )
         .await
         .expect("Put doc.");
-    handle.put(KEYSPACE_2,99,b"Hello, world! From keyspace 99. Key 1".to_vec(),Consistency::All,)
+    handle
+        .put(
+            KEYSPACE_2,
+            99,
+            b"Hello, world! From keyspace 2. Key 99".to_vec(),
+            Consistency::All,
+        )
         .await
         .expect("Put doc.");
 
-    let keys: Vec<u64> = handle.iter_metadata(KEYSPACE_1)
+    let keys: Vec<u64> = handle
+        .iter_metadata(KEYSPACE_1)
         .await?
         .map(|entry| entry.0)
         .collect();
-    let result: Vec<u64> = vec![1,2,3];
+    let result: Vec<u64> = vec![1, 2, 3];
     assert!(keys.iter().all(|item| result.contains(item)));
 
-    let keys: Vec<u64> = handle.iter_metadata(KEYSPACE_2)
+    let keys: Vec<u64> = handle
+        .iter_metadata(KEYSPACE_2)
         .await?
         .map(|entry| entry.0)
         .collect();
-    let result: Vec<u64> = vec![100,99];
+    let result: Vec<u64> = vec![100, 99];
     assert!(keys.iter().all(|item| result.contains(item)));
 
     Ok(())
