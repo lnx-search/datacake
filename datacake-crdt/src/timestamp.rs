@@ -51,7 +51,8 @@ pub const DATACAKE_EPOCH: Duration = Duration::from_secs(1672534861);
 /// let timestamp = node_b.send().unwrap();
 ///
 /// // Node-a gets this payload with the timestamp and so we call `recv()` on our clock.
-/// // This makes node-a is also unique and monotonic.
+/// // This makes node-a update its internal timestamp and counter ensuring subsequent events
+/// // are always treated as coming after our timestamp, maintaining the causality of events.
 /// node_a.recv(&timestamp).unwrap();
 /// ```
 pub struct HLCTimestamp(u64);
