@@ -28,7 +28,7 @@ pub const DATACAKE_EPOCH: Duration = Duration::from_secs(1672534861);
 /// The demo its self implemented the concepts talked about in this talk:
 /// <https://www.youtube.com/watch?v=DEcwa68f-jY>
 ///
-/// The timestamp doubles as a lock which can be used to maintain and consistently
+/// The timestamp doubles as a lock which can be used to maintain a consistently
 /// unique and monotonic clock.
 ///
 /// This internally is a packed `u64` integer and breaks down as the following:
@@ -51,7 +51,8 @@ pub const DATACAKE_EPOCH: Duration = Duration::from_secs(1672534861);
 /// let timestamp = node_b.send().unwrap();
 ///
 /// // Node-a gets this payload with the timestamp and so we call `recv()` on our clock.
-/// // This was node-a is also unique and monotonic.
+/// // This makes node-a update its internal timestamp and counter ensuring subsequent events
+/// // are always treated as coming after our timestamp, maintaining the causality of events.
 /// node_a.recv(&timestamp).unwrap();
 /// ```
 pub struct HLCTimestamp(u64);
@@ -196,7 +197,7 @@ impl HLCTimestamp {
         let c_old = self.counter();
 
         // Calculate the next logical time and counter.
-        // Ensure that the logical time never goes backward;
+        // Ensure that the logical time never goes backwards.
         // * if all logical clocks are equal, increment the max counter,
         // * if max = old > message, increment local counter,
         // * if max = message > old, increment message counter,
