@@ -1,6 +1,6 @@
 [package]
 name = "datacake-crdt"
-version = "0.4.1"
+version = "0.5.0"
 edition = "2021"
 description = "A conflict free replicated datatype based on a hybrid logical clock implementation for building eventually consistent data stores."
 license = "MIT"
