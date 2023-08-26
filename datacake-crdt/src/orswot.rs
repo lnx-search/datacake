@@ -137,7 +137,7 @@ impl<const N: usize> NodeVersions<N> {
 #[derive(Debug, Default, Clone)]
 #[repr(C)]
 #[cfg_attr(feature = "rkyv", derive(Serialize, Deserialize, Archive))]
-#[cfg_attr(feature = "rkyv", archive(compare(PartialEq), check_bytes))]
+#[cfg_attr(feature = "rkyv", archive(check_bytes))]
 /// A CRDT which supports purging of deleted entry tombstones.
 ///
 /// This implementation is largely based on the Riak DB implementations

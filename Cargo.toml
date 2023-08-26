@@ -1,6 +1,6 @@
 [package]
 name = "datacake"
-version = "0.7.1"
+version = "0.8.0"
 edition = "2021"
 description = "A batteries included framework for building fault-tolerance distributed data systems."
 license = "MIT"
@@ -12,11 +12,11 @@ readme = "README.md"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-datacake-crdt = { version = "0.4", path = "datacake-crdt", optional = true }
-datacake-eventual-consistency = { version = "0.5", path = "datacake-eventual-consistency", optional = true }
+datacake-crdt = { version = "0.5", path = "datacake-crdt", optional = true }
+datacake-eventual-consistency = { version = "0.6", path = "datacake-eventual-consistency", optional = true }
 datacake-sqlite = { version = "0.5", path = "datacake-sqlite", optional = true }
-datacake-rpc = { version = "0.5", path = "datacake-rpc", optional = true }
-datacake-node = { version = "0.4", path = "datacake-node", optional = true }
+datacake-rpc = { version = "0.6", path = "datacake-rpc", optional = true }
+datacake-node = { version = "0.5", path = "datacake-node", optional = true }
 datacake-lmdb = { version = "0.2", path = "datacake-lmdb", optional = true }
 
 [dev-dependencies]

@@ -268,8 +268,8 @@ where
     pub fn handle_with_keyspace(
         &self,
         keyspace: impl Into<String>,
-    ) -> ReplicatorKeyspaceHandle<S> {
-        ReplicatorKeyspaceHandle {
+    ) -> ReplicatedKeyspaceHandle<S> {
+        ReplicatedKeyspaceHandle {
             inner: self.handle(),
             keyspace: Cow::Owned(keyspace.into()),
         }
@@ -327,8 +327,8 @@ where
     pub fn with_keyspace(
         &self,
         keyspace: impl Into<String>,
-    ) -> ReplicatorKeyspaceHandle<S> {
-        ReplicatorKeyspaceHandle {
+    ) -> ReplicatedKeyspaceHandle<S> {
+        ReplicatedKeyspaceHandle {
             inner: self.clone(),
             keyspace: Cow::Owned(keyspace.into()),
         }
@@ -616,7 +616,7 @@ where
 }
 
 /// A convenience wrapper which creates a new handle with a preset keyspace.
-pub struct ReplicatorKeyspaceHandle<S>
+pub struct ReplicatedKeyspaceHandle<S>
 where
     S: Storage,
 {
@@ -624,7 +624,7 @@ where
     keyspace: Cow<'static, str>,
 }
 
-impl<S> Clone for ReplicatorKeyspaceHandle<S>
+impl<S> Clone for ReplicatedKeyspaceHandle<S>
 where
     S: Storage,
 {
@@ -636,7 +636,7 @@ where
     }
 }
 
-impl<S> ReplicatorKeyspaceHandle<S>
+impl<S> ReplicatedKeyspaceHandle<S>
 where
     S: Storage,
 {
