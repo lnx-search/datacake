@@ -1,14 +1,15 @@
+use std::future::Future;
 use std::marker::PhantomData;
-use std::ops::Deref;
 use std::time::Duration;
 
 use http::header::IntoHeaderName;
 use http::{HeaderMap, HeaderValue, StatusCode};
 
-use crate::handler::{Handler, RpcService, TryAsBody, TryIntoBody};
+use crate::body::{Body, TryAsBody, TryIntoBody};
+use crate::handler::{Handler, RpcService};
 use crate::net::{Channel, Status};
 use crate::request::{MessageMetadata, RequestContents};
-use crate::{Body, DataView};
+use crate::DataView;
 
 /// A type alias for the returned data view of the RPC message reply.
 pub type MessageReply<Svc, Msg> =
@@ -136,7 +137,10 @@ where
     ///
     /// In the event you need to send a [Body] or type which must consume `self`
     /// you can use [Self::send_owned]
-    pub async fn send<Msg>(&self, msg: &Msg) -> Result<MessageReply<Svc, Msg>, Status>
+    pub fn send<'a, 'slf: 'a, Msg>(
+        &'slf self,
+        msg: &'a Msg,
+    ) -> impl Future<Output = Result<MessageReply<Svc, Msg>, Status>> + 'a
     where
         Msg: RequestContents + TryAsBody,
         Svc: Handler<Msg>,
@@ -145,7 +149,7 @@ where
         <Svc as Handler<Msg>>::Reply: RequestContents + TryIntoBody,
     {
         let ctx = self.create_rpc_context();
-        ctx.send(msg).await.map(|r| r.into_inner())
+        ctx.send(msg)
     }
 
     #[inline]
@@ -153,19 +157,19 @@ where
     /// message value.
     ///
     /// This allows you to send types implementing [TryIntoBody] like [Body].
-    pub async fn send_owned<Msg>(
-        &self,
+    pub fn send_owned<'slf, Msg>(
+        &'slf self,
         msg: Msg,
-    ) -> Result<MessageReply<Svc, Msg>, Status>
+    ) -> impl Future<Output = Result<MessageReply<Svc, Msg>, Status>> + 'slf
     where
-        Msg: RequestContents + TryIntoBody,
+        Msg: RequestContents + TryIntoBody + 'slf,
         Svc: Handler<Msg>,
         // Due to some interesting compiler errors, we couldn't use GATs here to enforce
         // this on the trait side, which is a shame.
         <Svc as Handler<Msg>>::Reply: RequestContents + TryIntoBody,
     {
         let ctx = self.create_rpc_context();
-        ctx.send_owned(msg).await.map(|r| r.into_inner())
+        ctx.send_owned(msg)
     }
 
     #[inline]
@@ -225,10 +229,7 @@ where
     ///
     /// In the event you need to send a [Body] or type which must consume `self`
     /// you can use [Self::send_owned]
-    pub async fn send<Msg>(
-        self,
-        msg: &Msg,
-    ) -> Result<Response<MessageReply<Svc, Msg>>, Status>
+    pub async fn send<Msg>(self, msg: &Msg) -> Result<MessageReply<Svc, Msg>, Status>
     where
         Msg: RequestContents + TryAsBody,
         Svc: Handler<Msg>,
@@ -252,7 +253,7 @@ where
     pub async fn send_owned<Msg>(
         self,
         msg: Msg,
-    ) -> Result<Response<MessageReply<Svc, Msg>>, Status>
+    ) -> Result<MessageReply<Svc, Msg>, Status>
     where
         Msg: RequestContents + TryIntoBody,
         Svc: Handler<Msg>,
@@ -273,7 +274,7 @@ where
         self,
         body: Body,
         metadata: MessageMetadata,
-    ) -> Result<Response<MessageReply<Svc, Msg>>, Status>
+    ) -> Result<MessageReply<Svc, Msg>, Status>
     where
         Msg: RequestContents,
         Svc: Handler<Msg>,
@@ -294,8 +295,7 @@ where
         let (head, body) = response.into_parts();
 
         if head.status == StatusCode::OK {
-            let msg = <<Svc as Handler<Msg>>::Reply>::from_body(Body::new(body)).await?;
-            return Ok(Response::new(head.headers, msg));
+            return <<Svc as Handler<Msg>>::Reply>::from_body(Body::new(body)).await;
         }
 
         let buffer = crate::utils::to_aligned(body)
@@ -303,47 +303,5 @@ where
             .map_err(|e| Status::internal(e.message()))?;
         let status = DataView::<Status>::using(buffer).map_err(|_| Status::invalid())?;
         Err(status.to_owned().unwrap_or_else(|_| Status::invalid()))
-    }
-}
-
-/// A verbose RPC response.
-///
-/// This contains the inner message type `Msg` and the response headers
-/// returned by the server.
-pub struct Response<Msg> {
-    headers: HeaderMap,
-    inner: Msg,
-}
-
-impl<Msg> Response<Msg> {
-    /// Creates a new response type.
-    fn new(headers: HeaderMap, inner: Msg) -> Self {
-        Self { headers, inner }
-    }
-
-    #[inline]
-    /// Consumes the response returning the inner message.
-    pub fn into_inner(self) -> Msg {
-        self.inner
-    }
-
-    #[inline]
-    /// Consumes the response returning the headers and inner message.
-    pub fn into_parts(self) -> (HeaderMap, Msg) {
-        (self.headers, self.inner)
-    }
-
-    #[inline]
-    /// The request headers.
-    pub fn headers(&self) -> &HeaderMap {
-        &self.headers
-    }
-}
-
-impl<Msg> Deref for Response<Msg> {
-    type Target = Msg;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
     }
 }
