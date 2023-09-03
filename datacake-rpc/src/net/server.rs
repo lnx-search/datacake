@@ -12,7 +12,7 @@ use tokio::task::JoinHandle;
 
 use crate::body::Body;
 use crate::server::ServerState;
-use crate::{Status, SCRATCH_SPACE};
+use crate::Status;
 
 /// Starts the RPC server.
 ///
@@ -88,37 +88,40 @@ async fn handle_message(
     state: ServerState,
     remote_addr: SocketAddr,
 ) -> anyhow::Result<Response<hyper::Body>> {
-    let (req, body) = req.into_parts();
-    let uri = req.uri.path();
-    match state.get_handler(uri) {
-        None => {
-            let status = Status::unavailable(format!("Unknown service {uri}"));
-            let buffer =
-                rkyv::to_bytes::<_, SCRATCH_SPACE>(&status).unwrap_or_else(|e| {
-                    warn!(error = ?e, "Failed to serialize error message.");
-                    AlignedVec::new()
-                });
+    let reply = try_handle_request(req, state, remote_addr).await;
 
-            let mut response = Response::new(buffer.to_vec().into());
-            (*response.status_mut()) = StatusCode::BAD_REQUEST;
-
+    match reply {
+        Ok(body) => {
+            let mut response = Response::new(body.into_inner());
+            (*response.status_mut()) = StatusCode::OK;
             Ok(response)
         },
-        Some(handler) => {
-            let reply = handler.try_handle(remote_addr, Body::new(body)).await;
-
-            match reply {
-                Ok(body) => {
-                    let mut response = Response::new(body.into_inner());
-                    (*response.status_mut()) = StatusCode::OK;
-                    Ok(response)
-                },
-                Err(buffer) => {
-                    let mut response = Response::new(buffer.to_vec().into());
-                    (*response.status_mut()) = StatusCode::BAD_REQUEST;
-                    Ok(response)
-                },
-            }
-        },
+        Err(status) => Ok(create_bad_request(&status)),
     }
+}
+
+async fn try_handle_request(
+    req: Request<hyper::Body>,
+    state: ServerState,
+    remote_addr: SocketAddr,
+) -> Result<Body, Status> {
+    let (req, body) = req.into_parts();
+    let uri = req.uri.path();
+
+    let handler = state
+        .get_handler(uri)
+        .ok_or_else(|| Status::unavailable(format!("Unknown service {uri}")))?;
+
+    handler.try_handle(remote_addr, Body::new(body)).await
+}
+
+fn create_bad_request(status: &Status) -> Response<hyper::Body> {
+    // This should be infallible.
+    let buffer =
+        crate::rkyv_tooling::to_view_bytes(status).unwrap_or_else(|_| AlignedVec::new());
+
+    let mut response = Response::new(buffer.to_vec().into());
+    (*response.status_mut()) = StatusCode::BAD_REQUEST;
+
+    response
 }

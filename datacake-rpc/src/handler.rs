@@ -4,12 +4,12 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use rkyv::ser::serializers::AllocSerializer;
-use rkyv::{AlignedVec, Archive, Serialize};
+use rkyv::{Archive, Serialize};
 
 use crate::net::Status;
 use crate::request::{Request, RequestContents};
-use crate::{Body, SCRATCH_SPACE};
+use crate::rkyv_tooling::DatacakeSerializer;
+use crate::Body;
 
 /// A specific handler key.
 ///
@@ -236,7 +236,7 @@ pub(crate) trait OpaqueMessageHandler: Send + Sync {
         &self,
         remote_addr: SocketAddr,
         data: Body,
-    ) -> Result<Body, AlignedVec>;
+    ) -> Result<Body, Status>;
 }
 
 struct PhantomHandler<H, Msg>
@@ -258,15 +258,8 @@ where
         &self,
         remote_addr: SocketAddr,
         data: Body,
-    ) -> Result<Body, AlignedVec> {
-        let view = match Msg::from_body(data).await {
-            Ok(view) => view,
-            Err(status) => {
-                let error = rkyv::to_bytes::<_, SCRATCH_SPACE>(&status)
-                    .unwrap_or_else(|_| AlignedVec::new());
-                return Err(error);
-            },
-        };
+    ) -> Result<Body, Status> {
+        let view = Msg::from_body(data).await?;
 
         let msg = Request::new(remote_addr, view);
 
@@ -274,10 +267,6 @@ where
             .on_message(msg)
             .await
             .and_then(|reply| reply.try_into_body())
-            .map_err(|status| {
-                rkyv::to_bytes::<_, SCRATCH_SPACE>(&status)
-                    .unwrap_or_else(|_| AlignedVec::new())
-            })
     }
 }
 
@@ -306,10 +295,11 @@ pub trait TryAsBody {
 
 impl<T> TryAsBody for T
 where
-    T: Archive + Serialize<AllocSerializer<SCRATCH_SPACE>>,
+    T: Archive + Serialize<DatacakeSerializer>,
 {
+    #[inline]
     fn try_as_body(&self) -> Result<Body, Status> {
-        rkyv::to_bytes::<_, SCRATCH_SPACE>(self)
+        crate::rkyv_tooling::to_view_bytes(self)
             .map(|v| Body::from(v.to_vec()))
             .map_err(|e| Status::internal(e.to_string()))
     }
@@ -319,12 +309,14 @@ impl<T> TryIntoBody for T
 where
     T: TryAsBody,
 {
+    #[inline]
     fn try_into_body(self) -> Result<Body, Status> {
         <Self as TryAsBody>::try_as_body(&self)
     }
 }
 
 impl TryIntoBody for Body {
+    #[inline]
     fn try_into_body(self) -> Result<Body, Status> {
         Ok(self)
     }

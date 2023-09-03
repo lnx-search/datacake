@@ -34,8 +34,8 @@ impl Handler<MyMessage> for MyService {
     type Reply = Body;
 
     async fn on_message(&self, msg: Request<MyMessage>) -> Result<Self::Reply, Status> {
-        let bytes = msg.into_inner().into_data();
-        Ok(Body::from(bytes.to_vec()))
+        let bytes = msg.buffer.as_ref().to_vec();
+        Ok(Body::from(bytes))
     }
 }
 
@@ -58,10 +58,9 @@ async fn test_stream_body() {
         buffer: vec![0u8; 32 << 10],
     };
 
-    let bytes = rkyv::to_bytes::<_, 1024>(&msg1).unwrap();
     let resp = rpc_client.send(&msg1).await.unwrap();
     let body = hyper::body::to_bytes(resp.into_inner()).await.unwrap();
-    assert_eq!(bytes.as_ref(), body.as_ref());
+    assert_eq!(msg1.buffer, body.as_ref());
 
     server.shutdown();
 }

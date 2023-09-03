@@ -100,24 +100,30 @@ mod client;
 mod handler;
 mod net;
 mod request;
+mod rkyv_tooling;
 mod server;
 mod utils;
-mod view;
-
-pub(crate) const SCRATCH_SPACE: usize = 4096;
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 /// A re-export of the async-trait macro.
 pub use async_trait::async_trait;
-pub use body::Body;
-pub use client::{MessageReply, RpcClient};
-pub use handler::{Handler, RpcService, ServiceRegistry, TryAsBody, TryIntoBody};
-pub use net::{ArchivedErrorCode, ArchivedStatus, Channel, Error, ErrorCode, Status};
-pub use request::{Request, RequestContents};
-pub use server::Server;
-pub use view::{DataView, InvalidView};
+
+pub use self::body::Body;
+pub use self::client::{MessageReply, RpcClient};
+pub use self::handler::{Handler, RpcService, ServiceRegistry, TryAsBody, TryIntoBody};
+pub use self::net::{
+    ArchivedErrorCode,
+    ArchivedStatus,
+    Channel,
+    Error,
+    ErrorCode,
+    Status,
+};
+pub use self::request::{Request, RequestContents};
+pub use self::rkyv_tooling::{DataView, InvalidView};
+pub use self::server::Server;
 
 pub(crate) fn hash<H: Hash + ?Sized>(v: &H) -> u64 {
     let mut hasher = DefaultHasher::new();

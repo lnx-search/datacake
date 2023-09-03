@@ -61,11 +61,7 @@ impl Channel {
         metadata: MessageMetadata,
         msg: Body,
     ) -> Result<Result<Body, AlignedVec>, Error> {
-        let uri = format!(
-            "http://{}{}",
-            self.remote_addr,
-            crate::to_uri_path(&metadata.service_name, &metadata.path),
-        );
+        let uri = format!("http://{}{}", self.remote_addr, metadata.to_uri_path(),);
         let request = Request::builder()
             .method(Method::POST)
             .uri(uri)
