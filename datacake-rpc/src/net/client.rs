@@ -1,8 +1,6 @@
 use std::net::SocketAddr;
 
-use http::{Method, Request};
-use hyper::StatusCode;
-use rkyv::AlignedVec;
+use http::{HeaderMap, Method, Request, Response};
 
 #[cfg(feature = "simulation")]
 use super::simulation::LazyClient;
@@ -56,17 +54,20 @@ impl Channel {
 
     /// Sends a message payload the remote server and gets the response
     /// data back.
-    pub(crate) async fn send_msg(
+    pub(crate) async fn send_parts(
         &self,
         metadata: MessageMetadata,
-        msg: Body,
-    ) -> Result<Result<Body, AlignedVec>, Error> {
+        headers: HeaderMap,
+        body: Body,
+    ) -> Result<Response<hyper::Body>, Error> {
         let uri = format!("http://{}{}", self.remote_addr, metadata.to_uri_path(),);
-        let request = Request::builder()
+        let mut request = Request::builder()
             .method(Method::POST)
             .uri(uri)
-            .body(msg.into_inner())
+            .body(body.into_inner())
             .unwrap();
+
+        (*request.headers_mut()) = headers;
 
         #[cfg(not(feature = "simulation"))]
         let resp = self.connection.request(request).await?;
@@ -76,14 +77,7 @@ impl Channel {
             conn.lock().await.send_request(request).await?
         };
 
-        let (req, body) = resp.into_parts();
-
-        if req.status == StatusCode::OK {
-            Ok(Ok(Body::new(body)))
-        } else {
-            let buffer = crate::utils::to_aligned(body).await?;
-            Ok(Err(buffer))
-        }
+        Ok(resp)
     }
 
     #[inline]

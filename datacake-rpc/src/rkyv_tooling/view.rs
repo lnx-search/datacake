@@ -42,7 +42,7 @@ where
         let extended_buf =
             unsafe { mem::transmute::<&[u8], &'static [u8]>(data.as_slice()) };
 
-        if extended_buf.len() <= 4 {
+        if extended_buf.len() < 4 {
             return Err(InvalidView);
         }
 

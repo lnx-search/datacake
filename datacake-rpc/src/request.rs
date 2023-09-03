@@ -3,6 +3,7 @@ use std::net::SocketAddr;
 use std::ops::Deref;
 
 use async_trait::async_trait;
+use http::HeaderMap;
 use rkyv::Archive;
 
 use crate::rkyv_tooling::DataView;
@@ -74,6 +75,7 @@ where
     Msg: RequestContents,
 {
     pub(crate) remote_addr: SocketAddr,
+    pub(crate) headers: HeaderMap,
 
     // A small hack to stop linters miss-guiding users
     // into thinking their messages are `!Sized` when in fact they are.
@@ -112,9 +114,14 @@ impl<Msg> Request<Msg>
 where
     Msg: RequestContents,
 {
-    pub(crate) fn new(remote_addr: SocketAddr, view: Msg::Content) -> Self {
+    pub(crate) fn new(
+        remote_addr: SocketAddr,
+        headers: HeaderMap,
+        view: Msg::Content,
+    ) -> Self {
         Self {
             remote_addr,
+            headers,
             #[cfg(debug_assertions)]
             view: Box::new(view),
             #[cfg(not(debug_assertions))]
@@ -123,6 +130,7 @@ where
     }
 
     #[cfg(debug_assertions)]
+    #[inline]
     /// Consumes the request into the value of the message.
     pub fn into_inner(self) -> Msg::Content {
         *self.view
@@ -134,6 +142,27 @@ where
         self.view
     }
 
+    #[cfg(debug_assertions)]
+    #[inline]
+    /// Consumes the request and returns the headers and message contents.
+    pub fn into_parts(self) -> (HeaderMap, Msg::Content) {
+        (self.headers, *self.view)
+    }
+
+    #[cfg(not(debug_assertions))]
+    #[inline]
+    /// Consumes the request and returns the headers and message contents.
+    pub fn into_parts(self) -> (HeaderMap, Msg::Content) {
+        (self.headers, self.view)
+    }
+
+    #[inline]
+    /// The request headers.
+    pub fn headers(&self) -> &HeaderMap {
+        &self.headers
+    }
+
+    #[inline]
     /// The remote address of the incoming message.
     pub fn remote_addr(&self) -> SocketAddr {
         self.remote_addr
@@ -157,6 +186,6 @@ where
         use std::net::{Ipv4Addr, SocketAddrV4};
 
         let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::from([127, 0, 0, 1]), 80));
-        Self::new(addr, contents)
+        Self::new(addr, HeaderMap::new(), contents)
     }
 }

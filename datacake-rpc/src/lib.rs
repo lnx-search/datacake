@@ -109,10 +109,11 @@ use std::hash::{Hash, Hasher};
 
 /// A re-export of the async-trait macro.
 pub use async_trait::async_trait;
+pub use http;
 
-pub use self::body::Body;
+pub use self::body::{Body, TryAsBody, TryIntoBody};
 pub use self::client::{MessageReply, RpcClient};
-pub use self::handler::{Handler, RpcService, ServiceRegistry, TryAsBody, TryIntoBody};
+pub use self::handler::{Handler, RpcService, ServiceRegistry};
 pub use self::net::{
     ArchivedErrorCode,
     ArchivedStatus,
