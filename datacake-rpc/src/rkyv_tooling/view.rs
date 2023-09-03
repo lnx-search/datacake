@@ -64,11 +64,13 @@ where
         Ok(Self { data, view })
     }
 
+    #[inline]
     /// Gets the bytes representation of the dataview.
     pub fn as_bytes(&self) -> &[u8] {
         &self.data
     }
 
+    #[inline]
     /// Consumes the bytes representation of the dataview.
     pub fn into_data(self) -> AlignedVec {
         self.data
@@ -80,6 +82,7 @@ where
     T: Archive,
     T::Archived: Deserialize<T, SharedDeserializeMap> + 'static,
 {
+    #[inline]
     /// Deserializes the view into it's owned value T.
     pub fn to_owned(&self) -> Result<T, InvalidView> {
         self.view

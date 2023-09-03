@@ -104,8 +104,6 @@ mod rkyv_tooling;
 mod server;
 mod utils;
 
-pub(crate) const SCRATCH_SPACE: usize = 4096;
-
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 

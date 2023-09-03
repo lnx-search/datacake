@@ -5,7 +5,7 @@ use rkyv::{Archive, Deserialize, Serialize};
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive, PartialEq, Eq)]
-#[archive(compare(PartialEq), check_bytes)]
+#[archive(compare(PartialEq))]
 #[archive_attr(derive(PartialEq, Eq, Debug))]
 /// Status information around the cause of a message request failing.
 ///
@@ -81,7 +81,7 @@ impl Error for Status {}
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Archive, PartialEq, Eq, Debug)]
-#[archive(compare(PartialEq), check_bytes)]
+#[archive(compare(PartialEq))]
 #[archive_attr(derive(Debug, PartialEq, Eq))]
 /// A generic error code describing the high level reason why the request failed.
 pub enum ErrorCode {
@@ -105,14 +105,15 @@ mod tests {
 
     fn test_status_variant(status: Status) {
         println!("Testing: {:?}", &status);
-        let bytes = rkyv::to_bytes::<_, 1024>(&status).expect("Serialize OK");
-        let archived =
-            rkyv::check_archived_root::<'_, Status>(&bytes).expect("Archive OK");
+        let bytes = crate::rkyv_tooling::to_view_bytes(&status).expect("Serialize OK");
+        let view =
+            crate::rkyv_tooling::DataView::<Status>::using(bytes).expect("Archive OK");
         assert_eq!(
-            archived, &status,
+            view, status,
             "Archived value and original value should match"
         );
-        let copy: Status = rkyv::from_bytes(&bytes).expect("Deserialize OK");
+
+        let copy: Status = view.to_owned().expect("Deserialize OK");
         assert_eq!(
             copy, status,
             "Deserialized value and original value should match"

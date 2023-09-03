@@ -5,7 +5,7 @@ use std::time::Duration;
 use crate::handler::{Handler, RpcService, TryAsBody, TryIntoBody};
 use crate::net::{Channel, Status};
 use crate::request::{MessageMetadata, RequestContents};
-use crate::Body;
+use crate::{Body, DataView};
 
 /// A type alias for the returned data view of the RPC message reply.
 pub type MessageReply<Svc, Msg> =
@@ -197,8 +197,9 @@ where
         match result {
             Ok(body) => <<Svc as Handler<Msg>>::Reply>::from_body(body).await,
             Err(buffer) => {
-                let status = rkyv::from_bytes(&buffer).map_err(|_| Status::invalid())?;
-                Err(status)
+                let status =
+                    DataView::<Status>::using(buffer).map_err(|_| Status::invalid())?;
+                Err(status.to_owned().unwrap_or_else(|_| Status::invalid()))
             },
         }
     }
