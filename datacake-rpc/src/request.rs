@@ -4,10 +4,9 @@ use std::net::SocketAddr;
 use std::ops::Deref;
 
 use async_trait::async_trait;
-use rkyv::validation::validators::DefaultValidator;
-use rkyv::{Archive, CheckBytes, Deserialize, Serialize};
+use rkyv::{Archive, Deserialize, Serialize};
 
-use crate::view::DataView;
+use crate::rkyv_tooling::DataView;
 use crate::{Body, Status};
 
 #[async_trait]
@@ -36,7 +35,7 @@ impl RequestContents for Body {
 impl<Msg> RequestContents for Msg
 where
     Msg: Archive + Send + Sync + 'static,
-    Msg::Archived: CheckBytes<DefaultValidator<'static>> + Send + Sync + 'static,
+    Msg::Archived: Send + Sync + 'static,
 {
     type Content = DataView<Self>;
 
@@ -141,10 +140,7 @@ where
 #[cfg(feature = "test-utils")]
 impl<Msg> Request<Msg>
 where
-    Msg: RequestContents
-        + rkyv::Serialize<
-            rkyv::ser::serializers::AllocSerializer<{ crate::SCRATCH_SPACE }>,
-        >,
+    Msg: RequestContents + rkyv::Serialize<crate::rkyv_tooling::DatacakeSerializer>,
 {
     /// A test utility for creating a mocked request.
     ///
@@ -152,7 +148,7 @@ where
     ///
     /// This should be used for testing only.
     pub async fn using_owned(msg: Msg) -> Self {
-        let bytes = rkyv::to_bytes(&msg).unwrap();
+        let bytes = crate::rkyv_tooling::to_view_bytes(&msg).unwrap();
         let contents = Msg::from_body(Body::from(bytes.to_vec())).await.unwrap();
 
         use std::net::{Ipv4Addr, SocketAddrV4};
@@ -186,8 +182,11 @@ mod tests {
         };
 
         let addr = "127.0.0.1:8000".parse().unwrap();
-        let bytes = rkyv::to_bytes::<_, 1024>(&msg).expect("Serialize");
-        let view: DataView<MessageMetadata, _> =
+        let mut bytes = rkyv::to_bytes::<_, 1024>(&msg).expect("Serialize");
+        let checksum = crc32fast::hash(&bytes);
+        bytes.extend_from_slice(&checksum.to_le_bytes());
+
+        let view: DataView<MessageMetadata> =
             DataView::using(bytes).expect("Create view");
         let req = Request::<MessageMetadata>::new(addr, view);
         assert_eq!(req.remote_addr(), addr, "Remote addr should match.");

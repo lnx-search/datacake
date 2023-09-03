@@ -3,8 +3,7 @@ use std::mem;
 use std::ops::Deref;
 
 use rkyv::de::deserializers::SharedDeserializeMap;
-use rkyv::validation::validators::DefaultValidator;
-use rkyv::{AlignedVec, Archive, CheckBytes, Deserialize};
+use rkyv::{AlignedVec, Archive, Deserialize};
 
 #[derive(Debug, thiserror::Error)]
 #[error("View cannot be made for type with provided data.")]
@@ -12,40 +11,55 @@ use rkyv::{AlignedVec, Archive, CheckBytes, Deserialize};
 /// of the view type.
 pub struct InvalidView;
 
+#[repr(C)]
 /// A block of data that can be accessed as if it is the archived value `T`.
 ///
 /// This allows for safe, true zero-copy deserialization avoiding unnecessary
 /// allocations if the situation does not require having an owned version of the value.
-pub struct DataView<T, D = AlignedVec>
+pub struct DataView<T>
 where
     T: Archive,
     T::Archived: 'static,
-    D: Deref<Target = [u8]> + Send + Sync,
 {
+    /// The view reference which lives as long as `data: D`.
+    view: &'static rkyv::Archived<T>,
     /// The owned buffer itself.
     ///
     /// This must live as long as the view derived from it.
-    data: D,
-
-    /// The view reference which lives as long as `data: D`.
-    view: &'static rkyv::Archived<T>,
+    data: AlignedVec,
 }
 
-impl<T, D> DataView<T, D>
+impl<T> DataView<T>
 where
     T: Archive,
-    T::Archived: CheckBytes<DefaultValidator<'static>> + 'static,
-    D: Deref<Target = [u8]> + Send + Sync,
+    T::Archived: 'static,
 {
     /// Creates a new view using a provided buffer.
-    pub(crate) fn using(data: D) -> Result<Self, InvalidView> {
+    pub(crate) fn using(data: AlignedVec) -> Result<Self, InvalidView> {
         // SAFETY:
         //  This is safe as we own the data and keep it apart
         //  of the view itself.
-        let extended_buf = unsafe { mem::transmute::<&[u8], &'static [u8]>(&data) };
+        let extended_buf =
+            unsafe { mem::transmute::<&[u8], &'static [u8]>(data.as_slice()) };
 
-        let view =
-            rkyv::check_archived_root::<'_, T>(extended_buf).map_err(|_| InvalidView)?;
+        if extended_buf.len() <= 4 {
+            return Err(InvalidView);
+        }
+
+        let end = extended_buf.len();
+        let checksum_bytes = extended_buf[end - 4..]
+            .try_into()
+            .map_err(|_| InvalidView)?;
+        let expected_checksum = u32::from_le_bytes(checksum_bytes);
+
+        let data_bytes = &extended_buf[..end - 4];
+        let actual_checksum = crc32fast::hash(data_bytes);
+
+        if expected_checksum != actual_checksum {
+            return Err(InvalidView);
+        }
+
+        let view = unsafe { rkyv::archived_root::<T>(data_bytes) };
 
         Ok(Self { data, view })
     }
@@ -56,16 +70,15 @@ where
     }
 
     /// Consumes the bytes representation of the dataview.
-    pub fn into_data(self) -> D {
+    pub fn into_data(self) -> AlignedVec {
         self.data
     }
 }
 
-impl<T, D> DataView<T, D>
+impl<T> DataView<T>
 where
     T: Archive,
     T::Archived: Deserialize<T, SharedDeserializeMap> + 'static,
-    D: Deref<Target = [u8]> + Send + Sync,
 {
     /// Deserializes the view into it's owned value T.
     pub fn to_owned(&self) -> Result<T, InvalidView> {
@@ -75,33 +88,29 @@ where
     }
 }
 
-impl<T, D> Clone for DataView<T, D>
+impl<T> Clone for DataView<T>
 where
     T: Archive,
-    T::Archived: CheckBytes<DefaultValidator<'static>> + Debug,
-    D: Deref<Target = [u8]> + Send + Sync + Clone,
+    T::Archived: Debug + 'static,
 {
     fn clone(&self) -> Self {
         Self::using(self.data.clone()).expect("BUG: Valid data has become invalid?")
     }
 }
 
-impl<T, D> Debug for DataView<T, D>
+impl<T> Debug for DataView<T>
 where
     T: Archive,
-    T::Archived: CheckBytes<DefaultValidator<'static>> + Debug,
-    D: Deref<Target = [u8]> + Send + Sync,
+    T::Archived: Debug,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         self.view.fmt(f)
     }
 }
 
-impl<T, D> Deref for DataView<T, D>
+impl<T> Deref for DataView<T>
 where
     T: Archive,
-    T::Archived: CheckBytes<DefaultValidator<'static>>,
-    D: Deref<Target = [u8]> + Send + Sync,
 {
     type Target = T::Archived;
 
@@ -110,22 +119,20 @@ where
     }
 }
 
-impl<T, D> PartialEq for DataView<T, D>
+impl<T> PartialEq for DataView<T>
 where
     T: Archive,
-    T::Archived: CheckBytes<DefaultValidator<'static>> + PartialEq,
-    D: Deref<Target = [u8]> + Send + Sync,
+    T::Archived: PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
         self.view == other.view
     }
 }
 
-impl<T, D> PartialEq<T> for DataView<T, D>
+impl<T> PartialEq<T> for DataView<T>
 where
     T: Archive,
-    T::Archived: CheckBytes<DefaultValidator<'static>> + PartialEq<T>,
-    D: Deref<Target = [u8]> + Send + Sync,
+    T::Archived: PartialEq<T>,
 {
     fn eq(&self, other: &T) -> bool {
         self.view == other
@@ -154,14 +161,27 @@ mod tests {
             b: 133,
         };
 
-        let bytes = rkyv::to_bytes::<_, 1024>(&demo).unwrap();
-        let view: DataView<Demo, _> = DataView::using(bytes).unwrap();
+        let bytes = crate::rkyv_tooling::to_view_bytes(&demo).unwrap();
+        let view: DataView<Demo> = DataView::using(bytes).unwrap();
         assert!(view == demo, "Original and view must match.");
     }
 
     #[test]
+    fn test_view_missing_checksum() {
+        let demo = Demo {
+            a: "Jello".to_string(),
+            b: 133,
+        };
+
+        let bytes = rkyv::to_bytes::<_, 1024>(&demo).unwrap();
+        DataView::<Demo>::using(bytes).expect_err("System should return invalid view.");
+    }
+
+    #[test]
     fn test_invalid_view() {
-        let res = DataView::<Demo, _>::using(b"Hello, world!".to_vec());
+        let mut data = AlignedVec::new();
+        data.extend_from_slice(b"Hello, world!");
+        let res = DataView::<Demo>::using(data);
         assert!(res.is_err(), "View should be rejected");
     }
 
@@ -172,8 +192,8 @@ mod tests {
             b: 133,
         };
 
-        let bytes = rkyv::to_bytes::<_, 1024>(&demo).unwrap();
-        let view: DataView<Demo, _> = DataView::using(bytes).unwrap();
+        let bytes = crate::rkyv_tooling::to_view_bytes(&demo).unwrap();
+        let view: DataView<Demo> = DataView::using(bytes).unwrap();
         assert!(view == demo, "Original and view must match.");
 
         let value = view.to_owned().unwrap();
