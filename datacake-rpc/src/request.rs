@@ -1,10 +1,9 @@
-use std::borrow::Cow;
 use std::fmt::{Debug, Formatter};
 use std::net::SocketAddr;
 use std::ops::Deref;
 
 use async_trait::async_trait;
-use rkyv::{Archive, Deserialize, Serialize};
+use rkyv::Archive;
 
 use crate::rkyv_tooling::DataView;
 use crate::{Body, Status};
@@ -48,17 +47,21 @@ where
     }
 }
 
-#[repr(C)]
-#[derive(Serialize, Deserialize, Archive, PartialEq)]
+#[derive(PartialEq)]
 #[cfg_attr(test, derive(Debug))]
-#[archive(check_bytes)]
 pub struct MessageMetadata {
-    #[with(rkyv::with::AsOwned)]
     /// The name of the service being targeted.
-    pub(crate) service_name: Cow<'static, str>,
-    #[with(rkyv::with::AsOwned)]
+    pub(crate) service_name: &'static str,
     /// The message name/path.
-    pub(crate) path: Cow<'static, str>,
+    pub(crate) path: &'static str,
+}
+
+impl MessageMetadata {
+    #[inline]
+    /// Produces a uri path for the metadata.
+    pub(crate) fn to_uri_path(&self) -> String {
+        crate::to_uri_path(self.service_name, self.path)
+    }
 }
 
 /// A zero-copy view of the message data and any additional metadata provided
@@ -155,45 +158,5 @@ where
 
         let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::from([127, 0, 0, 1]), 80));
         Self::new(addr, contents)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_metadata() {
-        let meta = MessageMetadata {
-            service_name: Cow::Borrowed("test"),
-            path: Cow::Borrowed("demo"),
-        };
-
-        let bytes = rkyv::to_bytes::<_, 1024>(&meta).expect("Serialize");
-        let copy: MessageMetadata = rkyv::from_bytes(&bytes).expect("Deserialize");
-        assert_eq!(meta, copy, "Deserialized value should match");
-    }
-
-    #[test]
-    fn test_request() {
-        let msg = MessageMetadata {
-            service_name: Cow::Borrowed("test"),
-            path: Cow::Borrowed("demo"),
-        };
-
-        let addr = "127.0.0.1:8000".parse().unwrap();
-        let mut bytes = rkyv::to_bytes::<_, 1024>(&msg).expect("Serialize");
-        let checksum = crc32fast::hash(&bytes);
-        bytes.extend_from_slice(&checksum.to_le_bytes());
-
-        let view: DataView<MessageMetadata> =
-            DataView::using(bytes).expect("Create view");
-        let req = Request::<MessageMetadata>::new(addr, view);
-        assert_eq!(req.remote_addr(), addr, "Remote addr should match.");
-        assert_eq!(
-            req.to_owned().unwrap(),
-            msg,
-            "Deserialized value should match."
-        );
     }
 }

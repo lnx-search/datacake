@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::marker::PhantomData;
 use std::time::Duration;
 
@@ -140,8 +139,8 @@ where
         <Svc as Handler<Msg>>::Reply: RequestContents + TryIntoBody,
     {
         let metadata = MessageMetadata {
-            service_name: Cow::Borrowed(<Svc as RpcService>::service_name()),
-            path: Cow::Borrowed(<Svc as Handler<Msg>>::path()),
+            service_name: <Svc as RpcService>::service_name(),
+            path: <Svc as Handler<Msg>>::path(),
         };
 
         let body = msg.try_as_body()?;
@@ -164,8 +163,8 @@ where
         <Svc as Handler<Msg>>::Reply: RequestContents + TryIntoBody,
     {
         let metadata = MessageMetadata {
-            service_name: Cow::Borrowed(<Svc as RpcService>::service_name()),
-            path: Cow::Borrowed(<Svc as Handler<Msg>>::path()),
+            service_name: <Svc as RpcService>::service_name(),
+            path: <Svc as Handler<Msg>>::path(),
         };
 
         let body = msg.try_into_body()?;
