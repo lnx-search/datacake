@@ -1,5 +1,9 @@
 use std::marker::PhantomData;
+use std::ops::Deref;
 use std::time::Duration;
+
+use http::header::IntoHeaderName;
+use http::{HeaderMap, HeaderValue, StatusCode};
 
 use crate::handler::{Handler, RpcService, TryAsBody, TryIntoBody};
 use crate::net::{Channel, Status};
@@ -108,6 +112,7 @@ where
         self.timeout = Some(timeout);
     }
 
+    #[inline]
     /// Creates a new RPC client which can handle a new service type.
     ///
     /// [RpcClient]'s are cheap to create and should be preferred over
@@ -123,6 +128,7 @@ where
         }
     }
 
+    #[inline]
     /// Sends a message to the server and wait for a reply.
     ///
     /// This lets you send messages behind a reference which can help
@@ -138,15 +144,11 @@ where
         // this on the trait side, which is a shame.
         <Svc as Handler<Msg>>::Reply: RequestContents + TryIntoBody,
     {
-        let metadata = MessageMetadata {
-            service_name: <Svc as RpcService>::service_name(),
-            path: <Svc as Handler<Msg>>::path(),
-        };
-
-        let body = msg.try_as_body()?;
-        self.send_body(body, metadata).await
+        let ctx = self.create_rpc_context();
+        ctx.send(msg).await.map(|r| r.into_inner())
     }
 
+    #[inline]
     /// Sends a message to the server and wait for a reply using an owned
     /// message value.
     ///
@@ -162,20 +164,116 @@ where
         // this on the trait side, which is a shame.
         <Svc as Handler<Msg>>::Reply: RequestContents + TryIntoBody,
     {
+        let ctx = self.create_rpc_context();
+        ctx.send_owned(msg).await.map(|r| r.into_inner())
+    }
+
+    #[inline]
+    /// Creates a new RPC context which can customise more of
+    /// the request than the convenience methods, i.e. Headers.
+    pub fn create_rpc_context(&self) -> RpcContext<Svc> {
+        RpcContext {
+            client: self,
+            headers: HeaderMap::new(),
+        }
+    }
+}
+
+/// A configurable RPC context that can be used to
+/// fine tune the request/response of the RPC calls.
+///
+/// This allows you to pass and receive headers while
+/// being reasonably convenient and without
+/// breaking existing implementations.
+pub struct RpcContext<'a, Svc>
+where
+    Svc: RpcService,
+{
+    client: &'a RpcClient<Svc>,
+    headers: HeaderMap,
+}
+
+impl<'a, Svc> RpcContext<'a, Svc>
+where
+    Svc: RpcService,
+{
+    /// Set a single request header.
+    pub fn set_header<K>(mut self, key: K, value: HeaderValue) -> Self
+    where
+        K: IntoHeaderName,
+    {
+        self.headers.insert(key, value);
+        self
+    }
+
+    /// Set multiple request headers.
+    pub fn set_headers<K, I>(mut self, headers: I) -> Self
+    where
+        K: IntoHeaderName,
+        I: IntoIterator<Item = (K, HeaderValue)>,
+    {
+        for (key, value) in headers {
+            self.headers.insert(key, value);
+        }
+        self
+    }
+
+    /// Sends a message to the server and wait for a reply.
+    ///
+    /// This lets you send messages behind a reference which can help
+    /// avoid excess copies when it isn't needed.
+    ///
+    /// In the event you need to send a [Body] or type which must consume `self`
+    /// you can use [Self::send_owned]
+    pub async fn send<Msg>(
+        self,
+        msg: &Msg,
+    ) -> Result<Response<MessageReply<Svc, Msg>>, Status>
+    where
+        Msg: RequestContents + TryAsBody,
+        Svc: Handler<Msg>,
+        // Due to some interesting compiler errors, we couldn't use GATs here to enforce
+        // this on the trait side, which is a shame.
+        <Svc as Handler<Msg>>::Reply: RequestContents + TryIntoBody,
+    {
+        let metadata = MessageMetadata {
+            service_name: <Svc as RpcService>::service_name(),
+            path: <Svc as Handler<Msg>>::path(),
+        };
+
+        let body = msg.try_as_body()?;
+        self.send_inner(body, metadata).await
+    }
+
+    /// Sends a message to the server and wait for a reply using an owned
+    /// message value.
+    ///
+    /// This allows you to send types implementing [TryIntoBody] like [Body].
+    pub async fn send_owned<Msg>(
+        self,
+        msg: Msg,
+    ) -> Result<Response<MessageReply<Svc, Msg>>, Status>
+    where
+        Msg: RequestContents + TryIntoBody,
+        Svc: Handler<Msg>,
+        // Due to some interesting compiler errors, we couldn't use GATs here to enforce
+        // this on the trait side, which is a shame.
+        <Svc as Handler<Msg>>::Reply: RequestContents + TryIntoBody,
+    {
         let metadata = MessageMetadata {
             service_name: <Svc as RpcService>::service_name(),
             path: <Svc as Handler<Msg>>::path(),
         };
 
         let body = msg.try_into_body()?;
-        self.send_body(body, metadata).await
+        self.send_inner(body, metadata).await
     }
 
-    async fn send_body<Msg>(
-        &self,
+    async fn send_inner<Msg>(
+        self,
         body: Body,
         metadata: MessageMetadata,
-    ) -> Result<MessageReply<Svc, Msg>, Status>
+    ) -> Result<Response<MessageReply<Svc, Msg>>, Status>
     where
         Msg: RequestContents,
         Svc: Handler<Msg>,
@@ -183,9 +281,9 @@ where
         // this on the trait side, which is a shame.
         <Svc as Handler<Msg>>::Reply: RequestContents + TryIntoBody,
     {
-        let future = self.channel.send_msg(metadata, body);
+        let future = self.client.channel.send_parts(metadata, self.headers, body);
 
-        let result = match self.timeout {
+        let response = match self.client.timeout {
             Some(duration) => tokio::time::timeout(duration, future)
                 .await
                 .map_err(|_| Status::timeout())?
@@ -193,13 +291,59 @@ where
             None => future.await.map_err(Status::connection)?,
         };
 
-        match result {
-            Ok(body) => <<Svc as Handler<Msg>>::Reply>::from_body(body).await,
-            Err(buffer) => {
-                let status =
-                    DataView::<Status>::using(buffer).map_err(|_| Status::invalid())?;
-                Err(status.to_owned().unwrap_or_else(|_| Status::invalid()))
-            },
+        let (head, body) = response.into_parts();
+
+        if head.status == StatusCode::OK {
+            let msg = <<Svc as Handler<Msg>>::Reply>::from_body(Body::new(body)).await?;
+            return Ok(Response::new(head.headers, msg));
         }
+
+        let buffer = crate::utils::to_aligned(body)
+            .await
+            .map_err(|e| Status::internal(e.message()))?;
+        let status = DataView::<Status>::using(buffer).map_err(|_| Status::invalid())?;
+        Err(status.to_owned().unwrap_or_else(|_| Status::invalid()))
+    }
+}
+
+/// A verbose RPC response.
+///
+/// This contains the inner message type `Msg` and the response headers
+/// returned by the server.
+pub struct Response<Msg> {
+    headers: HeaderMap,
+    inner: Msg,
+}
+
+impl<Msg> Response<Msg> {
+    /// Creates a new response type.
+    fn new(headers: HeaderMap, inner: Msg) -> Self {
+        Self { headers, inner }
+    }
+
+    #[inline]
+    /// Consumes the response returning the inner message.
+    pub fn into_inner(self) -> Msg {
+        self.inner
+    }
+
+    #[inline]
+    /// Consumes the response returning the headers and inner message.
+    pub fn into_parts(self) -> (HeaderMap, Msg) {
+        (self.headers, self.inner)
+    }
+
+    #[inline]
+    /// The request headers.
+    pub fn headers(&self) -> &HeaderMap {
+        &self.headers
+    }
+}
+
+impl<Msg> Deref for Response<Msg> {
+    type Target = Msg;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
     }
 }

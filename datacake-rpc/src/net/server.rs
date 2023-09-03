@@ -107,12 +107,15 @@ async fn try_handle_request(
 ) -> Result<Body, Status> {
     let (req, body) = req.into_parts();
     let uri = req.uri.path();
+    let headers = req.headers;
 
     let handler = state
         .get_handler(uri)
         .ok_or_else(|| Status::unavailable(format!("Unknown service {uri}")))?;
 
-    handler.try_handle(remote_addr, Body::new(body)).await
+    handler
+        .try_handle(remote_addr, headers, Body::new(body))
+        .await
 }
 
 fn create_bad_request(status: &Status) -> Response<hyper::Body> {

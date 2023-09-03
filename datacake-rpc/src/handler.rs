@@ -4,6 +4,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use http::HeaderMap;
 use rkyv::{Archive, Serialize};
 
 use crate::net::Status;
@@ -235,7 +236,8 @@ pub(crate) trait OpaqueMessageHandler: Send + Sync {
     async fn try_handle(
         &self,
         remote_addr: SocketAddr,
-        data: Body,
+        headers: HeaderMap,
+        body: Body,
     ) -> Result<Body, Status>;
 }
 
@@ -257,11 +259,12 @@ where
     async fn try_handle(
         &self,
         remote_addr: SocketAddr,
-        data: Body,
+        headers: HeaderMap,
+        body: Body,
     ) -> Result<Body, Status> {
-        let view = Msg::from_body(data).await?;
+        let view = Msg::from_body(body).await?;
 
-        let msg = Request::new(remote_addr, view);
+        let msg = Request::new(remote_addr, headers, view);
 
         self.handler
             .on_message(msg)
