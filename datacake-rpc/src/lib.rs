@@ -123,7 +123,7 @@ pub use self::net::{
     Status,
 };
 pub use self::request::{Request, RequestContents};
-pub use self::rkyv_tooling::{DataView, InvalidView};
+pub use self::rkyv_tooling::{to_view_bytes, DataView, InvalidView};
 pub use self::server::Server;
 
 pub(crate) fn hash<H: Hash + ?Sized>(v: &H) -> u64 {

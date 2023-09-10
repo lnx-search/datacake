@@ -35,7 +35,7 @@ where
     T::Archived: 'static,
 {
     /// Creates a new view using a provided buffer.
-    pub(crate) fn using(data: AlignedVec) -> Result<Self, InvalidView> {
+    pub fn using(data: AlignedVec) -> Result<Self, InvalidView> {
         // SAFETY:
         //  This is safe as we own the data and keep it apart
         //  of the view itself.
