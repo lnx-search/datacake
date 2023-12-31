@@ -40,7 +40,7 @@ use crate::handler::{HandlerKey, OpaqueMessageHandler, RpcService, ServiceRegist
 ///     type Reply = MyMessage;
 ///
 ///     async fn on_message(&self, msg: Request<MyMessage>) -> Result<Self::Reply, Status> {
-///         Ok(msg.to_owned().unwrap())
+///         Ok(msg.deserialize_view().unwrap())
 ///     }
 /// }
 ///

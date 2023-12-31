@@ -44,7 +44,7 @@ pub type MessageReply<Svc, Msg> =
 ///     type Reply = MyMessage;
 ///
 ///     async fn on_message(&self, msg: Request<MyMessage>) -> Result<Self::Reply, Status> {
-///         Ok(msg.to_owned().unwrap())
+///         Ok(msg.deserialize_view().unwrap())
 ///     }
 /// }
 ///
@@ -302,6 +302,8 @@ where
             .await
             .map_err(|e| Status::internal(e.message()))?;
         let status = DataView::<Status>::using(buffer).map_err(|_| Status::invalid())?;
-        Err(status.to_owned().unwrap_or_else(|_| Status::invalid()))
+        Err(status
+            .deserialize_view()
+            .unwrap_or_else(|_| Status::invalid()))
     }
 }

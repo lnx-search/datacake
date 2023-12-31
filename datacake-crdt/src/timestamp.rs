@@ -18,7 +18,10 @@ pub const DATACAKE_EPOCH: Duration = Duration::from_secs(1672534861);
 #[derive(Debug, Hash, Copy, Clone, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(C)]
 #[cfg_attr(feature = "rkyv", derive(Serialize, Deserialize, Archive))]
-#[cfg_attr(feature = "rkyv", archive(compare(PartialEq), check_bytes))]
+#[cfg_attr(
+    all(feature = "rkyv", feature = "rkyv-validation"),
+    archive(compare(PartialEq), check_bytes)
+)]
 #[cfg_attr(feature = "rkyv", archive_attr(repr(C), derive(Debug)))]
 /// A HLC (Hybrid Logical Clock) timestamp implementation.
 ///
@@ -226,6 +229,14 @@ impl HLCTimestamp {
         self.0 = pack(ts_new, c_new, self.node());
 
         Ok(Self::new(ts_new, self.counter(), msg.node()))
+    }
+}
+
+#[cfg(feature = "rkyv-support")]
+impl ArchivedHLCTimestamp {
+    /// Casts the archived HLCTimestamp to the actual HLCTimestamp.
+    pub fn cast(&self) -> HLCTimestamp {
+        HLCTimestamp(self.0.value())
     }
 }
 
@@ -453,7 +464,7 @@ mod tests {
     }
 }
 
-#[cfg(all(test, feature = "rkyv-support"))]
+#[cfg(all(test, feature = "rkyv-support", feature = "rkyv-validation"))]
 mod rkyv_tests {
     use super::*;
 

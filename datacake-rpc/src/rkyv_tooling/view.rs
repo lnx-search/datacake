@@ -84,7 +84,7 @@ where
 {
     #[inline]
     /// Deserializes the view into it's owned value T.
-    pub fn to_owned(&self) -> Result<T, InvalidView> {
+    pub fn deserialize_view(&self) -> Result<T, InvalidView> {
         self.view
             .deserialize(&mut SharedDeserializeMap::default())
             .map_err(|_| InvalidView)
@@ -199,7 +199,7 @@ mod tests {
         let view: DataView<Demo> = DataView::using(bytes).unwrap();
         assert!(view == demo, "Original and view must match.");
 
-        let value = view.to_owned().unwrap();
+        let value = view.deserialize_view().unwrap();
         assert_eq!(value, demo, "Deserialized and original value should match.")
     }
 }

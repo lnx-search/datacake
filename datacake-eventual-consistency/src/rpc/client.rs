@@ -4,7 +4,6 @@ use std::net::SocketAddr;
 use datacake_crdt::{HLCTimestamp, Key, OrSWotSet};
 use datacake_node::{Clock, NodeId};
 use datacake_rpc::{Channel, RpcClient, Status};
-use rkyv::AlignedVec;
 
 use crate::core::{Document, DocumentMetadata};
 use crate::rpc::services::consistency_impl::{
@@ -67,8 +66,7 @@ where
                 timestamp,
             })
             .await?
-            .to_owned()
-            .map_err(Status::internal)?;
+            .cast();
         self.clock.register_ts(ts).await;
         Ok(())
     }
@@ -91,8 +89,7 @@ where
                 timestamp,
             })
             .await?
-            .to_owned()
-            .map_err(Status::internal)?;
+            .cast();
         self.clock.register_ts(ts).await;
         Ok(())
     }
@@ -113,8 +110,7 @@ where
                 timestamp,
             })
             .await?
-            .to_owned()
-            .map_err(Status::internal)?;
+            .cast();
         self.clock.register_ts(ts).await;
         Ok(())
     }
@@ -134,19 +130,13 @@ where
                 timestamp,
             })
             .await?
-            .to_owned()
-            .map_err(Status::internal)?;
+            .cast();
         self.clock.register_ts(ts).await;
         Ok(())
     }
 
     pub async fn apply_batch(&mut self, batch: &BatchPayload) -> Result<(), Status> {
-        let ts = self
-            .inner
-            .send(batch)
-            .await?
-            .to_owned()
-            .map_err(Status::internal)?;
+        let ts = self.inner.send(batch).await?.cast();
         self.clock.register_ts(ts).await;
         Ok(())
     }
@@ -186,7 +176,7 @@ where
             .inner
             .send(&PollKeyspace(timestamp))
             .await?
-            .to_owned()
+            .deserialize_view()
             .map_err(Status::internal)?;
 
         self.clock.register_ts(inner.timestamp).await;
@@ -211,17 +201,23 @@ where
                 timestamp,
                 keyspace: keyspace.into(),
             })
-            .await?
-            .to_owned()
-            .map_err(Status::internal)?;
+            .await?;
 
-        self.clock.register_ts(inner.timestamp).await;
+        self.clock.register_ts(inner.timestamp.cast()).await;
 
-        let mut aligned = AlignedVec::with_capacity(inner.set.len());
-        aligned.extend_from_slice(&inner.set);
+        // SAFETY:
+        //   Although this may seem very unsafe, we can rely on the parent type (`KeyspaceOrSwotSet`)
+        //   to satisfy our guarantees when performing this operation.
+        //   - Internally datacake-rpc has already validated and checked the checksum of the overall
+        //     payload of the message when it originally deserialized `KeyspaceOrSwotSet` this ensures
+        //     the actual layout and original data is intact.
+        //   - The alignment issues are solved by the the fact the DataView maintains a 16 byte aligned
+        //     buffer which the parent type maintains in its view form.
+        let state = unsafe {
+            rkyv::from_bytes_unchecked(&inner.set).map_err(|_| Status::invalid())?
+        };
 
-        let state = rkyv::from_bytes(&aligned).map_err(|_| Status::invalid())?;
-        Ok((inner.last_updated, state))
+        Ok((inner.last_updated.cast(), state))
     }
 
     /// Fetches a set of documents with the provided IDs belonging to the given keyspace.
@@ -240,7 +236,7 @@ where
             })
             .await?;
 
-        let payload = inner.to_owned().unwrap();
+        let payload = inner.deserialize_view().unwrap();
 
         self.clock.register_ts(payload.timestamp).await;
         Ok(payload.documents)

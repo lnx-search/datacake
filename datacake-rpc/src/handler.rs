@@ -69,7 +69,7 @@ pub type HandlerKey = u64;
 ///     type Reply = MyMessage;
 ///
 ///     async fn on_message(&self, msg: Request<MyMessage>) -> Result<Self::Reply, Status> {
-///         Ok(msg.to_owned().unwrap())
+///         Ok(msg.deserialize_view().unwrap())
 ///     }
 /// }
 ///
@@ -78,7 +78,7 @@ pub type HandlerKey = u64;
 ///     type Reply = MyOtherMessage;
 ///
 ///     async fn on_message(&self, msg: Request<MyOtherMessage>) -> Result<Self::Reply, Status> {
-///         Ok(msg.to_owned().unwrap())
+///         Ok(msg.deserialize_view().unwrap())
 ///     }
 /// }
 /// ```
@@ -201,7 +201,7 @@ pub trait RpcService: Sized {
 ///     // request buffer, you can use the `to_owned` method which will attempt to
 ///     // deserialize the inner message/view.
 ///     async fn on_message(&self, msg: Request<MyMessage>) -> Result<Self::Reply, Status> {
-///         Ok(msg.to_owned().unwrap())
+///         Ok(msg.deserialize_view().unwrap())
 ///     }
 /// }
 /// ```

@@ -60,7 +60,7 @@
 //!     // Our `Request` gives us a zero-copy view to our message, this doesn't actually
 //!     // allocate the message type.
 //!     async fn on_message(&self, msg: Request<MyMessage>) -> Result<Self::Reply, Status> {
-//!         Ok(msg.to_owned().unwrap().name)
+//!         Ok(msg.deserialize_view().unwrap().name)
 //!     }
 //! }
 //!
