@@ -17,7 +17,7 @@ datacake-eventual-consistency = { version = "0.6", path = "datacake-eventual-con
 datacake-sqlite = { version = "0.5", path = "datacake-sqlite", optional = true }
 datacake-rpc = { version = "0.6", path = "datacake-rpc", optional = true }
 datacake-node = { version = "0.5", path = "datacake-node", optional = true }
-datacake-lmdb = { version = "0.2", path = "datacake-lmdb", optional = true }
+datacake-lmdb = { version = "0.3", path = "datacake-lmdb", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt"] }
