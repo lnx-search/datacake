@@ -7,7 +7,7 @@ use datacake_eventual_consistency::{Document, DocumentMetadata};
 use flume::{self, Receiver, Sender};
 use futures::channel::oneshot;
 use heed::byteorder::LittleEndian;
-use heed::types::{ByteSlice, Str, Unit, U64};
+use heed::types::{Bytes as ByteSlice, Str, Unit, U64};
 use heed::{Database, Env, EnvOpenOptions};
 
 type KvDB = Database<U64<LittleEndian>, ByteSlice>;

@@ -1,6 +1,6 @@
 [package]
 name = "datacake-lmdb"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "A pre-built implementation of datacake's Storage trait using LMDB."
 license = "MIT"
@@ -17,7 +17,7 @@ futures = "0.3"
 flume = "0.10"
 thiserror = "1"
 
-heed = { version = "0.20.0-alpha.0", default-features = false }
+heed = { version = "=0.20.0-alpha.9", default-features = false }
 tokio = { version = "1", default-features = false, features = ["rt"] }
 
 datacake-crdt = { version = "0.5", path = "../datacake-crdt" }
