@@ -371,7 +371,7 @@ impl Handler<MyMessage> for MyService {
             Simulate::None => {},
         }
 
-        Ok(msg.to_owned().unwrap().name)
+        Ok(msg.deserialize_view().unwrap().name)
     }
 }
 

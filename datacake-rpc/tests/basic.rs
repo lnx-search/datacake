@@ -33,7 +33,7 @@ impl Handler<MyMessage> for MyService {
     type Reply = String;
 
     async fn on_message(&self, msg: Request<MyMessage>) -> Result<Self::Reply, Status> {
-        Ok(msg.to_owned().unwrap().name)
+        Ok(msg.deserialize_view().unwrap().name)
     }
 }
 

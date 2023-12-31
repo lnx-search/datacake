@@ -26,6 +26,7 @@ anyhow = "1"
 [features]
 test-utils = ["datacake-eventual-consistency/test-utils"]
 rkyv = ["datacake-crdt/rkyv-support"]
+rkyv-validation = ["rkyv", "datacake-crdt/rkyv-validation"]
 simulation = ["datacake-rpc/simulation"]
 default = [
     "datacake-crdt",

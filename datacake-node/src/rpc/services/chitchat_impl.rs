@@ -45,7 +45,7 @@ impl Handler<ChitchatRpcMessage> for ChitchatService {
         &self,
         request: Request<ChitchatRpcMessage>,
     ) -> Result<Self::Reply, Status> {
-        let msg = request.to_owned().map_err(Status::internal)?;
+        let msg = request.deserialize_view().map_err(Status::internal)?;
 
         let from = msg.source;
         self.clock.register_ts(msg.timestamp).await;

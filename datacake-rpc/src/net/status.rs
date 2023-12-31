@@ -113,7 +113,7 @@ mod tests {
             "Archived value and original value should match"
         );
 
-        let copy: Status = view.to_owned().expect("Deserialize OK");
+        let copy: Status = view.deserialize_view().expect("Deserialize OK");
         assert_eq!(
             copy, status,
             "Deserialized value and original value should match"

@@ -79,7 +79,10 @@ where
         &self,
         msg: Request<PutPayload>,
     ) -> Result<HLCTimestamp, Status> {
-        let payload = msg.into_inner().to_owned().map_err(Status::internal)?;
+        let payload = msg
+            .into_inner()
+            .deserialize_view()
+            .map_err(Status::internal)?;
 
         let doc = payload.document;
         let ctx = self.get_put_ctx(payload.ctx)?;
@@ -110,7 +113,10 @@ where
         &self,
         msg: Request<MultiPutPayload>,
     ) -> Result<Self::Reply, Status> {
-        let payload = msg.into_inner().to_owned().map_err(Status::internal)?;
+        let payload = msg
+            .into_inner()
+            .deserialize_view()
+            .map_err(Status::internal)?;
 
         let ctx = self.get_put_ctx(payload.ctx)?;
         self.group.clock().register_ts(payload.timestamp).await;
@@ -139,7 +145,10 @@ where
         &self,
         msg: Request<RemovePayload>,
     ) -> Result<Self::Reply, Status> {
-        let payload = msg.into_inner().to_owned().map_err(Status::internal)?;
+        let payload = msg
+            .into_inner()
+            .deserialize_view()
+            .map_err(Status::internal)?;
 
         self.group.clock().register_ts(payload.timestamp).await;
 
@@ -166,7 +175,10 @@ where
         &self,
         msg: Request<MultiRemovePayload>,
     ) -> Result<Self::Reply, Status> {
-        let payload = msg.into_inner().to_owned().map_err(Status::internal)?;
+        let payload = msg
+            .into_inner()
+            .deserialize_view()
+            .map_err(Status::internal)?;
 
         self.group.clock().register_ts(payload.timestamp).await;
 
@@ -193,7 +205,10 @@ where
         &self,
         msg: Request<BatchPayload>,
     ) -> Result<Self::Reply, Status> {
-        let msg = msg.into_inner().to_owned().map_err(Status::internal)?;
+        let msg = msg
+            .into_inner()
+            .deserialize_view()
+            .map_err(Status::internal)?;
 
         self.group.clock().register_ts(msg.timestamp).await;
 

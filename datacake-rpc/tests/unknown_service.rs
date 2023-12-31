@@ -32,7 +32,7 @@ impl Handler<Payload> for Add5Service {
 
     async fn on_message(&self, msg: Request<Payload>) -> Result<Self::Reply, Status> {
         dbg!(&msg);
-        let counter = msg.to_owned().expect("Get owned value.");
+        let counter = msg.deserialize_view().expect("Get owned value.");
         Ok(counter.value.saturating_add(5))
     }
 }
@@ -49,7 +49,7 @@ impl Handler<Payload> for Sub5Service {
 
     async fn on_message(&self, msg: Request<Payload>) -> Result<Self::Reply, Status> {
         dbg!(&msg);
-        let counter = msg.to_owned().expect("Get owned value.");
+        let counter = msg.deserialize_view().expect("Get owned value.");
         Ok(counter.value.saturating_sub(5))
     }
 }

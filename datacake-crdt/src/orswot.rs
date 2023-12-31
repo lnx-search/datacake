@@ -33,7 +33,10 @@ pub struct BadState;
 #[derive(Debug, Clone)]
 #[repr(C)]
 #[cfg_attr(feature = "rkyv", derive(Serialize, Deserialize, Archive))]
-#[cfg_attr(feature = "rkyv", archive(compare(PartialEq), check_bytes))]
+#[cfg_attr(
+    all(feature = "rkyv", feature = "rkyv-validation"),
+    archive(compare(PartialEq), check_bytes)
+)]
 pub struct NodeVersions<const N: usize> {
     nodes_max_stamps: [BTreeMap<u8, HLCTimestamp>; N],
     safe_last_stamps: BTreeMap<u8, HLCTimestamp>,
@@ -137,7 +140,10 @@ impl<const N: usize> NodeVersions<N> {
 #[derive(Debug, Default, Clone)]
 #[repr(C)]
 #[cfg_attr(feature = "rkyv", derive(Serialize, Deserialize, Archive))]
-#[cfg_attr(feature = "rkyv", archive(check_bytes))]
+#[cfg_attr(
+    all(feature = "rkyv", feature = "rkyv-validation"),
+    archive(check_bytes)
+)]
 /// A CRDT which supports purging of deleted entry tombstones.
 ///
 /// This implementation is largely based on the Riak DB implementations
@@ -217,7 +223,7 @@ pub struct OrSWotSet<const N: usize = 1> {
 }
 
 impl<const N: usize> OrSWotSet<N> {
-    #[cfg(feature = "rkyv")]
+    #[cfg(all(feature = "rkyv", feature = "rkyv-validation"))]
     /// Deserializes a [OrSWotSet] from a array of bytes.
     pub fn from_bytes(data: &[u8]) -> Result<Self, BadState> {
         let deserialized = rkyv::from_bytes::<Self>(data).map_err(|_| BadState)?;

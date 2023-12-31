@@ -48,7 +48,7 @@ impl Handler<IncCounter> for CountingService {
     type Reply = u64;
 
     async fn on_message(&self, msg: Request<IncCounter>) -> Result<Self::Reply, Status> {
-        let counter = msg.to_owned().expect("Get owned value.");
+        let counter = msg.deserialize_view().expect("Get owned value.");
 
         let mut lock = self.counters.lock();
         let value = lock.entry(counter.name).or_default();
@@ -63,7 +63,7 @@ impl Handler<DecCounter> for CountingService {
     type Reply = u64;
 
     async fn on_message(&self, msg: Request<DecCounter>) -> Result<Self::Reply, Status> {
-        let counter = msg.to_owned().expect("Get owned value.");
+        let counter = msg.deserialize_view().expect("Get owned value.");
 
         let mut lock = self.counters.lock();
         let value = lock.entry(counter.name).or_default();

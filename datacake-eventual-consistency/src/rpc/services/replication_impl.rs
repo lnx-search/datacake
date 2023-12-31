@@ -43,7 +43,7 @@ where
         &self,
         msg: Request<PollKeyspace>,
     ) -> Result<Self::Reply, Status> {
-        let msg = msg.to_owned().map_err(Status::internal)?;
+        let msg = msg.deserialize_view().map_err(Status::internal)?;
         self.group.clock().register_ts(msg.0).await;
 
         let payload = self.group.get_keyspace_info().await;
@@ -59,7 +59,7 @@ where
     type Reply = KeyspaceOrSwotSet;
 
     async fn on_message(&self, msg: Request<GetState>) -> Result<Self::Reply, Status> {
-        let msg = msg.to_owned().map_err(Status::internal)?;
+        let msg = msg.deserialize_view().map_err(Status::internal)?;
         self.group.clock().register_ts(msg.timestamp).await;
 
         let keyspace = self.group.get_or_create_keyspace(&msg.keyspace).await;
@@ -87,7 +87,7 @@ where
     type Reply = FetchedDocs;
 
     async fn on_message(&self, msg: Request<FetchDocs>) -> Result<Self::Reply, Status> {
-        let msg = msg.to_owned().map_err(Status::internal)?;
+        let msg = msg.deserialize_view().map_err(Status::internal)?;
         let clock = self.group.clock();
         clock.register_ts(msg.timestamp).await;
 
@@ -143,7 +143,7 @@ pub struct GetState {
 pub struct KeyspaceOrSwotSet {
     pub timestamp: HLCTimestamp,
     pub last_updated: HLCTimestamp,
-    #[with(rkyv::with::CopyOptimize)]
+    #[with(rkyv::with::Raw)]
     pub set: Vec<u8>,
 }
 
@@ -152,7 +152,7 @@ pub struct KeyspaceOrSwotSet {
 #[archive(check_bytes)]
 pub struct FetchDocs {
     pub keyspace: String,
-    #[with(rkyv::with::CopyOptimize)]
+    #[with(rkyv::with::Raw)]
     pub doc_ids: Vec<Key>,
     pub timestamp: HLCTimestamp,
 }

@@ -14,8 +14,9 @@ readme = "README.md"
 [dependencies]
 thiserror = "1.0.33"
 
-rkyv = { version = "0.7.42", features = ["validation"], optional = true }
+rkyv = { version = "0.7.42", features = ["strict", "archive_le"], optional = true }
 
 [features]
 # Enables (de)serialization support for all data types.
 rkyv-support = ["rkyv"]
+rkyv-validation = ["rkyv-support", "rkyv/validation"]
